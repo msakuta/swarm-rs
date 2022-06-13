@@ -21,7 +21,7 @@ pub(crate) enum LineMode {
 pub(crate) struct AppData {
     pub(crate) rows_text: String,
     pub(crate) columns_text: String,
-    pub(crate) width_text: String,
+    pub(crate) seed_text: String,
     pub(crate) vertex_edit: bool,
     pub(crate) group_edit: bool,
     pub(crate) group_radius_text: String,
@@ -41,18 +41,18 @@ pub(crate) struct AppData {
 
 impl AppData {
     pub(crate) fn new() -> Self {
-        let width = 100.;
         let group_radius = 100.;
+        let seed = 123513;
 
         let xs = 128;
         let ys = 128;
 
-        let (board, simplified_border) = AppData::create_board((xs, ys));
+        let (board, simplified_border) = AppData::create_board((xs, ys), seed);
 
         Self {
             rows_text: xs.to_string(),
             columns_text: ys.to_string(),
-            width_text: width.to_string(),
+            seed_text: seed.to_string(),
             vertex_edit: true,
             group_edit: true,
             group_radius_text: group_radius.to_string(),
@@ -70,9 +70,9 @@ impl AppData {
         }
     }
 
-    pub fn create_board((xs, ys): (usize, usize)) -> (Vec<bool>, Vec<BezPath>) {
+    pub fn create_board((xs, ys): (usize, usize), seed: u32) -> (Vec<bool>, Vec<BezPath>) {
         let bits = 6;
-        let mut xor128 = Xor128::new(123513);
+        let mut xor128 = Xor128::new(seed);
         let terms = gen_terms(&mut xor128, bits);
 
         let mut board = vec![false; xs * ys];
