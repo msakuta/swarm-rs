@@ -19,6 +19,7 @@ pub(crate) struct AppData {
     pub(crate) rows_text: String,
     pub(crate) columns_text: String,
     pub(crate) seed_text: String,
+    pub(crate) simplify_text: String,
     pub(crate) vertex_edit: bool,
     pub(crate) group_edit: bool,
     pub(crate) group_radius_text: String,
@@ -40,16 +41,18 @@ impl AppData {
     pub(crate) fn new() -> Self {
         let group_radius = 100.;
         let seed = 123513;
+        let simplify = 0.5;
 
         let xs = 128;
         let ys = 128;
 
-        let (board, simplified_border) = AppData::create_board((xs, ys), seed);
+        let (board, simplified_border) = AppData::create_board((xs, ys), seed, simplify);
 
         Self {
             rows_text: xs.to_string(),
             columns_text: ys.to_string(),
             seed_text: seed.to_string(),
+            simplify_text: simplify.to_string(),
             vertex_edit: true,
             group_edit: true,
             group_radius_text: group_radius.to_string(),
@@ -67,7 +70,11 @@ impl AppData {
         }
     }
 
-    pub fn create_board((xs, ys): (usize, usize), seed: u32) -> (Vec<bool>, Vec<BezPath>) {
+    pub fn create_board(
+        (xs, ys): (usize, usize),
+        seed: u32,
+        simplify: f64,
+    ) -> (Vec<bool>, Vec<BezPath>) {
         let bits = 6;
         let mut xor128 = Xor128::new(seed);
         let terms = gen_terms(&mut xor128, bits);
@@ -94,11 +101,19 @@ impl AppData {
 
         let mut simplified_border = vec![];
 
-        let to_point = |p: [usize; 2]| Point::new(p[0] as f64 + 1., p[1] as f64 + 1.);
+        let to_point = |p: [f64; 2]| Point::new(p[0] as f64 + 1., p[1] as f64 + 1.);
 
         let lines = trace_lines(&field);
         for line in lines {
-            if let Some((first, rest)) = line.split_first() {
+            let simplified = crate::rdp::rdp(
+                &line
+                    .iter()
+                    .map(|p| [p[0] as f64, p[1] as f64])
+                    .collect::<Vec<_>>(),
+                simplify,
+            );
+
+            if let Some((first, rest)) = simplified.split_first() {
                 let mut bez_path = BezPath::new();
                 bez_path.move_to(to_point(*first));
                 for point in rest {

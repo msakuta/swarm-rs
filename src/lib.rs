@@ -3,6 +3,7 @@ mod marching_squares;
 mod mesh_widget;
 mod paint_board;
 mod perlin_noise;
+mod rdp;
 mod shape;
 mod widget;
 #[macro_use]

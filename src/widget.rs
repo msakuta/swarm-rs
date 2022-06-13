@@ -30,6 +30,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                                     let (board, simplified_border) = AppData::create_board(
                                         (data.xs, data.ys),
                                         data.seed_text.parse().unwrap_or(1),
+                                        data.simplify_text.parse().unwrap_or(0.5),
                                     );
                                     *Rc::make_mut(&mut data.board) = board;
                                     *Rc::make_mut(&mut data.simplified_border) = simplified_border;
@@ -74,6 +75,12 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     Flex::row()
                         .with_child(Label::new("Seed: ").padding(3.0))
                         .with_child(TextBox::new().lens(AppData::seed_text))
+                        .padding(5.0),
+                )
+                .with_child(
+                    Flex::row()
+                        .with_child(Label::new("Simplify: ").padding(3.0))
+                        .with_child(TextBox::new().lens(AppData::simplify_text))
                         .padding(5.0),
                 )
                 .with_child(
