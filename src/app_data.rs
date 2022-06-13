@@ -8,9 +8,6 @@ use std::{
     rc::Rc,
 };
 
-#[allow(dead_code)]
-pub(crate) type Polygon = geo::Polygon<f64>;
-
 #[derive(Clone, PartialEq, Eq, Data)]
 pub(crate) enum LineMode {
     Line,
