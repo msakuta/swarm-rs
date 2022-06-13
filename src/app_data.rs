@@ -1,5 +1,8 @@
-use crate::perlin_noise::{gen_terms, perlin_noise_pixel, Xor128};
-use druid::{Data, Lens, Vec2};
+use crate::{
+    marching_squares::{trace_lines, BoolField},
+    perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
+};
+use druid::{piet::kurbo::BezPath, Data, Lens, Point, Vec2};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -26,6 +29,7 @@ pub(crate) struct AppData {
     pub(crate) ys: usize,
     pub(crate) board: Rc<Vec<bool>>,
     pub(crate) line_mode: LineMode,
+    pub(crate) simplified_border: Rc<Vec<BezPath>>,
     pub(crate) origin: Vec2,
     pub(crate) scale: f64,
     pub(crate) message: String,
@@ -37,14 +41,36 @@ pub(crate) struct AppData {
 
 impl AppData {
     pub(crate) fn new() -> Self {
-        let rows = 8;
-        let columns = 8;
         let width = 100.;
         let group_radius = 100.;
 
         let xs = 128;
         let ys = 128;
 
+        let (board, simplified_border) = AppData::create_board((xs, ys));
+
+        Self {
+            rows_text: xs.to_string(),
+            columns_text: ys.to_string(),
+            width_text: width.to_string(),
+            vertex_edit: true,
+            group_edit: true,
+            group_radius_text: group_radius.to_string(),
+            xs,
+            ys,
+            board: Rc::new(board),
+            line_mode: LineMode::Line,
+            simplified_border: Rc::new(simplified_border),
+            origin: Vec2::new(400., 400.),
+            scale: 1.,
+            message: "".to_string(),
+            render_mesh_time: Cell::new(0.),
+            get_mesh_time: 0.,
+            render_stats: Rc::new(RefCell::new("".to_string())),
+        }
+    }
+
+    pub fn create_board((xs, ys): (usize, usize)) -> (Vec<bool>, Vec<BezPath>) {
         let bits = 6;
         let mut xor128 = Xor128::new(123513);
         let terms = gen_terms(&mut xor128, bits);
@@ -65,23 +91,28 @@ impl AppData {
             board.iter().filter(|c| !**c).count()
         );
 
-        Self {
-            rows_text: rows.to_string(),
-            columns_text: columns.to_string(),
-            width_text: width.to_string(),
-            vertex_edit: true,
-            group_edit: true,
-            group_radius_text: group_radius.to_string(),
-            xs,
-            ys,
-            board: Rc::new(board),
-            line_mode: LineMode::Line,
-            origin: Vec2::new(400., 400.),
-            scale: 1.,
-            message: "".to_string(),
-            render_mesh_time: Cell::new(0.),
-            get_mesh_time: 0.,
-            render_stats: Rc::new(RefCell::new("".to_string())),
+        let shape = (xs as isize, ys as isize);
+
+        let field = BoolField::new(&board, shape);
+
+        let mut simplified_border = vec![];
+
+        let to_point = |p: [usize; 2]| Point::new(p[0] as f64 + 1., p[1] as f64 + 1.);
+
+        let lines = trace_lines(&field);
+        for line in lines {
+            if let Some((first, rest)) = line.split_first() {
+                let mut bez_path = BezPath::new();
+                bez_path.move_to(to_point(*first));
+                for point in rest {
+                    bez_path.line_to(to_point(*point));
+                }
+                bez_path.close_path();
+                simplified_border.push(bez_path);
+            }
         }
+        println!("simplified_border: {}", simplified_border.len());
+
+        (board, simplified_border)
     }
 }

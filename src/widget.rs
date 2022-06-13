@@ -7,6 +7,7 @@ use druid::widget::{
     Button, Checkbox, CrossAxisAlignment, Flex, Label, RadioGroup, TextBox, WidgetExt,
 };
 use druid::Color;
+use std::rc::Rc;
 
 const BG: Color = Color::rgb8(0, 0, 53 as u8);
 
@@ -24,6 +25,12 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                                 .on_click(|ctx, data: &mut AppData, _: &Env| {
                                     data.message =
                                         "Define transform mesh by dragging vertices".to_string();
+                                    data.xs = data.columns_text.parse().unwrap_or(64);
+                                    data.ys = data.rows_text.parse().unwrap_or(64);
+                                    let (board, simplified_border) =
+                                        AppData::create_board((data.xs, data.ys));
+                                    *Rc::make_mut(&mut data.board) = board;
+                                    *Rc::make_mut(&mut data.simplified_border) = simplified_border;
                                     ctx.request_paint();
                                 })
                                 .padding(5.0),
@@ -55,9 +62,9 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 )
                 .with_child(
                     Flex::row()
-                        .with_child(Label::new("Rows:").padding(3.0))
+                        .with_child(Label::new("X size:").padding(3.0))
                         .with_child(TextBox::new().lens(AppData::rows_text))
-                        .with_child(Label::new("Columns: ").padding(3.0))
+                        .with_child(Label::new("Y size: ").padding(3.0))
                         .with_child(TextBox::new().lens(AppData::columns_text))
                         .padding(5.0),
                 )

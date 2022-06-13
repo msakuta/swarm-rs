@@ -1,6 +1,7 @@
 use crate::{
     app_data::{AppData, LineMode},
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
+    perlin_noise::Xor128,
 };
 use druid::widget::prelude::*;
 use druid::{
@@ -20,13 +21,15 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
     ctx.save().unwrap();
     ctx.transform(view_transform);
 
+    let mut rng = Xor128::new(32132);
+
     let (xs, ys) = (data.xs, data.ys);
     for (i, cell) in data.board.iter().enumerate() {
         let xi = i % xs;
         let yi = i / ys;
         let point = Point {
-            x: w0 * xi as f64,
-            y: h0 * yi as f64,
+            x: w0 * xi as f64 + (w0 - cell_size.0) * 0.5,
+            y: h0 * yi as f64 + (h0 - cell_size.1) * 0.5,
         };
         let rect = Rect::from_origin_size(point, cell_size);
         ctx.fill(
@@ -41,8 +44,6 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
 
     let shape = (xs as isize, ys as isize);
 
-    let scale_transform = /*view_transform*/ Affine::scale(w0);
-
     const RED_COLOR: Color = Color::rgb8(255, 0, 0);
 
     let field = BoolField::new(data.board.as_ref(), shape);
@@ -53,7 +54,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
             ctx.restore().unwrap();
             for y in 0..ys - 1 {
                 for x in 0..xs - 1 {
-                    let bits = pick_bits(field, (x as isize, y as isize));
+                    let bits = pick_bits(&field, (x as isize, y as isize));
 
                     if bits == 0 || bits == 15 {
                         continue;
@@ -73,11 +74,25 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
                     contours += 1;
                 }
             }
+
+            let scale_transform = view_transform * Affine::scale(w0);
+
+            for bez_path in data.simplified_border.as_ref() {
+                let stroke_color = Color::rgb8(
+                    (rng.nexti() % 0x80 + 0x7f) as u8,
+                    (rng.nexti() % 0x80 + 0x7f) as u8,
+                    (rng.nexti() % 0x80 + 0x7f) as u8,
+                );
+
+                ctx.stroke(scale_transform * bez_path, &stroke_color, 2.0);
+            }
         }
         LineMode::Polygon => {
+            let scale_transform = /*view_transform*/ Affine::scale(w0);
+
             for y in 0..ys - 1 {
                 for x in 0..xs - 1 {
-                    let bits = pick_bits(field, (x as isize, y as isize));
+                    let bits = pick_bits(&field, (x as isize, y as isize));
 
                     if bits == 0 || bits == 15 {
                         continue;
