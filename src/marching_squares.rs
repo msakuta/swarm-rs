@@ -200,13 +200,14 @@ pub(crate) fn trace_line_single(
     let mut ret = vec![];
 
     let mut visited = HashSet::new();
+    let mut last_pos: Option<[usize; 2]> = None;
 
-    let mut move_to = |pos: [usize; 2], dx: isize, dy: isize| {
-        if visited.contains(&pos) {
+    let mut move_to = |pos: [usize; 2], last_pos: Option<[usize; 2]>, dx: isize, dy: isize| {
+        if visited.contains(&(pos, last_pos)) {
             return None;
         }
         ret.push(pos);
-        visited.insert(pos);
+        visited.insert((pos, last_pos));
         // println!("find pixel: {:?} len: {}", pos, ret.len());
         let x = pos[0] as isize + dx;
         let y = pos[1] as isize + dy;
@@ -223,23 +224,44 @@ pub(crate) fn trace_line_single(
             0 | 15 => return if ret.is_empty() { None } else { Some(ret) },
             1..=14 => {
                 let next_pos = match bits {
-                    1 => move_to(pos, 0, -1),
-                    2 => move_to(pos, 1, 0),
-                    3 => move_to(pos, 1, 0),
-                    4 => move_to(pos, 0, 1),
-                    5 => move_to(pos, 0, 1),
-                    6 => move_to(pos, 0, 1),
-                    7 => move_to(pos, 0, 1),
-                    8 => move_to(pos, -1, 0),
-                    9 => move_to(pos, 0, -1),
-                    10 => move_to(pos, -1, 0),
-                    11 => move_to(pos, 1, 0),
-                    12 => move_to(pos, -1, 0),
-                    13 => move_to(pos, 0, -1),
-                    14 => move_to(pos, -1, 0),
+                    1 => move_to(pos, last_pos, 0, -1),
+                    2 => move_to(pos, last_pos, 1, 0),
+                    3 => move_to(pos, last_pos, 1, 0),
+                    4 => move_to(pos, last_pos, 0, 1),
+                    5 => {
+                        if let Some(last_pos_val) = last_pos {
+                            if last_pos_val[0] < pos[0] {
+                                move_to(pos, last_pos, 0, 1)
+                            } else {
+                                move_to(pos, last_pos, 0, -1)
+                            }
+                        } else {
+                            return None;
+                        }
+                    }
+                    6 => move_to(pos, last_pos, 0, 1),
+                    7 => move_to(pos, last_pos, 0, 1),
+                    8 => move_to(pos, last_pos, -1, 0),
+                    9 => move_to(pos, last_pos, 0, -1),
+                    10 => {
+                        if let Some(last_pos_val) = last_pos {
+                            if last_pos_val[1] < pos[1] {
+                                move_to(pos, last_pos, -1, 0)
+                            } else {
+                                move_to(pos, last_pos, 1, 0)
+                            }
+                        } else {
+                            return None;
+                        }
+                    }
+                    11 => move_to(pos, last_pos, 1, 0),
+                    12 => move_to(pos, last_pos, -1, 0),
+                    13 => move_to(pos, last_pos, 0, -1),
+                    14 => move_to(pos, last_pos, -1, 0),
                     _ => None,
                 };
                 if let Some(next_pos) = next_pos {
+                    last_pos = Some(pos);
                     pos = next_pos;
                 } else {
                     return Some(ret);
