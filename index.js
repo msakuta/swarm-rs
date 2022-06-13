@@ -1,4 +1,4 @@
-import init, { wasm_main } from "./pkg/mesh_transform_rs.js";
+import init, { wasm_main } from "./pkg/swarm_rs.js";
 
 async function run() {
   await init();
