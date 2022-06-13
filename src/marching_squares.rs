@@ -34,7 +34,8 @@ pub(crate) struct F64Field<'a> {
 }
 
 impl<'a> F64Field<'a> {
-    fn _new(field: &'a [f64], shape: Shape, threshold: f64) -> Self {
+    #[allow(dead_code)]
+    fn new(field: &'a [f64], shape: Shape, threshold: f64) -> Self {
         Self {
             field,
             shape,
