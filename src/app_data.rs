@@ -104,14 +104,27 @@ impl AppData {
         let to_point = |p: [f64; 2]| Point::new(p[0] as f64 + 1., p[1] as f64 + 1.);
 
         let lines = trace_lines(&field);
+        let mut simplified_vertices = 0;
         for line in &lines {
-            let simplified = crate::rdp::rdp(
-                &line
-                    .iter()
-                    .map(|p| [p[0] as f64, p[1] as f64])
-                    .collect::<Vec<_>>(),
-                simplify,
-            );
+            let simplified = if simplify == 0. {
+                line.iter().map(|p| [p[0] as f64, p[1] as f64]).collect()
+            } else {
+                // println!("rdp closed: {} start/end: {:?}/{:?}", line.first() == line.last(), line.first(), line.last());
+
+                // if the ring is closed, remove the last element to open it, because rdp needs different start and end points
+                let mut slice = &line[..];
+                while 1 < slice.len() && slice.first() == slice.last() {
+                    slice = &slice[..slice.len() - 1];
+                }
+
+                crate::rdp::rdp(
+                    &slice
+                        .iter()
+                        .map(|p| [p[0] as f64, p[1] as f64])
+                        .collect::<Vec<_>>(),
+                    simplify,
+                )
+            };
 
             // If the polygon does not make up a triangle, skip it
             if simplified.len() <= 2 {
@@ -126,12 +139,15 @@ impl AppData {
                 }
                 bez_path.close_path();
                 simplified_border.push(bez_path);
+                simplified_vertices += simplified.len();
             }
         }
         println!(
-            "trace_lines: {}, simplified_border: {}",
+            "trace_lines: {}, vertices: {}, simplified_border: {} vertices: {}",
             lines.len(),
-            simplified_border.len()
+            lines.iter().map(|line| line.len()).sum::<usize>(),
+            simplified_border.len(),
+            simplified_vertices
         );
 
         (board, simplified_border)
