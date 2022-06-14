@@ -104,7 +104,7 @@ impl AppData {
         let to_point = |p: [f64; 2]| Point::new(p[0] as f64 + 1., p[1] as f64 + 1.);
 
         let lines = trace_lines(&field);
-        for line in lines {
+        for line in &lines {
             let simplified = crate::rdp::rdp(
                 &line
                     .iter()
@@ -112,6 +112,11 @@ impl AppData {
                     .collect::<Vec<_>>(),
                 simplify,
             );
+
+            // If the polygon does not make up a triangle, skip it
+            if simplified.len() <= 2 {
+                continue;
+            }
 
             if let Some((first, rest)) = simplified.split_first() {
                 let mut bez_path = BezPath::new();
@@ -123,7 +128,11 @@ impl AppData {
                 simplified_border.push(bez_path);
             }
         }
-        println!("simplified_border: {}", simplified_border.len());
+        println!(
+            "trace_lines: {}, simplified_border: {}",
+            lines.len(),
+            simplified_border.len()
+        );
 
         (board, simplified_border)
     }

@@ -19,7 +19,7 @@ pub(crate) fn rdp(point_list: &[[f64; 2]], epsilon: f64) -> Vec<[f64; 2]> {
     let mut dmax = 0.;
     let mut index = 0;
     let end = point_list.len() - 1;
-    for i in 2..end {
+    for i in 1..end {
         let d = perpendicular_distance(&point_list[i], &[point_list[0], point_list[end]]);
         if d > dmax {
             index = i;
@@ -29,13 +29,14 @@ pub(crate) fn rdp(point_list: &[[f64; 2]], epsilon: f64) -> Vec<[f64; 2]> {
 
     // If max distance is greater than epsilon, recursively simplify
     if dmax > epsilon {
-        // # Recursive call
-        let results1 = rdp(&point_list[1..index], epsilon);
-        let results2 = rdp(&point_list[index..end], epsilon);
+        // Recursive call
+        let mut results1 = rdp(&point_list[..index], epsilon);
+        let results2 = rdp(&point_list[index..], epsilon);
 
-        // # Build the result list
-        results1.iter().chain(results2.iter()).copied().collect()
+        // Build the result list
+        results1.extend_from_slice(&results2);
+        results1
     } else {
-        vec![point_list[1], point_list[end]]
+        vec![point_list[0], point_list[end]]
     }
 }
