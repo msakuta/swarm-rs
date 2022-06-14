@@ -159,12 +159,12 @@ pub(crate) fn trace_lines(f: &impl AsBoolField) -> Vec<Vec<[usize; 2]>> {
             }
             let line = trace_line_single(f, [x as usize, y as usize]);
             if let Some(line) = line {
-                println!(
-                    "Got line {:?}, total trace_lines: {}, visited: {}",
-                    line.len(),
-                    ret.len(),
-                    visited.len()
-                );
+                // println!(
+                //     "Got line {:?}, total trace_lines: {}, visited: {}",
+                //     line.len(),
+                //     ret.len(),
+                //     visited.len()
+                // );
                 let mut duplicate = None;
                 for point in &line {
                     if let Some(existing_point) = visited.get(point) {
@@ -175,13 +175,13 @@ pub(crate) fn trace_lines(f: &impl AsBoolField) -> Vec<Vec<[usize; 2]>> {
                     }
                 }
                 if let Some(duplicate) = duplicate {
-                    println!("Duplicate line at {}", duplicate);
+                    // println!("Duplicate line at {}", duplicate);
                     for point in &line {
                         visited.insert(*point, duplicate);
                     }
                     ret[duplicate] = line;
                 } else {
-                    println!("New line at {}", ret.len());
+                    // println!("New line at {}", ret.len());
                     for point in &line {
                         visited.insert(*point, ret.len());
                     }

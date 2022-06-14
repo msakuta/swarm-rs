@@ -30,7 +30,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                                     let (board, simplified_border) = AppData::create_board(
                                         (data.xs, data.ys),
                                         data.seed_text.parse().unwrap_or(1),
-                                        data.simplify_text.parse().unwrap_or(0.5),
+                                        data.simplify_text.parse().unwrap_or(1.),
                                     );
                                     *Rc::make_mut(&mut data.board) = board;
                                     *Rc::make_mut(&mut data.simplified_border) = simplified_border;

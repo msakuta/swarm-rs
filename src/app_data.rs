@@ -41,7 +41,7 @@ impl AppData {
     pub(crate) fn new() -> Self {
         let group_radius = 100.;
         let seed = 123513;
-        let simplify = 0.5;
+        let simplify = 1.;
 
         let xs = 128;
         let ys = 128;
