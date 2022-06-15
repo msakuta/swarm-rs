@@ -3,9 +3,7 @@ use crate::{
     mesh_widget::MeshWidget,
 };
 use druid::widget::prelude::*;
-use druid::widget::{
-    Button, Checkbox, CrossAxisAlignment, Flex, Label, RadioGroup, TextBox, WidgetExt,
-};
+use druid::widget::{Button, CrossAxisAlignment, Flex, Label, RadioGroup, TextBox, WidgetExt};
 use druid::Color;
 use std::rc::Rc;
 
@@ -81,26 +79,6 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     Flex::row()
                         .with_child(Label::new("Simplify: ").padding(3.0))
                         .with_child(TextBox::new().lens(AppData::simplify_text))
-                        .padding(5.0),
-                )
-                .with_child(
-                    Flex::row()
-                        .with_child(
-                            Checkbox::new("Vertex edit")
-                                .lens(AppData::vertex_edit)
-                                .padding(3.0),
-                        )
-                        .with_child(
-                            Checkbox::new("Group edit")
-                                .lens(AppData::group_edit)
-                                .padding(3.0),
-                        )
-                        .padding(5.0),
-                )
-                .with_child(
-                    Flex::row()
-                        .with_child(Label::new("Group radius: ").padding(3.0))
-                        .with_child(TextBox::new().lens(AppData::group_radius_text))
                         .padding(5.0),
                 )
                 .with_child(Flex::row().with_flex_child(

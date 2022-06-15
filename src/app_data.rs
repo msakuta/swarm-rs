@@ -20,9 +20,6 @@ pub(crate) struct AppData {
     pub(crate) columns_text: String,
     pub(crate) seed_text: String,
     pub(crate) simplify_text: String,
-    pub(crate) vertex_edit: bool,
-    pub(crate) group_edit: bool,
-    pub(crate) group_radius_text: String,
     pub(crate) xs: usize,
     pub(crate) ys: usize,
     pub(crate) board: Rc<Vec<bool>>,
@@ -39,7 +36,6 @@ pub(crate) struct AppData {
 
 impl AppData {
     pub(crate) fn new() -> Self {
-        let group_radius = 100.;
         let seed = 123513;
         let simplify = 1.;
 
@@ -53,9 +49,6 @@ impl AppData {
             columns_text: ys.to_string(),
             seed_text: seed.to_string(),
             simplify_text: simplify.to_string(),
-            vertex_edit: true,
-            group_edit: true,
-            group_radius_text: group_radius.to_string(),
             xs,
             ys,
             board: Rc::new(board),
