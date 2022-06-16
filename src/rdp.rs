@@ -16,21 +16,18 @@ pub(crate) fn rdp(point_list: &[[f64; 2]], epsilon: f64) -> Vec<[f64; 2]> {
         return point_list.to_vec();
     }
     // Find the point with the maximum distance
-    let mut dmax = 0.;
-    let mut index = 0;
     let end = point_list.len() - 1;
-    for i in 1..end {
-        let d = perpendicular_distance(&point_list[i], &[point_list[0], point_list[end]]);
-        if d > dmax {
-            index = i;
-            dmax = d;
-        }
-    }
+    let segment = &[point_list[0], point_list[end]];
+    let (index, dmax) = point_list[1..end]
+        .iter()
+        .enumerate()
+        .map(|(i, point)| (i + 1, perpendicular_distance(point, segment)))
+        .fold((0, 0.), |a, b| if a.1 < b.1 { b } else { a });
 
     // If max distance is greater than epsilon, recursively simplify
     if dmax > epsilon {
         // Recursive call
-        let mut results1 = rdp(&point_list[..index], epsilon);
+        let mut results1 = rdp(&point_list[..index + 1], epsilon);
         let results2 = rdp(&point_list[index..], epsilon);
 
         // Build the result list
