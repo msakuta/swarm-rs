@@ -28,9 +28,9 @@ pub(crate) struct AppData {
     pub(crate) origin: Vec2,
     pub(crate) scale: f64,
     pub(crate) message: String,
-    pub(crate) get_mesh_time: f64,
+    pub(crate) get_board_time: f64,
     #[data(ignore)]
-    pub(crate) render_mesh_time: Cell<f64>,
+    pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
 }
 
@@ -57,8 +57,8 @@ impl AppData {
             origin: Vec2::new(400., 400.),
             scale: 1.,
             message: "".to_string(),
-            render_mesh_time: Cell::new(0.),
-            get_mesh_time: 0.,
+            render_board_time: Cell::new(0.),
+            get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
         }
     }

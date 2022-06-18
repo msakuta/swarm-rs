@@ -1,6 +1,6 @@
 use crate::{
     app_data::{AppData, LineMode},
-    mesh_widget::MeshWidget,
+    board_widget::MeshWidget,
 };
 use druid::widget::prelude::*;
 use druid::widget::{Button, CrossAxisAlignment, Flex, Label, RadioGroup, TextBox, WidgetExt};
@@ -88,9 +88,9 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 .with_child(Flex::row().with_flex_child(
                     Label::new(|data: &AppData, _: &_| {
                         format!(
-                            "Render mesh: {:.06}s, Get mesh: {:.06}s",
-                            data.render_mesh_time.get(),
-                            &data.get_mesh_time
+                            "Render board: {:.06}s, Get board: {:.06}s",
+                            data.render_board_time.get(),
+                            &data.get_board_time
                         )
                     }),
                     1.,
