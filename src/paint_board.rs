@@ -202,17 +202,26 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
 
     const AGENT_COLORS: [Color; 2] = [Color::rgb8(63, 255, 63), Color::RED];
 
-    for agent in data.agents.iter() {
+    for agent in data.entities.iter() {
         let agent = agent.borrow();
-        let pos = to_point(agent.pos);
+        let pos = to_point(agent.get_pos());
         let circle = Circle::new(view_transform * pos, 5.);
-        let brush = &AGENT_COLORS[agent.team % AGENT_COLORS.len()];
+        let brush = &AGENT_COLORS[agent.get_team() % AGENT_COLORS.len()];
         ctx.fill(circle, brush);
 
+        if !agent.is_agent() {
+            let big_circle = Circle::new(view_transform * pos, 10.);
+            ctx.stroke(big_circle, brush, 3.);
+        }
+
         if data.target_visible {
-            if let Some(target) = agent.target {
-                if let Some(target) = data.agents.iter().find(|agent| agent.borrow().id == target) {
-                    let target_pos = target.borrow().pos;
+            if let Some(target) = agent.get_target() {
+                if let Some(target) = data
+                    .entities
+                    .iter()
+                    .find(|agent| agent.borrow().get_id() == target)
+                {
+                    let target_pos = target.borrow().get_pos();
                     let line = Line::new(pos, to_point(target_pos));
 
                     ctx.stroke(view_transform * line, brush, 1.);
@@ -221,13 +230,13 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
         }
 
         if data.path_visible {
-            if let Some((first, rest)) = agent.path.split_first() {
+            if let Some((first, rest)) = agent.get_path().and_then(|path| path.split_first()) {
                 let mut bez_path = BezPath::new();
                 bez_path.move_to(to_point(*first));
                 for point in rest {
                     bez_path.line_to(to_point(*point));
                 }
-                bez_path.line_to(to_point(agent.pos));
+                bez_path.line_to(to_point(agent.get_pos()));
                 ctx.stroke(view_transform * bez_path, brush, 1.);
             }
         }

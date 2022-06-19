@@ -9,6 +9,8 @@ mod widget;
 #[macro_use]
 mod macros;
 mod agent;
+mod entity;
+mod spawner;
 mod triangle_utils;
 
 use crate::{app_data::AppData, widget::make_widget};
@@ -33,7 +35,7 @@ pub fn main() {
         })
         .resizable(true)
         .title(
-            LocalizedString::new("custom-widget-demo-window-title").with_placeholder("Swarm-js"),
+            LocalizedString::new("custom-widget-demo-window-title").with_placeholder("Swarm-rs"),
         );
 
     AppLauncher::with_window(window)

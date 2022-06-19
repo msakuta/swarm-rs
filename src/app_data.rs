@@ -1,7 +1,9 @@
 use crate::{
     agent::{Agent, Bullet},
+    entity::{Entity, GameEvent},
     marching_squares::{trace_lines, BoolField},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
+    spawner::Spawner,
     triangle_utils::{center_of_triangle_obj, find_triangle_at, label_triangles},
     WINDOW_HEIGHT,
 };
@@ -31,7 +33,7 @@ pub(crate) struct AppData {
     pub(crate) simplify_text: String,
     pub(crate) xs: usize,
     pub(crate) ys: usize,
-    pub(crate) board: Rc<Vec<bool>>,
+    pub(crate) board: Rc<Board>,
     pub(crate) line_mode: LineMode,
     pub(crate) simplified_border: Rc<Vec<BezPath>>,
     pub(crate) simplified_visible: bool,
@@ -50,7 +52,7 @@ pub(crate) struct AppData {
     #[data(ignore)]
     pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
-    pub(crate) agents: Rc<Vec<RefCell<Agent>>>,
+    pub(crate) entities: Rc<Vec<RefCell<Entity>>>,
     pub(crate) bullets: Rc<Vec<Bullet>>,
     pub(crate) paused: bool,
     pub(crate) interval: f64,
@@ -90,24 +92,7 @@ impl AppData {
             .max_by_key(|(_, count)| **count)
             .map(|(key, _)| *key);
 
-        let mut id_gen = 0;
-        let mut agents = vec![];
-        let mut agent_rng = Xor128::new(seed);
-        for i in 0..4 {
-            if let Some(agent) = Self::try_new_agent(
-                &mut agent_rng,
-                &mut id_gen,
-                &board,
-                (xs, ys),
-                i % 2,
-                &triangulation,
-                &points,
-                &triangle_labels,
-                largest_label,
-            ) {
-                agents.push(RefCell::new(agent));
-            }
-        }
+        let id_gen = 0;
 
         Self {
             rows_text: xs.to_string(),
@@ -134,11 +119,11 @@ impl AppData {
             render_board_time: Cell::new(0.),
             get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
-            agents: Rc::new(agents),
+            entities: Rc::new(vec![]),
             bullets: Rc::new(vec![]),
             paused: false,
             interval: 100.,
-            rng: Rc::new(agent_rng),
+            rng: Rc::new(Xor128::new(9318245)),
             id_gen,
             path_visible: true,
             target_visible: true,
@@ -278,27 +263,43 @@ impl AppData {
         self.points = Rc::new(points);
         self.triangle_passable = Rc::new(triangle_passable);
         self.triangle_labels = Rc::new(triangle_labels);
-        self.agents = Rc::new(vec![]);
+        self.entities = Rc::new(vec![]);
         self.bullets = Rc::new(vec![]);
     }
 
-    fn try_new_agent(
-        rng: &mut Xor128,
-        id_gen: &mut usize,
-        board: &Board,
-        (xs, ys): (usize, usize),
-        team: usize,
-        triangulation: &Triangulation,
-        points: &[delaunator::Point],
-        triangle_labels: &[i32],
-        largest_label: Option<i32>,
-    ) -> Option<Agent> {
+    pub(crate) fn try_new_agent(&mut self, pos: [f64; 2], team: usize) -> Option<Entity> {
+        let rng = Rc::make_mut(&mut self.rng);
+        let id_gen = &mut self.id_gen;
+        let triangulation = &self.triangulation;
+        let points = &self.points;
+        let triangle_labels = &self.triangle_labels;
+        let largest_label = self.largest_label;
         for _ in 0..10 {
-            let pos_candidate = [rng.next() * xs as f64, rng.next() * ys as f64];
+            let pos_candidate = [
+                pos[0] + rng.next() * 10. - 5.,
+                pos[1] + rng.next() * 10. - 5.,
+            ];
             if let Some(tri) = find_triangle_at(&triangulation, &points, pos_candidate) {
                 if Some(triangle_labels[tri]) == largest_label {
-                    if board[pos_candidate[0] as usize + xs * pos_candidate[1] as usize] {
-                        return Some(Agent::new(id_gen, pos_candidate, team));
+                    return Some(Entity::Agent(Agent::new(id_gen, pos_candidate, team)));
+                }
+            }
+        }
+        None
+    }
+
+    fn try_new_spawner(&mut self, team: usize) -> Option<Entity> {
+        for _ in 0..10 {
+            let rng = Rc::make_mut(&mut self.rng);
+            let pos_candidate = [rng.next() * self.xs as f64, rng.next() * self.ys as f64];
+            if let Some(tri) = find_triangle_at(&self.triangulation, &self.points, pos_candidate) {
+                if Some(self.triangle_labels[tri]) == self.largest_label {
+                    if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
+                        return Some(Entity::Spawner(Spawner::new(
+                            &mut self.id_gen,
+                            pos_candidate,
+                            team,
+                        )));
                     }
                 }
             }
@@ -307,21 +308,28 @@ impl AppData {
     }
 
     pub(crate) fn update(&mut self) {
-        let agents = &self.agents;
-        for agent in agents.iter() {
-            let mut agent = agent.borrow_mut();
-            agent.find_enemy(agents);
-            agent.update(
-                agents,
-                &self.triangulation,
-                &self.points,
-                &self.triangle_passable,
-                &self.board,
-                (self.xs as isize, self.ys as isize),
-                Rc::make_mut(&mut self.bullets),
-            );
+        let mut entities = std::mem::take(Rc::make_mut(&mut self.entities));
+        let mut bullets = std::mem::take(Rc::make_mut(&mut self.bullets));
+        let mut events = vec![];
+        for entity in entities.iter() {
+            let mut entity = entity.borrow_mut();
+            events.extend(entity.update(self, &entities, &mut bullets));
         }
 
+        for event in events {
+            match event {
+                GameEvent::SpawnAgent { pos, team } => {
+                    if let Some(agent) = self.try_new_agent(pos, team) {
+                        entities.push(RefCell::new(agent));
+                    }
+                }
+            }
+        }
+
+        self.entities = Rc::new(entities);
+        self.bullets = Rc::new(bullets);
+
+        let agents = &self.entities;
         self.bullets = Rc::new(
             self.bullets
                 .iter()
@@ -332,13 +340,15 @@ impl AppData {
                     let newpos = (Vector2::from(bullet.pos) + Vector2::from(bullet.velo)).into();
                     for agent in agents.iter() {
                         let mut agent = agent.borrow_mut();
-                        if agent.team == bullet.team {
+                        if agent.get_team() == bullet.team {
                             continue;
                         }
-                        let dist2 = Vector2::from(agent.pos).distance2(Vector2::from(newpos));
+                        let dist2 = Vector2::from(agent.get_pos()).distance2(Vector2::from(newpos));
                         if dist2 < 3. * 3. {
-                            agent.active = false;
-                            println!("Agent {} is being killed", agent.id);
+                            if !agent.damage() {
+                                agent.set_active(false);
+                            }
+                            println!("Agent {} is being killed", agent.get_id());
                             return None;
                         }
                     }
@@ -349,38 +359,26 @@ impl AppData {
                 .collect(),
         );
 
-        let mut agents: Vec<_> = self
-            .agents
-            .iter()
-            .filter(|agent| agent.borrow().active)
-            .map(|agent| agent.clone())
+        let mut entities: Vec<_> = std::mem::take(Rc::make_mut(&mut self.entities))
+            .into_iter()
+            .filter(|agent| agent.borrow().get_active())
             .collect();
 
-        let rng = Rc::make_mut(&mut self.rng);
         for team in 0..2 {
-            if agents
+            let rng = Rc::make_mut(&mut self.rng);
+            if entities
                 .iter()
-                .filter(|agent| agent.borrow().team == team)
+                .filter(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
                 .count()
-                < 5
+                < 1
                 && rng.next() < 0.1
             {
-                if let Some(agent) = Self::try_new_agent(
-                    rng,
-                    &mut self.id_gen,
-                    &self.board,
-                    (self.xs, self.ys),
-                    team,
-                    &self.triangulation,
-                    &self.points,
-                    &self.triangle_labels,
-                    self.largest_label,
-                ) {
-                    agents.push(RefCell::new(agent));
+                if let Some(spawner) = self.try_new_spawner(team) {
+                    entities.push(RefCell::new(spawner));
                 }
             }
         }
-        self.agents = Rc::new(agents);
+        self.entities = Rc::new(entities);
     }
 
     pub(crate) fn is_passable_at(&self, pos: [f64; 2]) -> bool {

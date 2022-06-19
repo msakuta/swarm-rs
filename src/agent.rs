@@ -1,8 +1,11 @@
 mod find_path;
 
-use crate::shape::{Idx, Shape};
+use crate::{
+    app_data::AppData,
+    entity::Entity,
+    shape::{Idx, Shape},
+};
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
-use ::delaunator::{Point, Triangulation};
 use std::{cell::RefCell, collections::HashSet};
 
 #[derive(Clone, Debug)]
@@ -56,15 +59,17 @@ impl Agent {
         }
     }
 
-    pub(crate) fn find_enemy<'a>(&'a mut self, agents: &[RefCell<Agent>]) {
+    pub(crate) fn find_enemy<'a>(&'a mut self, agents: &[RefCell<Entity>]) {
         let best_agent = agents
             .iter()
             .filter_map(|a| a.try_borrow().ok())
             .filter(|a| {
-                !self.unreachables.contains(&a.id) && a.id != self.id && a.team != self.team
+                let aid = a.get_id();
+                let ateam = a.get_team();
+                !self.unreachables.contains(&aid) && aid != self.id && ateam != self.team
             })
             .filter_map(|a| {
-                let distance = Vector2::from(a.pos).distance(Vector2::from(self.pos));
+                let distance = Vector2::from(a.get_pos()).distance(Vector2::from(self.pos));
                 Some((distance, a))
             })
             .fold(None, |acc: Option<(f64, _)>, cur| {
@@ -80,7 +85,7 @@ impl Agent {
             });
 
         if let Some((_dist, agent)) = best_agent {
-            self.target = Some(agent.id);
+            self.target = Some(agent.get_id());
         }
     }
 
@@ -104,18 +109,21 @@ impl Agent {
 
     pub fn update<'a, 'b>(
         &'a mut self,
-        agents: &[RefCell<Agent>],
-        triangulation: &Triangulation,
-        points: &[Point],
-        triangle_passable: &[bool],
-        board: &[bool],
-        shape: Shape,
+        app_data: &mut AppData,
+        entities: &[RefCell<Entity>],
         bullets: &mut Vec<Bullet>,
     ) {
+        let triangulation = &app_data.triangulation;
+        let points = &app_data.points;
+        let triangle_passable = &app_data.triangle_passable;
+        let board = &app_data.board;
+        let shape = (app_data.xs as isize, app_data.ys as isize);
         if let Some(target) = self.target.and_then(|target| {
-            agents
-                .iter()
-                .find(|a| a.try_borrow().map(|a| a.id == target).unwrap_or(false))
+            entities.iter().find(|a| {
+                a.try_borrow()
+                    .map(|a| a.get_id() == target)
+                    .unwrap_or(false)
+            })
         }) {
             let target = target.borrow_mut();
             if self
@@ -126,10 +134,10 @@ impl Agent {
                     let target_pos = *target;
                     self.move_to(board, shape, target_pos);
                 }
-            } else if 10. < Vector2::from(target.pos).distance(Vector2::from(self.pos)) {
-                self.move_to(board, shape, target.pos);
+            } else if 10. < Vector2::from(target.get_pos()).distance(Vector2::from(self.pos)) {
+                self.move_to(board, shape, target.get_pos());
             }
-            self.shoot_bullet(bullets, target.pos);
+            self.shoot_bullet(bullets, target.get_pos());
         } else {
             self.path = vec![];
         }

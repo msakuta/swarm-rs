@@ -1,5 +1,8 @@
 use super::Agent;
-use crate::triangle_utils::{center_of_triangle_obj, find_triangle_at};
+use crate::{
+    entity::Entity,
+    triangle_utils::{center_of_triangle_obj, find_triangle_at},
+};
 use ::cgmath::{InnerSpace, Vector2};
 use ::delaunator::Triangulation;
 use std::{cmp::Reverse, collections::BinaryHeap};
@@ -16,14 +19,15 @@ fn inftest() {
 impl Agent {
     pub fn find_path<'a, 'b>(
         &'a mut self,
-        target: Option<&Agent>,
+        target: Option<&Entity>,
         triangulation: &Triangulation,
         points: &[delaunator::Point],
         triangle_passable: &[bool],
     ) -> Result<(), ()> {
         if let Some(target) = target {
             let this_triangle = find_triangle_at(&triangulation, &points, self.pos).ok_or(())?;
-            let target_triangle = find_triangle_at(&triangulation, &points, target.pos).ok_or(())?;
+            let target_triangle =
+                find_triangle_at(&triangulation, &points, target.get_pos()).ok_or(())?;
             if this_triangle == target_triangle {
                 // self.path_line = vec![
                 //         self.pos,
@@ -79,7 +83,7 @@ impl Agent {
                 }
             }
             if !found_path {
-                self.unreachables.insert(target.id);
+                self.unreachables.insert(target.get_id());
                 self.target = None;
             }
 
