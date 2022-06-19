@@ -2,7 +2,7 @@ use crate::{
     agent::{Agent, Bullet},
     marching_squares::{trace_lines, BoolField},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
-    triangle_utils::{center_of_triangle_obj, label_triangles},
+    triangle_utils::{center_of_triangle_obj, find_triangle_at, label_triangles},
     WINDOW_HEIGHT,
 };
 use ::cgmath::{MetricSpace, Vector2};
@@ -10,6 +10,7 @@ use ::delaunator::{triangulate, Triangulation};
 use druid::{piet::kurbo::BezPath, Data, Lens, Point, Vec2};
 use std::{
     cell::{Cell, RefCell},
+    collections::HashMap,
     rc::Rc,
 };
 
@@ -36,6 +37,7 @@ pub(crate) struct AppData {
     pub(crate) simplified_visible: bool,
     pub(crate) triangulation: Rc<Triangulation>,
     pub(crate) points: Rc<Vec<delaunator::Point>>,
+    pub(crate) largest_label: Option<i32>,
     pub(crate) triangle_passable: Rc<Vec<bool>>,
     pub(crate) triangle_labels: Rc<Vec<i32>>,
     pub(crate) triangulation_visible: bool,
@@ -70,23 +72,42 @@ impl AppData {
 
         let (board, simplified_border, points) = AppData::create_board((xs, ys), seed, simplify);
 
-        let mut id_gen = 0;
-        let mut agents = vec![];
-        let mut agent_rng = Xor128::new(seed);
-        for i in 0..4 {
-            if let Some(agent) =
-                Self::try_new_agent(&mut agent_rng, &mut id_gen, &board, (xs, ys), i % 2)
-            {
-                agents.push(RefCell::new(agent));
-            }
-        }
-
         let triangulation = triangulate(&points);
 
         let triangle_passable =
             Self::calc_passable_triangles(&board, (xs, ys), &points, &triangulation);
 
         let triangle_labels = label_triangles(&triangulation, &triangle_passable);
+
+        let mut label_stats = HashMap::new();
+        for label in &triangle_labels {
+            if *label != -1 {
+                *label_stats.entry(*label).or_insert(0) += 1;
+            }
+        }
+        let largest_label = label_stats
+            .iter()
+            .max_by_key(|(_, count)| **count)
+            .map(|(key, _)| *key);
+
+        let mut id_gen = 0;
+        let mut agents = vec![];
+        let mut agent_rng = Xor128::new(seed);
+        for i in 0..4 {
+            if let Some(agent) = Self::try_new_agent(
+                &mut agent_rng,
+                &mut id_gen,
+                &board,
+                (xs, ys),
+                i % 2,
+                &triangulation,
+                &points,
+                &triangle_labels,
+                largest_label,
+            ) {
+                agents.push(RefCell::new(agent));
+            }
+        }
 
         Self {
             rows_text: xs.to_string(),
@@ -102,6 +123,7 @@ impl AppData {
             triangulation: Rc::new(triangulation),
             triangle_passable: Rc::new(triangle_passable),
             triangle_labels: Rc::new(triangle_labels),
+            largest_label,
             points: Rc::new(points),
             triangulation_visible: false,
             unpassable_visible: false,
@@ -239,6 +261,17 @@ impl AppData {
 
         let triangle_labels = label_triangles(&triangulation, &triangle_passable);
 
+        let mut label_stats = HashMap::new();
+        for label in &triangle_labels {
+            if *label != -1 {
+                *label_stats.entry(*label).or_insert(0) += 1;
+            }
+        }
+        self.largest_label = label_stats
+            .iter()
+            .max_by_key(|(_, count)| **count)
+            .map(|(key, _)| *key);
+
         self.board = Rc::new(board);
         self.simplified_border = Rc::new(simplified_border);
         self.triangulation = Rc::new(triangulation);
@@ -255,11 +288,19 @@ impl AppData {
         board: &Board,
         (xs, ys): (usize, usize),
         team: usize,
+        triangulation: &Triangulation,
+        points: &[delaunator::Point],
+        triangle_labels: &[i32],
+        largest_label: Option<i32>,
     ) -> Option<Agent> {
         for _ in 0..10 {
             let pos_candidate = [rng.next() * xs as f64, rng.next() * ys as f64];
-            if board[pos_candidate[0] as usize + xs * pos_candidate[1] as usize] {
-                return Some(Agent::new(id_gen, pos_candidate, team));
+            if let Some(tri) = find_triangle_at(&triangulation, &points, pos_candidate) {
+                if Some(triangle_labels[tri]) == largest_label {
+                    if board[pos_candidate[0] as usize + xs * pos_candidate[1] as usize] {
+                        return Some(Agent::new(id_gen, pos_candidate, team));
+                    }
+                }
             }
         }
         None
@@ -330,6 +371,10 @@ impl AppData {
                     &self.board,
                     (self.xs, self.ys),
                     team,
+                    &self.triangulation,
+                    &self.points,
+                    &self.triangle_labels,
+                    self.largest_label,
                 ) {
                     agents.push(RefCell::new(agent));
                 }
