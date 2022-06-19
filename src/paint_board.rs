@@ -28,8 +28,8 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
         let xi = i % xs;
         let yi = i / ys;
         let point = Point {
-            x: w0 * xi as f64 + (w0 - cell_size.0) * 0.5,
-            y: h0 * yi as f64 + (h0 - cell_size.1) * 0.5,
+            x: w0 * (xi as f64 - 1.) + (w0 - cell_size.0) * 0.5,
+            y: h0 * (yi as f64 - 1.) + (h0 - cell_size.1) * 0.5,
         };
         let rect = Rect::from_origin_size(point, cell_size);
         ctx.fill(
@@ -50,6 +50,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
 
     let mut contours = 0;
     match data.line_mode {
+        LineMode::None => ctx.restore().unwrap(),
         LineMode::Line => {
             ctx.restore().unwrap();
             for y in 0..ys - 1 {
@@ -63,8 +64,8 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
                     let lines = cell_lines(bits);
                     let to_point = |p: [f32; 2]| {
                         Point::new(
-                            (p[0] as f64 + x as f64 + 0.5) * w0,
-                            (p[1] as f64 + y as f64 + 0.5) * h0,
+                            (p[0] as f64 + x as f64 - 0.5) * w0,
+                            (p[1] as f64 + y as f64 - 0.5) * h0,
                         )
                     };
                     for line in lines {
@@ -73,18 +74,6 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
                     }
                     contours += 1;
                 }
-            }
-
-            let scale_transform = view_transform * Affine::scale(w0);
-
-            for bez_path in data.simplified_border.as_ref() {
-                let stroke_color = Color::rgb8(
-                    (rng.nexti() % 0x80 + 0x7f) as u8,
-                    (rng.nexti() % 0x80 + 0x7f) as u8,
-                    (rng.nexti() % 0x80 + 0x7f) as u8,
-                );
-
-                ctx.stroke(scale_transform * bez_path, &stroke_color, 2.0);
             }
         }
         LineMode::Polygon => {
@@ -104,8 +93,8 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
                     let mut path = BezPath::new();
                     let to_point = |i: usize| {
                         Point::new(
-                            (poly[i * 2] as f64) / 2. + 1. + x as f64,
-                            (poly[i * 2 + 1] as f64) / 2. + 1. + y as f64,
+                            (poly[i * 2] as f64) / 2. + x as f64,
+                            (poly[i * 2 + 1] as f64) / 2. + y as f64,
                         )
                     };
                     path.move_to(scale_transform * to_point(0));
@@ -118,6 +107,40 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
                 }
             }
             ctx.restore().unwrap();
+        }
+    }
+
+    let scale_transform = view_transform * Affine::scale(w0);
+
+    if data.simplified_visible {
+        for bez_path in data.simplified_border.as_ref() {
+            let stroke_color = Color::rgb8(
+                (rng.nexti() % 0x80 + 0x7f) as u8,
+                (rng.nexti() % 0x80 + 0x7f) as u8,
+                (rng.nexti() % 0x80 + 0x7f) as u8,
+            );
+
+            ctx.stroke(scale_transform * bez_path, &stroke_color, 2.0);
+        }
+    }
+
+    fn delaunator_to_druid_point(p: &delaunator::Point) -> Point {
+        Point { x: p.x, y: p.y }
+    }
+
+    const PURPLE_COLOR: Color = Color::rgb8(255, 0, 255);
+
+    if data.triangulation_visible {
+        let triangles = &data.triangulation.triangles;
+        for triangle in triangles.chunks(3) {
+            let vertices: [usize; 4] = [triangle[0], triangle[1], triangle[2], triangle[0]];
+            for (start, end) in vertices.iter().zip(vertices.iter().skip(1)) {
+                let line = Line::new(
+                    delaunator_to_druid_point(&data.points[*start]),
+                    delaunator_to_druid_point(&data.points[*end]),
+                );
+                ctx.stroke(scale_transform * line, &PURPLE_COLOR, 1.0);
+            }
         }
     }
 

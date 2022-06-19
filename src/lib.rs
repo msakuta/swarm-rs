@@ -1,6 +1,6 @@
 mod app_data;
-mod marching_squares;
 mod board_widget;
+mod marching_squares;
 mod paint_board;
 mod perlin_noise;
 mod rdp;

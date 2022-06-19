@@ -2,6 +2,7 @@ use crate::{
     marching_squares::{trace_lines, BoolField},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
 };
+use ::delaunator::{triangulate, Triangulation};
 use druid::{piet::kurbo::BezPath, Data, Lens, Point, Vec2};
 use std::{
     cell::{Cell, RefCell},
@@ -10,6 +11,7 @@ use std::{
 
 #[derive(Clone, PartialEq, Eq, Data)]
 pub(crate) enum LineMode {
+    None,
     Line,
     Polygon,
 }
@@ -25,6 +27,10 @@ pub(crate) struct AppData {
     pub(crate) board: Rc<Vec<bool>>,
     pub(crate) line_mode: LineMode,
     pub(crate) simplified_border: Rc<Vec<BezPath>>,
+    pub(crate) simplified_visible: bool,
+    pub(crate) triangulation: Rc<Triangulation>,
+    pub(crate) points: Rc<Vec<delaunator::Point>>,
+    pub(crate) triangulation_visible: bool,
     pub(crate) origin: Vec2,
     pub(crate) scale: f64,
     pub(crate) message: String,
@@ -42,7 +48,7 @@ impl AppData {
         let xs = 128;
         let ys = 128;
 
-        let (board, simplified_border) = AppData::create_board((xs, ys), seed, simplify);
+        let (board, simplified_border, points) = AppData::create_board((xs, ys), seed, simplify);
 
         Self {
             rows_text: xs.to_string(),
@@ -52,8 +58,12 @@ impl AppData {
             xs,
             ys,
             board: Rc::new(board),
-            line_mode: LineMode::Line,
+            line_mode: LineMode::None,
             simplified_border: Rc::new(simplified_border),
+            simplified_visible: true,
+            triangulation: Rc::new(triangulate(&points)),
+            points: Rc::new(points),
+            triangulation_visible: true,
             origin: Vec2::new(400., 400.),
             scale: 1.,
             message: "".to_string(),
@@ -66,8 +76,8 @@ impl AppData {
     pub fn create_board(
         (xs, ys): (usize, usize),
         seed: u32,
-        simplify: f64,
-    ) -> (Vec<bool>, Vec<BezPath>) {
+        simplify_epsilon: f64,
+    ) -> (Vec<bool>, Vec<BezPath>, Vec<delaunator::Point>) {
         let bits = 6;
         let mut xor128 = Xor128::new(seed);
         let terms = gen_terms(&mut xor128, bits);
@@ -93,13 +103,14 @@ impl AppData {
         let field = BoolField::new(&board, shape);
 
         let mut simplified_border = vec![];
+        let mut points = vec![];
 
-        let to_point = |p: [f64; 2]| Point::new(p[0] as f64 + 1., p[1] as f64 + 1.);
+        let to_point = |p: [f64; 2]| Point::new(p[0] as f64, p[1] as f64);
 
         let lines = trace_lines(&field);
         let mut simplified_vertices = 0;
         for line in &lines {
-            let simplified = if simplify == 0. {
+            let simplified = if simplify_epsilon == 0. {
                 line.iter().map(|p| [p[0] as f64, p[1] as f64]).collect()
             } else {
                 // println!("rdp closed: {} start/end: {:?}/{:?}", line.first() == line.last(), line.first(), line.last());
@@ -115,7 +126,7 @@ impl AppData {
                         .iter()
                         .map(|p| [p[0] as f64, p[1] as f64])
                         .collect::<Vec<_>>(),
-                    simplify,
+                    simplify_epsilon,
                 )
             };
 
@@ -129,6 +140,10 @@ impl AppData {
                 bez_path.move_to(to_point(*first));
                 for point in rest {
                     bez_path.line_to(to_point(*point));
+                    points.push(delaunator::Point {
+                        x: point[0],
+                        y: point[1],
+                    });
                 }
                 bez_path.close_path();
                 simplified_border.push(bez_path);
@@ -143,6 +158,6 @@ impl AppData {
             simplified_vertices
         );
 
-        (board, simplified_border)
+        (board, simplified_border, points)
     }
 }

@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 druid = "0.7.0"
 cgmath = "0.18.0"
 serde_json = "1.0"
+delaunator = "1.0.1"
 
 wasm-bindgen = "0.2.67"
 console_error_panic_hook = "0.1.6"

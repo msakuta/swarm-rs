@@ -2,8 +2,11 @@ use crate::{
     app_data::{AppData, LineMode},
     board_widget::MeshWidget,
 };
+use ::delaunator::triangulate;
 use druid::widget::prelude::*;
-use druid::widget::{Button, CrossAxisAlignment, Flex, Label, RadioGroup, TextBox, WidgetExt};
+use druid::widget::{
+    Button, Checkbox, CrossAxisAlignment, Flex, Label, RadioGroup, TextBox, WidgetExt,
+};
 use druid::Color;
 use std::rc::Rc;
 
@@ -25,13 +28,14 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                                         "Define transform mesh by dragging vertices".to_string();
                                     data.xs = data.columns_text.parse().unwrap_or(64);
                                     data.ys = data.rows_text.parse().unwrap_or(64);
-                                    let (board, simplified_border) = AppData::create_board(
+                                    let (board, simplified_border, points) = AppData::create_board(
                                         (data.xs, data.ys),
                                         data.seed_text.parse().unwrap_or(1),
                                         data.simplify_text.parse().unwrap_or(1.),
                                     );
                                     *Rc::make_mut(&mut data.board) = board;
                                     *Rc::make_mut(&mut data.simplified_border) = simplified_border;
+                                    *Rc::make_mut(&mut data.triangulation) = triangulate(&points);
                                     ctx.request_paint();
                                 })
                                 .padding(5.0),
@@ -51,15 +55,26 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 )
                 .with_child(
                     Flex::row()
-                        .with_child(Label::new("Line mode:").padding(3.0))
+                        .with_child(Label::new("Border line mode:").padding(3.0))
                         .with_child(
                             RadioGroup::new([
+                                ("none", LineMode::None),
                                 ("line", LineMode::Line),
                                 ("polygon", LineMode::Polygon),
                             ])
                             .lens(AppData::line_mode)
                             .padding(5.),
                         ),
+                )
+                .with_child(
+                    Checkbox::new("Simplified border")
+                        .lens(AppData::simplified_visible)
+                        .padding(5.),
+                )
+                .with_child(
+                    Checkbox::new("Triangulation")
+                        .lens(AppData::triangulation_visible)
+                        .padding(5.),
                 )
                 .with_child(
                     Flex::row()
