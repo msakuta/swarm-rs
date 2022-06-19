@@ -9,6 +9,7 @@ mod widget;
 #[macro_use]
 mod macros;
 mod agent;
+mod triangle_utils;
 
 use crate::{app_data::AppData, widget::make_widget};
 use druid::widget::prelude::*;

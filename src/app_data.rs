@@ -2,6 +2,7 @@ use crate::{
     agent::{Agent, Bullet},
     marching_squares::{trace_lines, BoolField},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
+    triangle_utils::center_of_triangle_obj,
 };
 use ::cgmath::{MetricSpace, Vector2};
 use ::delaunator::{triangulate, Triangulation};
@@ -34,6 +35,7 @@ pub(crate) struct AppData {
     pub(crate) simplified_visible: bool,
     pub(crate) triangulation: Rc<Triangulation>,
     pub(crate) points: Rc<Vec<delaunator::Point>>,
+    pub(crate) triangle_passable: Rc<Vec<bool>>,
     pub(crate) triangulation_visible: bool,
     pub(crate) origin: Vec2,
     pub(crate) scale: f64,
@@ -42,7 +44,7 @@ pub(crate) struct AppData {
     #[data(ignore)]
     pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
-    pub(crate) agents: Rc<Vec<Agent>>,
+    pub(crate) agents: Rc<Vec<RefCell<Agent>>>,
     pub(crate) bullets: Rc<Vec<Bullet>>,
     pub(crate) paused: bool,
     pub(crate) interval: f64,
@@ -67,9 +69,21 @@ impl AppData {
             if let Some(agent) =
                 Self::try_new_agent(&mut agent_rng, &mut id_gen, &board, (xs, ys), i % 2)
             {
-                agents.push(agent);
+                agents.push(RefCell::new(agent));
             }
         }
+
+        let triangulation = triangulate(&points);
+
+        let triangle_passable = triangulation
+            .triangles
+            .chunks(3)
+            .enumerate()
+            .map(|(t, _)| {
+                let pos = center_of_triangle_obj(&triangulation, &points, t);
+                is_passable_at(&board, (xs, ys), [pos.x, pos.y])
+            })
+            .collect();
 
         Self {
             rows_text: xs.to_string(),
@@ -82,7 +96,8 @@ impl AppData {
             line_mode: LineMode::None,
             simplified_border: Rc::new(simplified_border),
             simplified_visible: true,
-            triangulation: Rc::new(triangulate(&points)),
+            triangulation: Rc::new(triangulation),
+            triangle_passable: Rc::new(triangle_passable),
             points: Rc::new(points),
             triangulation_visible: true,
             origin: Vec2::new(400., 400.),
@@ -205,32 +220,30 @@ impl AppData {
     }
 
     pub(crate) fn update(&mut self) {
-        let agents = Rc::make_mut(&mut self.agents);
-        for i in 0..agents.len() {
-            let (first, mid) = agents.split_at_mut(i);
-            let (agent, last) = mid.split_first_mut().unwrap();
-            let rest = || first.iter().chain(last.iter());
-            agent.find_enemy(rest());
-            if let Some(target) = agent
-                .target
-                .and_then(|target| rest().find(|a| a.id == target))
-            {
-                if 10. < Vector2::from(target.pos).distance(Vector2::from(agent.pos)) {
-                    agent.move_to(
-                        self.board.as_ref(),
-                        (self.xs as isize, self.ys as isize),
-                        target.pos,
-                    );
-                }
-                agent.shoot_bullet(Rc::make_mut(&mut self.bullets), target.pos);
-            }
-            agent.update();
+        let agents = &self.agents;
+        // for i in 0..agents.len() {
+        for agent in agents.iter() {
+            // let (first, mid) = agents.split_at_mut(i);
+            // let (agent, last) = mid.split_first_mut().unwrap();
+            // let rest = || first.iter().chain(last.iter());
+            let mut agent = agent.borrow_mut();
+            agent.find_enemy(agents);
+            agent.update(
+                agents,
+                &self.triangulation,
+                &self.points,
+                &self.triangle_passable,
+                &self.board,
+                (self.xs as isize, self.ys as isize),
+                Rc::make_mut(&mut self.bullets),
+            );
         }
 
         let bullets = Rc::make_mut(&mut self.bullets);
         for bullet in bullets {
             bullet.pos = (Vector2::from(bullet.pos) + Vector2::from(bullet.velo)).into();
-            for agent in agents.iter_mut() {
+            for agent in agents.iter() {
+                let mut agent = agent.borrow_mut();
                 if agent.team == bullet.team {
                     continue;
                 }
@@ -245,13 +258,19 @@ impl AppData {
         let agents = std::mem::take(Rc::make_mut(&mut self.agents));
         let mut agents: Vec<_> = agents
             .iter()
-            .filter(|bullet| bullet.active)
-            .map(|bullet| bullet.clone())
+            .filter(|agent| agent.borrow().active)
+            .map(|agent| agent.clone())
             .collect();
 
         let rng = Rc::make_mut(&mut self.rng);
         for team in 0..2 {
-            if agents.iter().filter(|agent| agent.team == team).count() < 5 && rng.next() < 0.1 {
+            if agents
+                .iter()
+                .filter(|agent| agent.borrow().team == team)
+                .count()
+                < 5
+                && rng.next() < 0.1
+            {
                 if let Some(agent) = Self::try_new_agent(
                     rng,
                     &mut self.id_gen,
@@ -259,7 +278,7 @@ impl AppData {
                     (self.xs, self.ys),
                     team,
                 ) {
-                    agents.push(agent);
+                    agents.push(RefCell::new(agent));
                 }
             }
         }
@@ -274,12 +293,16 @@ impl AppData {
     }
 
     pub(crate) fn is_passable_at(&self, pos: [f64; 2]) -> bool {
-        let pos = [pos[0] as isize, pos[1] as isize];
-        if pos[0] < 0 || self.xs as isize <= pos[0] || pos[1] < 0 || self.ys as isize <= pos[1] {
-            false
-        } else {
-            let pos = [pos[0] as usize, pos[1] as usize];
-            self.board[pos[0] + self.xs * pos[1]]
-        }
+        is_passable_at(&self.board, (self.xs, self.ys), pos)
+    }
+}
+
+pub(crate) fn is_passable_at(board: &[bool], shape: (usize, usize), pos: [f64; 2]) -> bool {
+    let pos = [pos[0] as isize, pos[1] as isize];
+    if pos[0] < 0 || shape.0 as isize <= pos[0] || pos[1] < 0 || shape.1 as isize <= pos[1] {
+        false
+    } else {
+        let pos = [pos[0] as usize, pos[1] as usize];
+        board[pos[0] + shape.0 * pos[1]]
     }
 }

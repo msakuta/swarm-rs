@@ -132,7 +132,10 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
 
     if data.triangulation_visible {
         let triangles = &data.triangulation.triangles;
-        for triangle in triangles.chunks(3) {
+        for (i, triangle) in triangles.chunks(3).enumerate() {
+            if !data.triangle_passable[i] {
+                continue;
+            }
             let vertices: [usize; 4] = [triangle[0], triangle[1], triangle[2], triangle[0]];
             for (start, end) in vertices.iter().zip(vertices.iter().skip(1)) {
                 let line = Line::new(
@@ -152,18 +155,29 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
     const AGENT_COLORS: [Color; 2] = [Color::rgb8(63, 255, 63), Color::RED];
 
     for agent in data.agents.iter() {
+        let agent = agent.borrow();
         let pos = to_point(agent.pos);
         let circle = Circle::new(view_transform * pos, 5.);
         let brush = &AGENT_COLORS[agent.team % AGENT_COLORS.len()];
         ctx.fill(circle, brush);
 
-        if let Some(target) = agent.target {
-            if let Some(target) = data.agents.iter().find(|agent| agent.id == target) {
-                let target_pos = target.pos;
-                let line = Line::new(pos, to_point(target_pos));
+        // if let Some(target) = agent.target {
+        //     if let Some(target) = data.agents.iter().find(|agent| agent.borrow().id == target) {
+        //         let target_pos = target.borrow().pos;
+        //         let line = Line::new(pos, to_point(target_pos));
 
-                ctx.stroke(view_transform * line, brush, 1.);
+        //         ctx.stroke(view_transform * line, brush, 1.);
+        //     }
+        // }
+
+        if let Some((first, rest)) = agent.path.split_first() {
+            let mut bez_path = BezPath::new();
+            bez_path.move_to(to_point(*first));
+            for point in rest {
+                bez_path.line_to(to_point(*point));
             }
+            bez_path.line_to(to_point(agent.pos));
+            ctx.stroke(view_transform * bez_path, brush, 1.);
         }
     }
 
