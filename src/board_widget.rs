@@ -1,4 +1,5 @@
 use crate::{app_data::AppData, paint_board::paint_board};
+use ::cgmath::{MetricSpace, Vector2};
 use druid::widget::prelude::*;
 use druid::{Affine, TimerToken, Vec2};
 use std::{rc::Rc, time::Duration};
@@ -38,7 +39,23 @@ impl Widget<AppData> for BoardWidget {
                         for i in 0..agents.len() {
                             let (first, mid) = agents.split_at_mut(i);
                             let (agent, last) = mid.split_first_mut().unwrap();
-                            agent.find_enemy(first.iter().chain(last.iter()));
+                            let rest = || first.iter().chain(last.iter());
+                            agent.find_enemy(rest());
+                            if let Some(target) = agent
+                                .target
+                                .and_then(|target| rest().find(|a| a.id == target))
+                            {
+                                if 10.
+                                    < Vector2::from(target.pos).distance(Vector2::from(agent.pos))
+                                {
+                                    agent.move_to(
+                                        rest(),
+                                        data.board.as_ref(),
+                                        (data.xs as isize, data.ys as isize),
+                                        target.pos,
+                                    );
+                                }
+                            }
                         }
                         ctx.request_paint();
                     }
