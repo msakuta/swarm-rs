@@ -5,7 +5,7 @@ use crate::{
 };
 use druid::widget::prelude::*;
 use druid::{
-    piet::kurbo::{BezPath, Line},
+    piet::kurbo::{BezPath, Circle, Line},
     Affine, Color, Point, Rect,
 };
 
@@ -142,6 +142,19 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
                 ctx.stroke(scale_transform * line, &PURPLE_COLOR, 1.0);
             }
         }
+    }
+
+    const GREEN_COLOR: Color = Color::GREEN;
+
+    for agent in data.agents.iter() {
+        let pos = agent.pos;
+        let pos = Point {
+            x: pos[0] * w0,
+            y: pos[1] * h0,
+        };
+        let circle = Circle::new(view_transform * pos, 5.);
+
+        ctx.fill(circle, &GREEN_COLOR);
     }
 
     *data.render_stats.borrow_mut() = format!("Drawn {} contours", contours);

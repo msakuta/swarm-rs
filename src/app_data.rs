@@ -1,4 +1,5 @@
 use crate::{
+    agent::Agent,
     marching_squares::{trace_lines, BoolField},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
 };
@@ -38,6 +39,7 @@ pub(crate) struct AppData {
     #[data(ignore)]
     pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
+    pub(crate) agents: Rc<Vec<Agent>>,
 }
 
 impl AppData {
@@ -49,6 +51,19 @@ impl AppData {
         let ys = 128;
 
         let (board, simplified_border, points) = AppData::create_board((xs, ys), seed, simplify);
+
+        let mut id_gen = 0;
+        let mut agents = vec![];
+        let mut agent_rng = Xor128::new(seed);
+        for _ in 0..3 {
+            for _ in 0..10 {
+                let pos_candidate = [agent_rng.next() * xs as f64, agent_rng.next() * ys as f64];
+                if board[pos_candidate[0] as usize + xs * pos_candidate[1] as usize] {
+                    agents.push(Agent::new(&mut id_gen, pos_candidate, 0));
+                    break;
+                }
+            }
+        }
 
         Self {
             rows_text: xs.to_string(),
@@ -70,6 +85,7 @@ impl AppData {
             render_board_time: Cell::new(0.),
             get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
+            agents: Rc::new(agents),
         }
     }
 

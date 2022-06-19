@@ -8,6 +8,7 @@ mod shape;
 mod widget;
 #[macro_use]
 mod macros;
+mod agent;
 
 use crate::{app_data::AppData, widget::make_widget};
 use druid::{AppLauncher, Data, Lens, LocalizedString, Size, WindowDesc};
