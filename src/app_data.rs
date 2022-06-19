@@ -1,8 +1,9 @@
 use crate::{
-    agent::Agent,
+    agent::{Agent, Bullet},
     marching_squares::{trace_lines, BoolField},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
 };
+use ::cgmath::{MetricSpace, Vector2};
 use ::delaunator::{triangulate, Triangulation};
 use druid::{piet::kurbo::BezPath, Data, Lens, Point, Vec2};
 use std::{
@@ -40,6 +41,7 @@ pub(crate) struct AppData {
     pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
     pub(crate) agents: Rc<Vec<Agent>>,
+    pub(crate) bullets: Rc<Vec<Bullet>>,
     pub(crate) paused: bool,
     pub(crate) interval: f64,
 }
@@ -88,6 +90,7 @@ impl AppData {
             get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
             agents: Rc::new(agents),
+            bullets: Rc::new(vec![]),
             paused: false,
             interval: 100.,
         }
@@ -179,5 +182,51 @@ impl AppData {
         );
 
         (board, simplified_border, points)
+    }
+
+    pub(crate) fn update(&mut self) {
+        let agents = Rc::make_mut(&mut self.agents);
+        for i in 0..agents.len() {
+            let (first, mid) = agents.split_at_mut(i);
+            let (agent, last) = mid.split_first_mut().unwrap();
+            let rest = || first.iter().chain(last.iter());
+            agent.find_enemy(rest());
+            if let Some(target) = agent
+                .target
+                .and_then(|target| rest().find(|a| a.id == target))
+            {
+                if 10. < Vector2::from(target.pos).distance(Vector2::from(agent.pos)) {
+                    agent.move_to(
+                        self.board.as_ref(),
+                        (self.xs as isize, self.ys as isize),
+                        target.pos,
+                    );
+                }
+                agent.shoot_bullet(Rc::make_mut(&mut self.bullets), target.pos);
+            }
+            agent.update();
+        }
+
+        let bullets = Rc::make_mut(&mut self.bullets);
+        for bullet in bullets {
+            bullet.pos = (Vector2::from(bullet.pos) + Vector2::from(bullet.velo)).into();
+        }
+
+        let bullets = std::mem::take(Rc::make_mut(&mut self.bullets));
+        *Rc::make_mut(&mut self.bullets) = bullets
+            .iter()
+            .filter(|bullet| self.is_passable_at(bullet.pos))
+            .map(|bullet| bullet.clone())
+            .collect();
+    }
+
+    pub(crate) fn is_passable_at(&self, pos: [f64; 2]) -> bool {
+        let pos = [pos[0] as isize, pos[1] as isize];
+        if pos[0] < 0 || self.xs as isize <= pos[0] || pos[1] < 0 || self.ys as isize <= pos[1] {
+            false
+        } else {
+            let pos = [pos[0] as usize, pos[1] as usize];
+            self.board[pos[0] + self.xs * pos[1]]
+        }
     }
 }

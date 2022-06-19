@@ -165,5 +165,18 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
         }
     }
 
+    for bullet in data.bullets.iter() {
+        let circle = Circle::new(view_transform * to_point(bullet.pos), 3.);
+        ctx.fill(
+            circle,
+            if bullet.team == 0 {
+                &Color::WHITE
+            } else {
+                &Color::PURPLE
+            },
+        );
+        ctx.stroke(circle, &Color::YELLOW, 1.);
+    }
+
     *data.render_stats.borrow_mut() = format!("Drawn {} contours", contours);
 }
