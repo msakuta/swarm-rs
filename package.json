@@ -1,0 +1,12 @@
+{
+  "name": "swarm-rs",
+  "version": "0.1.0",
+  "files": [
+    "swarm_rs_bg.wasm",
+    "swarm_rs.js",
+    "swarm_rs.d.ts"
+  ],
+  "module": "swarm_rs.js",
+  "types": "swarm_rs.d.ts",
+  "sideEffects": false
+}
