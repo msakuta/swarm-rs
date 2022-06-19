@@ -57,24 +57,29 @@ impl Agent {
     }
 
     pub(crate) fn find_enemy<'a>(&'a mut self, agents: &[RefCell<Agent>]) {
-        let mut best_agent = None;
-        let mut best_distance = 1e6;
-        for a in agents {
-            if let Ok(a) = a.try_borrow() {
-                if self.unreachables.contains(&a.id) {
-                    continue;
-                }
-                if a.id != self.id && a.team != self.team {
-                    let distance = Vector2::from(a.pos).distance(Vector2::from(self.pos));
-                    if distance < best_distance {
-                        best_agent = Some(a);
-                        best_distance = distance;
+        let best_agent = agents
+            .iter()
+            .filter_map(|a| a.try_borrow().ok())
+            .filter(|a| {
+                !self.unreachables.contains(&a.id) && a.id != self.id && a.team != self.team
+            })
+            .filter_map(|a| {
+                let distance = Vector2::from(a.pos).distance(Vector2::from(self.pos));
+                Some((distance, a))
+            })
+            .fold(None, |acc: Option<(f64, _)>, cur| {
+                if let Some(acc) = acc {
+                    if cur.0 < acc.0 {
+                        Some(cur)
+                    } else {
+                        Some(acc)
                     }
+                } else {
+                    Some(cur)
                 }
-            }
-        }
+            });
 
-        if let Some(agent) = best_agent {
+        if let Some((_dist, agent)) = best_agent {
             self.target = Some(agent.id);
         }
     }
