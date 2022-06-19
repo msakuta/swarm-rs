@@ -6,15 +6,15 @@ use crate::{
 use druid::widget::prelude::*;
 use druid::{
     piet::kurbo::{BezPath, Circle, Line},
-    Affine, Color, Point, Rect,
+    piet::{ImageFormat, InterpolationMode},
+    Affine, Color, Point,
 };
 
-const OBSTACLE_COLOR: Color = Color::rgb8(63, 63, 63);
-const BACKGROUND_COLOR: Color = Color::rgb8(127, 127, 127);
+const OBSTACLE_COLOR: u8 = 63u8;
+const BACKGROUND_COLOR: u8 = 127u8;
 
 pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
     let (w0, h0) = (32., 32.);
-    let cell_size = (28., 28.);
 
     let view_transform = data.view_transform();
 
@@ -24,22 +24,28 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
     let mut rng = Xor128::new(32132);
 
     let (xs, ys) = (data.xs, data.ys);
-    for (i, cell) in data.board.iter().enumerate() {
-        let xi = i % xs;
-        let yi = i / ys;
-        let point = Point {
-            x: w0 * (xi as f64 - 1.) + (w0 - cell_size.0) * 0.5,
-            y: h0 * (yi as f64 - 1.) + (h0 - cell_size.1) * 0.5,
-        };
-        let rect = Rect::from_origin_size(point, cell_size);
-        ctx.fill(
-            rect,
-            if *cell {
-                &BACKGROUND_COLOR
-            } else {
-                &OBSTACLE_COLOR
-            },
-        );
+
+    match ctx.make_image(
+        xs,
+        ys,
+        &data
+            .board
+            .iter()
+            .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
+            .collect::<Vec<_>>(),
+        ImageFormat::Grayscale,
+    ) {
+        Ok(res) => {
+            ctx.draw_image(
+                &res,
+                (
+                    Point::new(-w0, -h0),
+                    Point::new(w0 * (xs as f64 - 1.), h0 * (ys as f64 - 1.)),
+                ),
+                InterpolationMode::NearestNeighbor,
+            );
+        }
+        Err(e) => println!("Make image error: {}", e.to_string()),
     }
 
     let shape = (xs as isize, ys as isize);
