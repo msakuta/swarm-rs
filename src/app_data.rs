@@ -252,24 +252,35 @@ impl AppData {
             );
         }
 
-        let bullets = Rc::make_mut(&mut self.bullets);
-        for bullet in bullets {
-            bullet.pos = (Vector2::from(bullet.pos) + Vector2::from(bullet.velo)).into();
-            for agent in agents.iter() {
-                let mut agent = agent.borrow_mut();
-                if agent.team == bullet.team {
-                    continue;
-                }
-                let dist2 = Vector2::from(agent.pos).distance2(Vector2::from(bullet.pos));
-                if dist2 < 10. * 10. {
-                    agent.active = false;
-                    println!("Agent {} is being killed", agent.id);
-                }
-            }
-        }
+        self.bullets = Rc::new(
+            self.bullets
+                .iter()
+                .filter_map(|bullet| {
+                    if !self.is_passable_at(bullet.pos) {
+                        return None;
+                    }
+                    let newpos = (Vector2::from(bullet.pos) + Vector2::from(bullet.velo)).into();
+                    for agent in agents.iter() {
+                        let mut agent = agent.borrow_mut();
+                        if agent.team == bullet.team {
+                            continue;
+                        }
+                        let dist2 = Vector2::from(agent.pos).distance2(Vector2::from(newpos));
+                        if dist2 < 3. * 3. {
+                            agent.active = false;
+                            println!("Agent {} is being killed", agent.id);
+                            return None;
+                        }
+                    }
+                    let mut ret = bullet.clone();
+                    ret.pos = newpos;
+                    Some(ret)
+                })
+                .collect(),
+        );
 
-        let agents = std::mem::take(Rc::make_mut(&mut self.agents));
-        let mut agents: Vec<_> = agents
+        let mut agents: Vec<_> = self
+            .agents
             .iter()
             .filter(|agent| agent.borrow().active)
             .map(|agent| agent.clone())
@@ -295,14 +306,7 @@ impl AppData {
                 }
             }
         }
-        *Rc::make_mut(&mut self.agents) = agents;
-
-        let bullets = std::mem::take(Rc::make_mut(&mut self.bullets));
-        *Rc::make_mut(&mut self.bullets) = bullets
-            .iter()
-            .filter(|bullet| self.is_passable_at(bullet.pos))
-            .map(|bullet| bullet.clone())
-            .collect();
+        self.agents = Rc::new(agents);
     }
 
     pub(crate) fn is_passable_at(&self, pos: [f64; 2]) -> bool {

@@ -29,7 +29,6 @@ impl Agent {
                 //         self.pos,
                 //         target.pos
                 // ];
-                println!("Already in the same triangle");
                 return Ok(());
             }
             let mut costmap = vec![std::f64::INFINITY; triangulation.triangles.len()];
