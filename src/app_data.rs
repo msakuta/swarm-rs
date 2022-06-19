@@ -78,15 +78,8 @@ impl AppData {
 
         let triangulation = triangulate(&points);
 
-        let triangle_passable = triangulation
-            .triangles
-            .chunks(3)
-            .enumerate()
-            .map(|(t, _)| {
-                let pos = center_of_triangle_obj(&triangulation, &points, t);
-                is_passable_at(&board, (xs, ys), [pos.x, pos.y])
-            })
-            .collect();
+        let triangle_passable =
+            Self::calc_passable_triangles(&board, (xs, ys), &points, &triangulation);
 
         Self {
             rows_text: xs.to_string(),
@@ -204,6 +197,23 @@ impl AppData {
         );
 
         (board, simplified_border, points)
+    }
+
+    pub(crate) fn calc_passable_triangles(
+        board: &[bool],
+        shape: (usize, usize),
+        points: &[delaunator::Point],
+        triangulation: &Triangulation,
+    ) -> Vec<bool> {
+        triangulation
+            .triangles
+            .chunks(3)
+            .enumerate()
+            .map(|(t, _)| {
+                let pos = center_of_triangle_obj(&triangulation, points, t);
+                is_passable_at(&board, shape, [pos.x, pos.y])
+            })
+            .collect()
     }
 
     fn try_new_agent(

@@ -30,12 +30,22 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                                     data.seed_text.parse().unwrap_or(1),
                                     data.simplify_text.parse().unwrap_or(1.),
                                 );
-                                *Rc::make_mut(&mut data.board) = board;
-                                *Rc::make_mut(&mut data.simplified_border) = simplified_border;
-                                *Rc::make_mut(&mut data.triangulation) = triangulate(&points);
-                                *Rc::make_mut(&mut data.points) = points;
-                                *Rc::make_mut(&mut data.agents) = vec![];
-                                *Rc::make_mut(&mut data.bullets) = vec![];
+
+                                let triangulation = triangulate(&points);
+                                let triangle_passable = AppData::calc_passable_triangles(
+                                    &board,
+                                    (data.xs, data.ys),
+                                    &points,
+                                    &triangulation,
+                                );
+
+                                data.board = Rc::new(board);
+                                data.simplified_border = Rc::new(simplified_border);
+                                data.triangulation = Rc::new(triangulation);
+                                data.points = Rc::new(points);
+                                data.triangle_passable = Rc::new(triangle_passable);
+                                data.agents = Rc::new(vec![]);
+                                data.bullets = Rc::new(vec![]);
                                 ctx.request_paint();
                             })
                             .padding(5.0),
