@@ -43,6 +43,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     // Validity label
                     Label::new(|data: &AppData, _env: &_| data.message.clone()).padding(5.),
                 )
+                .with_child(Checkbox::new("Pause").lens(AppData::paused).padding(5.))
                 .with_child(
                     Flex::row()
                         .with_child(Label::new("Border line mode:").padding(3.0))
