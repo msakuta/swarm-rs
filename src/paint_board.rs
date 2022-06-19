@@ -144,17 +144,25 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
         }
     }
 
-    const GREEN_COLOR: Color = Color::GREEN;
+    let to_point = |pos: [f64; 2]| Point {
+        x: pos[0] * w0,
+        y: pos[1] * h0,
+    };
+
+    const AGENT_COLORS: [Color; 2] = [Color::rgb8(63, 255, 63), Color::RED];
 
     for agent in data.agents.iter() {
-        let pos = agent.pos;
-        let pos = Point {
-            x: pos[0] * w0,
-            y: pos[1] * h0,
-        };
+        let pos = to_point(agent.pos);
         let circle = Circle::new(view_transform * pos, 5.);
+        let brush = &AGENT_COLORS[agent.team % AGENT_COLORS.len()];
+        ctx.fill(circle, brush);
 
-        ctx.fill(circle, &GREEN_COLOR);
+        if let Some(target) = agent.target {
+            let target_pos = data.agents[target].pos;
+            let line = Line::new(pos, to_point(target_pos));
+
+            ctx.stroke(view_transform * line, brush, 1.);
+        }
     }
 
     *data.render_stats.borrow_mut() = format!("Drawn {} contours", contours);

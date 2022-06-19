@@ -40,6 +40,8 @@ pub(crate) struct AppData {
     pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
     pub(crate) agents: Rc<Vec<Agent>>,
+    pub(crate) paused: bool,
+    pub(crate) interval: f64,
 }
 
 impl AppData {
@@ -55,11 +57,11 @@ impl AppData {
         let mut id_gen = 0;
         let mut agents = vec![];
         let mut agent_rng = Xor128::new(seed);
-        for _ in 0..3 {
+        for i in 0..4 {
             for _ in 0..10 {
                 let pos_candidate = [agent_rng.next() * xs as f64, agent_rng.next() * ys as f64];
                 if board[pos_candidate[0] as usize + xs * pos_candidate[1] as usize] {
-                    agents.push(Agent::new(&mut id_gen, pos_candidate, 0));
+                    agents.push(Agent::new(&mut id_gen, pos_candidate, i % 2));
                     break;
                 }
             }
@@ -86,6 +88,8 @@ impl AppData {
             get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
             agents: Rc::new(agents),
+            paused: false,
+            interval: 100.,
         }
     }
 

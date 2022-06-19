@@ -1,14 +1,19 @@
 use crate::{app_data::AppData, paint_board::paint_board};
 use druid::widget::prelude::*;
-use druid::{Affine, Vec2};
+use druid::{Affine, TimerToken, Vec2};
+use std::{rc::Rc, time::Duration};
 
 pub(crate) struct BoardWidget {
+    timer_id: TimerToken,
     panning: Option<Vec2>,
 }
 
 impl BoardWidget {
     pub(crate) fn new() -> Self {
-        Self { panning: None }
+        Self {
+            panning: None,
+            timer_id: TimerToken::INVALID,
+        }
     }
 }
 
@@ -23,8 +28,23 @@ impl Widget<AppData> for BoardWidget {
         match event {
             Event::WindowConnected => {
                 ctx.request_paint();
-                // let deadline = Duration::from_millis(data.iter_interval() as u64);
-                // self.timer_id = ctx.request_timer(deadline);
+                let deadline = Duration::from_millis(data.interval as u64);
+                self.timer_id = ctx.request_timer(deadline);
+            }
+            Event::Timer(id) => {
+                if *id == self.timer_id {
+                    if !data.paused {
+                        let agents = Rc::make_mut(&mut data.agents);
+                        for i in 0..agents.len() {
+                            let (first, mid) = agents.split_at_mut(i);
+                            let (agent, last) = mid.split_first_mut().unwrap();
+                            agent.find_enemy(first.iter().chain(last.iter()));
+                        }
+                        ctx.request_paint();
+                    }
+                    let deadline = Duration::from_millis(data.interval as u64);
+                    self.timer_id = ctx.request_timer(deadline);
+                }
             }
             Event::MouseDown(e) => {
                 self.panning = Some(e.pos.to_vec2());
