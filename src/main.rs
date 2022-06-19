@@ -26,8 +26,7 @@ pub fn main() {
         })
         .resizable(true)
         .title(
-            LocalizedString::new("custom-widget-demo-window-title")
-                .with_placeholder("Swarm-js"),
+            LocalizedString::new("custom-widget-demo-window-title").with_placeholder("Swarm-js"),
         );
 
     AppLauncher::with_window(window)
