@@ -118,18 +118,6 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
 
     let scale_transform = view_transform * Affine::scale(w0);
 
-    if data.simplified_visible {
-        for bez_path in data.simplified_border.as_ref() {
-            let stroke_color = Color::rgb8(
-                (rng.nexti() % 0x80 + 0x7f) as u8,
-                (rng.nexti() % 0x80 + 0x7f) as u8,
-                (rng.nexti() % 0x80 + 0x7f) as u8,
-            );
-
-            ctx.stroke(scale_transform * bez_path, &stroke_color, 2.0);
-        }
-    }
-
     fn delaunator_to_druid_point(p: &delaunator::Point) -> Point {
         Point { x: p.x, y: p.y }
     }
@@ -153,6 +141,18 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
         }
     }
 
+    if data.simplified_visible {
+        for bez_path in data.simplified_border.as_ref() {
+            let stroke_color = Color::rgb8(
+                (rng.nexti() % 0x80 + 0x7f) as u8,
+                (rng.nexti() % 0x80 + 0x7f) as u8,
+                (rng.nexti() % 0x80 + 0x7f) as u8,
+            );
+
+            ctx.stroke(scale_transform * bez_path, &stroke_color, 2.0);
+        }
+    }
+
     let to_point = |pos: [f64; 2]| Point {
         x: pos[0] * w0,
         y: pos[1] * h0,
@@ -167,23 +167,27 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
         let brush = &AGENT_COLORS[agent.team % AGENT_COLORS.len()];
         ctx.fill(circle, brush);
 
-        // if let Some(target) = agent.target {
-        //     if let Some(target) = data.agents.iter().find(|agent| agent.borrow().id == target) {
-        //         let target_pos = target.borrow().pos;
-        //         let line = Line::new(pos, to_point(target_pos));
+        if data.target_visible {
+            if let Some(target) = agent.target {
+                if let Some(target) = data.agents.iter().find(|agent| agent.borrow().id == target) {
+                    let target_pos = target.borrow().pos;
+                    let line = Line::new(pos, to_point(target_pos));
 
-        //         ctx.stroke(view_transform * line, brush, 1.);
-        //     }
-        // }
-
-        if let Some((first, rest)) = agent.path.split_first() {
-            let mut bez_path = BezPath::new();
-            bez_path.move_to(to_point(*first));
-            for point in rest {
-                bez_path.line_to(to_point(*point));
+                    ctx.stroke(view_transform * line, brush, 1.);
+                }
             }
-            bez_path.line_to(to_point(agent.pos));
-            ctx.stroke(view_transform * bez_path, brush, 1.);
+        }
+
+        if data.path_visible {
+            if let Some((first, rest)) = agent.path.split_first() {
+                let mut bez_path = BezPath::new();
+                bez_path.move_to(to_point(*first));
+                for point in rest {
+                    bez_path.line_to(to_point(*point));
+                }
+                bez_path.line_to(to_point(agent.pos));
+                ctx.stroke(view_transform * bez_path, brush, 1.);
+            }
         }
     }
 

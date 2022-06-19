@@ -51,6 +51,8 @@ pub(crate) struct AppData {
     pub(crate) interval: f64,
     pub(crate) rng: Rc<Xor128>,
     pub(crate) id_gen: usize,
+    pub(crate) path_visible: bool,
+    pub(crate) target_visible: bool,
 }
 
 impl AppData {
@@ -108,6 +110,8 @@ impl AppData {
             interval: 100.,
             rng: Rc::new(agent_rng),
             id_gen,
+            path_visible: true,
+            target_visible: true,
         }
     }
 
