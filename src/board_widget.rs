@@ -2,11 +2,11 @@ use crate::{app_data::AppData, paint_board::paint_board};
 use druid::widget::prelude::*;
 use druid::{Affine, Vec2};
 
-pub(crate) struct MeshWidget {
+pub(crate) struct BoardWidget {
     panning: Option<Vec2>,
 }
 
-impl MeshWidget {
+impl BoardWidget {
     pub(crate) fn new() -> Self {
         Self { panning: None }
     }
@@ -18,7 +18,7 @@ impl AppData {
     }
 }
 
-impl Widget<AppData> for MeshWidget {
+impl Widget<AppData> for BoardWidget {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut AppData, _env: &Env) {
         match event {
             Event::WindowConnected => {

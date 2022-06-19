@@ -1,6 +1,6 @@
 use crate::{
     app_data::{AppData, LineMode},
-    board_widget::MeshWidget,
+    board_widget::BoardWidget,
 };
 use ::delaunator::triangulate;
 use druid::widget::prelude::*;
@@ -15,39 +15,28 @@ const BG: Color = Color::rgb8(0, 0, 53 as u8);
 pub(crate) fn make_widget() -> impl Widget<AppData> {
     Flex::row()
         .cross_axis_alignment(CrossAxisAlignment::Start)
-        .with_flex_child(MeshWidget::new(), 1.)
+        .with_flex_child(BoardWidget::new(), 1.)
         .with_flex_child(
             Flex::column()
                 .cross_axis_alignment(CrossAxisAlignment::Start)
                 .with_child(
-                    Flex::row()
-                        .with_child(
-                            Button::new("Create mesh")
-                                .on_click(|ctx, data: &mut AppData, _: &Env| {
-                                    data.message =
-                                        "Define transform mesh by dragging vertices".to_string();
-                                    data.xs = data.columns_text.parse().unwrap_or(64);
-                                    data.ys = data.rows_text.parse().unwrap_or(64);
-                                    let (board, simplified_border, points) = AppData::create_board(
-                                        (data.xs, data.ys),
-                                        data.seed_text.parse().unwrap_or(1),
-                                        data.simplify_text.parse().unwrap_or(1.),
-                                    );
-                                    *Rc::make_mut(&mut data.board) = board;
-                                    *Rc::make_mut(&mut data.simplified_border) = simplified_border;
-                                    *Rc::make_mut(&mut data.triangulation) = triangulate(&points);
-                                    ctx.request_paint();
-                                })
-                                .padding(5.0),
-                        )
-                        .with_child(
-                            Button::new("Cancel")
-                                .on_click(|ctx, data: &mut AppData, _: &Env| {
-                                    data.message = "".to_string();
-                                    ctx.request_paint();
-                                })
-                                .padding(5.0),
-                        ),
+                    Flex::row().with_child(
+                        Button::new("Create board")
+                            .on_click(|ctx, data: &mut AppData, _: &Env| {
+                                data.xs = data.columns_text.parse().unwrap_or(64);
+                                data.ys = data.rows_text.parse().unwrap_or(64);
+                                let (board, simplified_border, points) = AppData::create_board(
+                                    (data.xs, data.ys),
+                                    data.seed_text.parse().unwrap_or(1),
+                                    data.simplify_text.parse().unwrap_or(1.),
+                                );
+                                *Rc::make_mut(&mut data.board) = board;
+                                *Rc::make_mut(&mut data.simplified_border) = simplified_border;
+                                *Rc::make_mut(&mut data.triangulation) = triangulate(&points);
+                                ctx.request_paint();
+                            })
+                            .padding(5.0),
+                    ),
                 )
                 .with_child(
                     // Validity label
