@@ -12,13 +12,11 @@ mod agent;
 mod triangle_utils;
 
 use crate::{app_data::AppData, widget::make_widget};
-use druid::{AppLauncher, Data, Lens, LocalizedString, Size, WindowDesc};
+use druid::{AppLauncher, LocalizedString, Size, WindowDesc};
 use wasm_bindgen::prelude::*;
 
-#[derive(Clone, Data, Lens)]
-struct HelloState {
-    name: String,
-}
+const WINDOW_WIDTH: f64 = 1200.;
+const WINDOW_HEIGHT: f64 = 800.;
 
 #[wasm_bindgen]
 pub fn wasm_main() {
@@ -30,13 +28,13 @@ pub fn wasm_main() {
 pub fn main() {
     let window = WindowDesc::new(make_widget)
         .window_size(Size {
-            width: 1200.0,
-            height: 800.0,
+            width: WINDOW_WIDTH,
+            height: WINDOW_HEIGHT,
         })
         .resizable(true)
         .title(
             LocalizedString::new("custom-widget-demo-window-title")
-                .with_placeholder("Mesh Transform Editor"),
+                .with_placeholder("Swarm-js"),
         );
 
     AppLauncher::with_window(window)

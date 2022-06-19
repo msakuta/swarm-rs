@@ -3,6 +3,7 @@ use crate::{
     marching_squares::{trace_lines, BoolField},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
     triangle_utils::center_of_triangle_obj,
+    WINDOW_HEIGHT,
 };
 use ::cgmath::{MetricSpace, Vector2};
 use ::delaunator::{triangulate, Triangulation};
@@ -60,6 +61,8 @@ impl AppData {
         let xs = 128;
         let ys = 128;
 
+        let w = 32.;
+
         let (board, simplified_border, points) = AppData::create_board((xs, ys), seed, simplify);
 
         let mut id_gen = 0;
@@ -100,8 +103,8 @@ impl AppData {
             triangle_passable: Rc::new(triangle_passable),
             points: Rc::new(points),
             triangulation_visible: true,
-            origin: Vec2::new(400., 400.),
-            scale: 1.,
+            origin: Vec2::new(0., 0.),
+            scale: WINDOW_HEIGHT / w / ys as f64,
             message: "".to_string(),
             render_board_time: Cell::new(0.),
             get_board_time: 0.,
