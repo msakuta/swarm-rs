@@ -12,7 +12,7 @@ pub(crate) struct Bullet {
 #[derive(Clone, Debug)]
 pub(crate) struct Agent {
     pub target: Option<usize>,
-    active: bool,
+    pub active: bool,
     // path: Path,
     unreachables: HashSet<usize>,
     // behaviorTree = new BT.BehaviorTree();

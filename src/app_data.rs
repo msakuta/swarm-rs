@@ -18,6 +18,8 @@ pub(crate) enum LineMode {
     Polygon,
 }
 
+type Board = Vec<bool>;
+
 #[derive(Clone, Lens, Data)]
 pub(crate) struct AppData {
     pub(crate) rows_text: String,
@@ -44,6 +46,8 @@ pub(crate) struct AppData {
     pub(crate) bullets: Rc<Vec<Bullet>>,
     pub(crate) paused: bool,
     pub(crate) interval: f64,
+    pub(crate) rng: Rc<Xor128>,
+    pub(crate) id_gen: usize,
 }
 
 impl AppData {
@@ -60,12 +64,10 @@ impl AppData {
         let mut agents = vec![];
         let mut agent_rng = Xor128::new(seed);
         for i in 0..4 {
-            for _ in 0..10 {
-                let pos_candidate = [agent_rng.next() * xs as f64, agent_rng.next() * ys as f64];
-                if board[pos_candidate[0] as usize + xs * pos_candidate[1] as usize] {
-                    agents.push(Agent::new(&mut id_gen, pos_candidate, i % 2));
-                    break;
-                }
+            if let Some(agent) =
+                Self::try_new_agent(&mut agent_rng, &mut id_gen, &board, (xs, ys), i % 2)
+            {
+                agents.push(agent);
             }
         }
 
@@ -93,6 +95,8 @@ impl AppData {
             bullets: Rc::new(vec![]),
             paused: false,
             interval: 100.,
+            rng: Rc::new(agent_rng),
+            id_gen,
         }
     }
 
@@ -184,6 +188,22 @@ impl AppData {
         (board, simplified_border, points)
     }
 
+    fn try_new_agent(
+        rng: &mut Xor128,
+        id_gen: &mut usize,
+        board: &Board,
+        (xs, ys): (usize, usize),
+        team: usize,
+    ) -> Option<Agent> {
+        for _ in 0..10 {
+            let pos_candidate = [rng.next() * xs as f64, rng.next() * ys as f64];
+            if board[pos_candidate[0] as usize + xs * pos_candidate[1] as usize] {
+                return Some(Agent::new(id_gen, pos_candidate, team));
+            }
+        }
+        None
+    }
+
     pub(crate) fn update(&mut self) {
         let agents = Rc::make_mut(&mut self.agents);
         for i in 0..agents.len() {
@@ -210,7 +230,40 @@ impl AppData {
         let bullets = Rc::make_mut(&mut self.bullets);
         for bullet in bullets {
             bullet.pos = (Vector2::from(bullet.pos) + Vector2::from(bullet.velo)).into();
+            for agent in agents.iter_mut() {
+                if agent.team == bullet.team {
+                    continue;
+                }
+                let dist2 = Vector2::from(agent.pos).distance2(Vector2::from(bullet.pos));
+                if dist2 < 10. * 10. {
+                    agent.active = false;
+                    println!("Agent {} is being killed", agent.id);
+                }
+            }
         }
+
+        let agents = std::mem::take(Rc::make_mut(&mut self.agents));
+        let mut agents: Vec<_> = agents
+            .iter()
+            .filter(|bullet| bullet.active)
+            .map(|bullet| bullet.clone())
+            .collect();
+
+        let rng = Rc::make_mut(&mut self.rng);
+        for team in 0..2 {
+            if agents.iter().filter(|agent| agent.team == team).count() < 5 && rng.next() < 0.1 {
+                if let Some(agent) = Self::try_new_agent(
+                    rng,
+                    &mut self.id_gen,
+                    &self.board,
+                    (self.xs, self.ys),
+                    team,
+                ) {
+                    agents.push(agent);
+                }
+            }
+        }
+        *Rc::make_mut(&mut self.agents) = agents;
 
         let bullets = std::mem::take(Rc::make_mut(&mut self.bullets));
         *Rc::make_mut(&mut self.bullets) = bullets

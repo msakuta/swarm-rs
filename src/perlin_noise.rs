@@ -65,6 +65,7 @@ fn noise_pixel(ix: f64, iy: f64, x: f64, y: f64, terms: &[f64; 6]) -> f64 {
     dx * gradient[0] + dy * gradient[1]
 }
 
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Xor128 {
     x: u32,
     y: u32,

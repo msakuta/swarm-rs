@@ -158,10 +158,12 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
         ctx.fill(circle, brush);
 
         if let Some(target) = agent.target {
-            let target_pos = data.agents[target].pos;
-            let line = Line::new(pos, to_point(target_pos));
+            if let Some(target) = data.agents.iter().find(|agent| agent.id == target) {
+                let target_pos = target.pos;
+                let line = Line::new(pos, to_point(target_pos));
 
-            ctx.stroke(view_transform * line, brush, 1.);
+                ctx.stroke(view_transform * line, brush, 1.);
+            }
         }
     }
 
