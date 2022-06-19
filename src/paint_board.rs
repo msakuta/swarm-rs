@@ -2,26 +2,25 @@ use crate::{
     app_data::{AppData, LineMode},
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
+    triangle_utils::center_of_triangle_obj,
 };
 use druid::widget::prelude::*;
 use druid::{
     piet::kurbo::{BezPath, Circle, Line},
-    piet::{ImageFormat, InterpolationMode},
-    Affine, Color, Point,
+    piet::{FontFamily, ImageFormat, InterpolationMode},
+    Affine, Color, FontDescriptor, Point, TextLayout,
 };
 
 const OBSTACLE_COLOR: u8 = 63u8;
 const BACKGROUND_COLOR: u8 = 127u8;
 
-pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
+pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     let (w0, h0) = (32., 32.);
 
     let view_transform = data.view_transform();
 
     ctx.save().unwrap();
     ctx.transform(view_transform);
-
-    let mut rng = Xor128::new(32132);
 
     let (xs, ys) = (data.xs, data.ys);
 
@@ -122,26 +121,69 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData) {
         Point { x: p.x, y: p.y }
     }
 
-    const PURPLE_COLOR: Color = Color::rgb8(255, 0, 255);
-
     if data.triangulation_visible {
+        let mut rng = Xor128::new(616516);
+
+        let max_label = *data.triangle_labels.iter().max().unwrap_or(&0) as usize + 1;
+        let label_colors = (0..max_label)
+            .map(|_| {
+                Color::rgb8(
+                    (rng.nexti() % 0x80 + 0x7f) as u8,
+                    (rng.nexti() % 0x80 + 0x7f) as u8,
+                    (rng.nexti() % 0x80 + 0x7f) as u8,
+                )
+            })
+            .collect::<Vec<_>>();
+
         let triangles = &data.triangulation.triangles;
         for (i, triangle) in triangles.chunks(3).enumerate() {
-            if !data.triangle_passable[i] {
+            use ::delaunator::EMPTY;
+            let label = data.triangle_labels[i];
+            if triangles[i * 3] == EMPTY
+                || triangles[i * 3 + 1] == EMPTY
+                || triangles[i * 3 + 2] == EMPTY
+            {
                 continue;
             }
-            let vertices: [usize; 4] = [triangle[0], triangle[1], triangle[2], triangle[0]];
-            for (start, end) in vertices.iter().zip(vertices.iter().skip(1)) {
-                let line = Line::new(
-                    delaunator_to_druid_point(&data.points[*start]),
-                    delaunator_to_druid_point(&data.points[*end]),
+            let color = if data.triangle_passable[i] && label >= 0 {
+                label_colors[label as usize].clone()
+            } else {
+                Color::RED
+            };
+
+            if data.triangle_passable[i] && label >= 0 || data.unpassable_visible {
+                let vertices: [usize; 4] = [triangle[0], triangle[1], triangle[2], triangle[0]];
+                for (start, end) in vertices.iter().zip(vertices.iter().skip(1)) {
+                    let line = Line::new(
+                        delaunator_to_druid_point(&data.points[*start]),
+                        delaunator_to_druid_point(&data.points[*end]),
+                    );
+                    ctx.stroke(scale_transform * line, &color, 1.0);
+                }
+            }
+
+            if data.triangle_label_visible && (data.triangle_passable[i] || data.unpassable_visible)
+            {
+                let mut layout = TextLayout::<String>::from_text(format!("{}", i));
+                layout.set_font(FontDescriptor::new(FontFamily::SANS_SERIF).with_size(16.0));
+                layout.set_text_color(color);
+                layout.rebuild_if_needed(ctx.text(), env);
+                layout.draw(
+                    ctx,
+                    scale_transform
+                        * delaunator_to_druid_point(&center_of_triangle_obj(
+                            &data.triangulation,
+                            &data.points,
+                            i,
+                        )),
                 );
-                ctx.stroke(scale_transform * line, &PURPLE_COLOR, 1.0);
             }
         }
     }
 
     if data.simplified_visible {
+        let mut rng = Xor128::new(32132);
+
         for bez_path in data.simplified_border.as_ref() {
             let stroke_color = Color::rgb8(
                 (rng.nexti() % 0x80 + 0x7f) as u8,

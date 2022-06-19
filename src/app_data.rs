@@ -2,7 +2,7 @@ use crate::{
     agent::{Agent, Bullet},
     marching_squares::{trace_lines, BoolField},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
-    triangle_utils::center_of_triangle_obj,
+    triangle_utils::{center_of_triangle_obj, label_triangles},
     WINDOW_HEIGHT,
 };
 use ::cgmath::{MetricSpace, Vector2};
@@ -37,7 +37,10 @@ pub(crate) struct AppData {
     pub(crate) triangulation: Rc<Triangulation>,
     pub(crate) points: Rc<Vec<delaunator::Point>>,
     pub(crate) triangle_passable: Rc<Vec<bool>>,
+    pub(crate) triangle_labels: Rc<Vec<i32>>,
     pub(crate) triangulation_visible: bool,
+    pub(crate) unpassable_visible: bool,
+    pub(crate) triangle_label_visible: bool,
     pub(crate) origin: Vec2,
     pub(crate) scale: f64,
     pub(crate) message: String,
@@ -83,6 +86,8 @@ impl AppData {
         let triangle_passable =
             Self::calc_passable_triangles(&board, (xs, ys), &points, &triangulation);
 
+        let triangle_labels = label_triangles(&triangulation, &triangle_passable);
+
         Self {
             rows_text: xs.to_string(),
             columns_text: ys.to_string(),
@@ -96,8 +101,11 @@ impl AppData {
             simplified_visible: false,
             triangulation: Rc::new(triangulation),
             triangle_passable: Rc::new(triangle_passable),
+            triangle_labels: Rc::new(triangle_labels),
             points: Rc::new(points),
             triangulation_visible: false,
+            unpassable_visible: false,
+            triangle_label_visible: false,
             origin: Vec2::new(0., 0.),
             scale: WINDOW_HEIGHT / w / ys as f64,
             message: "".to_string(),
@@ -220,6 +228,27 @@ impl AppData {
             .collect()
     }
 
+    pub(crate) fn new_board(&mut self, shape: (usize, usize), seed: u32, simplify: f64) {
+        self.xs = shape.0;
+        self.ys = shape.0;
+        let (board, simplified_border, points) = AppData::create_board(shape, seed, simplify);
+
+        let triangulation = triangulate(&points);
+        let triangle_passable =
+            AppData::calc_passable_triangles(&board, shape, &points, &triangulation);
+
+        let triangle_labels = label_triangles(&triangulation, &triangle_passable);
+
+        self.board = Rc::new(board);
+        self.simplified_border = Rc::new(simplified_border);
+        self.triangulation = Rc::new(triangulation);
+        self.points = Rc::new(points);
+        self.triangle_passable = Rc::new(triangle_passable);
+        self.triangle_labels = Rc::new(triangle_labels);
+        self.agents = Rc::new(vec![]);
+        self.bullets = Rc::new(vec![]);
+    }
+
     fn try_new_agent(
         rng: &mut Xor128,
         id_gen: &mut usize,
@@ -238,11 +267,7 @@ impl AppData {
 
     pub(crate) fn update(&mut self) {
         let agents = &self.agents;
-        // for i in 0..agents.len() {
         for agent in agents.iter() {
-            // let (first, mid) = agents.split_at_mut(i);
-            // let (agent, last) = mid.split_first_mut().unwrap();
-            // let rest = || first.iter().chain(last.iter());
             let mut agent = agent.borrow_mut();
             agent.find_enemy(agents);
             agent.update(

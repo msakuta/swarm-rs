@@ -17,7 +17,7 @@ pub(crate) struct Agent {
     pub target: Option<usize>,
     pub active: bool,
     // path: Path,
-    unreachables: HashSet<usize>,
+    pub unreachables: HashSet<usize>,
     // behaviorTree = new BT.BehaviorTree();
     pub id: usize,
     pub pos: [f64; 2],

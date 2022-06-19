@@ -100,7 +100,7 @@ impl Widget<AppData> for BoardWidget {
         // }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, data: &AppData, _env: &Env) {
-        paint_board(ctx, data);
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &AppData, env: &Env) {
+        paint_board(ctx, data, env);
     }
 }

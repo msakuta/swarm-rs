@@ -2,13 +2,11 @@ use crate::{
     app_data::{AppData, LineMode},
     board_widget::BoardWidget,
 };
-use ::delaunator::triangulate;
 use druid::widget::prelude::*;
 use druid::widget::{
     Button, Checkbox, CrossAxisAlignment, Flex, Label, RadioGroup, TextBox, WidgetExt,
 };
 use druid::Color;
-use std::rc::Rc;
 
 const BG: Color = Color::rgb8(0, 0, 53 as u8);
 
@@ -23,29 +21,11 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     Flex::row().with_child(
                         Button::new("Create board")
                             .on_click(|ctx, data: &mut AppData, _: &Env| {
-                                data.xs = data.columns_text.parse().unwrap_or(64);
-                                data.ys = data.rows_text.parse().unwrap_or(64);
-                                let (board, simplified_border, points) = AppData::create_board(
-                                    (data.xs, data.ys),
-                                    data.seed_text.parse().unwrap_or(1),
-                                    data.simplify_text.parse().unwrap_or(1.),
-                                );
-
-                                let triangulation = triangulate(&points);
-                                let triangle_passable = AppData::calc_passable_triangles(
-                                    &board,
-                                    (data.xs, data.ys),
-                                    &points,
-                                    &triangulation,
-                                );
-
-                                data.board = Rc::new(board);
-                                data.simplified_border = Rc::new(simplified_border);
-                                data.triangulation = Rc::new(triangulation);
-                                data.points = Rc::new(points);
-                                data.triangle_passable = Rc::new(triangle_passable);
-                                data.agents = Rc::new(vec![]);
-                                data.bullets = Rc::new(vec![]);
+                                let xs = data.columns_text.parse().unwrap_or(64);
+                                let ys = data.rows_text.parse().unwrap_or(64);
+                                let seed = data.seed_text.parse().unwrap_or(1);
+                                let simplify = data.simplify_text.parse().unwrap_or(1.);
+                                data.new_board((xs, ys), seed, simplify);
                                 ctx.request_paint();
                             })
                             .padding(5.0),
@@ -75,8 +55,12 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                         .padding(5.),
                 )
                 .with_child(
-                    Checkbox::new("Triangulation")
-                        .lens(AppData::triangulation_visible)
+                    Flex::row()
+                        .with_child(
+                            Checkbox::new("Triangulation").lens(AppData::triangulation_visible),
+                        )
+                        .with_child(Checkbox::new("Unpassable").lens(AppData::unpassable_visible))
+                        .with_child(Checkbox::new("Label").lens(AppData::triangle_label_visible))
                         .padding(5.),
                 )
                 .with_child(
