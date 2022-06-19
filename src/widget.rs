@@ -33,6 +33,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                                 *Rc::make_mut(&mut data.board) = board;
                                 *Rc::make_mut(&mut data.simplified_border) = simplified_border;
                                 *Rc::make_mut(&mut data.triangulation) = triangulate(&points);
+                                *Rc::make_mut(&mut data.points) = points;
                                 ctx.request_paint();
                             })
                             .padding(5.0),
