@@ -65,6 +65,13 @@ impl Entity {
         matches!(self, Entity::Agent(_))
     }
 
+    pub(crate) fn get_orient(&self) -> Option<f64> {
+        match self {
+            Entity::Agent(agent) => Some(agent.orient),
+            _ => None,
+        }
+    }
+
     pub(crate) fn damage(&mut self) -> bool {
         match self {
             Entity::Agent(_) => false,

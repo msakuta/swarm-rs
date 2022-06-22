@@ -214,6 +214,17 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
             ctx.stroke(big_circle, brush, 3.);
         }
 
+        if let Some(orient) = agent.get_orient() {
+            let length = 10.;
+            let view_pos = view_transform * pos;
+            let dest = Point::new(
+                view_pos.x + orient.cos() * length,
+                view_pos.y + orient.sin() * length,
+            );
+            let orient_line = Line::new(view_pos, dest);
+            ctx.stroke(orient_line, brush, 3.);
+        }
+
         if data.target_visible {
             if let Some(target) = agent.get_target() {
                 if let Some(target) = data
@@ -240,6 +251,19 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
                 ctx.stroke(view_transform * bez_path, brush, 1.);
             }
         }
+
+        if data.entity_label_visible {
+            let mut layout =
+                TextLayout::<String>::from_text(if let Some(target) = agent.get_target() {
+                    format!("{} ({})", agent.get_id(), target)
+                } else {
+                    format!("{} (?)", agent.get_id())
+                });
+            layout.set_font(FontDescriptor::new(FontFamily::SANS_SERIF).with_size(16.0));
+            layout.set_text_color(brush.clone());
+            layout.rebuild_if_needed(ctx.text(), env);
+            layout.draw(ctx, view_transform * pos);
+        }
     }
 
     for bullet in data.bullets.iter() {
@@ -255,5 +279,9 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
         ctx.stroke(circle, &Color::YELLOW, 1.);
     }
 
-    *data.render_stats.borrow_mut() = format!("Drawn {} contours", contours);
+    *data.render_stats.borrow_mut() = format!(
+        "Drawn {} contours, {} triangles",
+        contours,
+        data.triangulation.triangles.len()
+    );
 }

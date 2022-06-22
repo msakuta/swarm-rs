@@ -24,13 +24,14 @@ pub(crate) struct Agent {
     // behaviorTree = new BT.BehaviorTree();
     pub id: usize,
     pub pos: [f64; 2],
+    pub orient: f64,
     pub team: usize,
     cooldown: f64,
     pub path: Vec<[f64; 2]>,
 }
 
 impl Agent {
-    pub(crate) fn new(id_gen: &mut usize, pos: [f64; 2], team: usize) -> Self {
+    pub(crate) fn new(id_gen: &mut usize, pos: [f64; 2], orient: f64, team: usize) -> Self {
         let id = *id_gen;
         *id_gen += 1;
         Self {
@@ -39,23 +40,47 @@ impl Agent {
             unreachables: HashSet::new(),
             id,
             pos,
+            orient,
             team,
             cooldown: 5.,
             path: vec![],
         }
     }
 
+    fn orient_to(&mut self, target: [f64; 2]) -> bool {
+        use std::f64::consts::PI;
+        const ANGLE_SPEED: f64 = PI / 10.;
+        let delta = Vector2::from(target) - Vector2::from(self.pos);
+        let target_angle = delta.y.atan2(delta.x);
+        let delta_angle = target_angle - self.orient;
+        let wrap_angle = (delta_angle + PI) % (PI * 2.) - PI;
+        if wrap_angle.abs() < ANGLE_SPEED {
+            self.orient = target_angle;
+            true
+        } else if wrap_angle < 0. {
+            self.orient = (self.orient - ANGLE_SPEED) % (PI * 2.);
+            wrap_angle.abs() < PI / 4.
+        } else {
+            self.orient = (self.orient + ANGLE_SPEED) % (PI * 2.);
+            wrap_angle.abs() < PI / 4.
+        }
+    }
+
     pub(crate) fn move_to<'a>(&'a mut self, board: &[bool], shape: Shape, target_pos: [f64; 2]) {
         const SPEED: f64 = 1.;
-        let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
-        let distance = delta.magnitude();
-        let newpos = if distance <= SPEED {
-            target_pos
-        } else {
-            (Vector2::from(self.pos) + SPEED * delta / distance).into()
-        };
-        if board[shape.idx(newpos[0] as isize, newpos[1] as isize)] {
-            self.pos = newpos;
+
+        if self.orient_to(target_pos) {
+            let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
+            let distance = delta.magnitude();
+            let newpos = if distance <= SPEED {
+                target_pos
+            } else {
+                let forward = Vector2::new(self.orient.cos(), self.orient.sin());
+                (Vector2::from(self.pos) + SPEED * forward).into()
+            };
+            if board[shape.idx(newpos[0] as isize, newpos[1] as isize)] {
+                self.pos = newpos;
+            }
         }
     }
 
@@ -90,14 +115,17 @@ impl Agent {
     }
 
     pub fn shoot_bullet(&mut self, bullets: &mut Vec<Bullet>, target_pos: [f64; 2]) -> bool {
+        const BULLET_SPEED: f64 = 5.;
         if 0. < self.cooldown {
             return false;
         }
-        let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
-        let distance = delta.magnitude();
+        let dir = Vector2::new(self.orient.cos(), self.orient.sin());
+        if dir.dot((Vector2::from(target_pos) - Vector2::from(self.pos)).normalize()) < 0.5 {
+            return false;
+        }
         let bullet = Bullet {
             pos: self.pos,
-            velo: (Vector2::from(delta) * 3. / distance).into(),
+            velo: (dir * BULLET_SPEED).into(),
             team: self.team,
         };
 
@@ -126,16 +154,21 @@ impl Agent {
             })
         }) {
             let target = target.borrow_mut();
-            if self
-                .find_path(Some(&target), triangulation, points, triangle_passable)
-                .is_ok()
-            {
-                if let Some(target) = self.path.last() {
-                    let target_pos = *target;
-                    self.move_to(board, shape, target_pos);
+            if 5. < Vector2::from(target.get_pos()).distance(Vector2::from(self.pos)) {
+                if self
+                    .find_path(Some(&target), triangulation, points, triangle_passable)
+                    .is_ok()
+                {
+                    if let Some(target) = self.path.last() {
+                        let target_pos = *target;
+                        self.move_to(board, shape, target_pos);
+                    }
+                } else {
+                    self.move_to(board, shape, target.get_pos());
                 }
-            } else if 10. < Vector2::from(target.get_pos()).distance(Vector2::from(self.pos)) {
-                self.move_to(board, shape, target.get_pos());
+            } else {
+                // println!("Orienting {}", self.id);
+                self.orient_to(target.get_pos());
             }
             self.shoot_bullet(bullets, target.get_pos());
         } else {

@@ -60,6 +60,7 @@ pub(crate) struct AppData {
     pub(crate) id_gen: usize,
     pub(crate) path_visible: bool,
     pub(crate) target_visible: bool,
+    pub(crate) entity_label_visible: bool,
 }
 
 impl AppData {
@@ -127,6 +128,7 @@ impl AppData {
             id_gen,
             path_visible: true,
             target_visible: true,
+            entity_label_visible: true,
         }
     }
 
@@ -279,9 +281,15 @@ impl AppData {
                 pos[0] + rng.next() * 10. - 5.,
                 pos[1] + rng.next() * 10. - 5.,
             ];
+            let orient_candidate = rng.next() * std::f64::consts::PI * 2.;
             if let Some(tri) = find_triangle_at(&triangulation, &points, pos_candidate) {
                 if Some(triangle_labels[tri]) == largest_label {
-                    return Some(Entity::Agent(Agent::new(id_gen, pos_candidate, team)));
+                    return Some(Entity::Agent(Agent::new(
+                        id_gen,
+                        pos_candidate,
+                        orient_candidate,
+                        team,
+                    )));
                 }
             }
         }

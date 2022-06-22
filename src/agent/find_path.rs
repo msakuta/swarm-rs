@@ -68,9 +68,14 @@ impl Agent {
                     }
                 }
             }
+            if self.id == 1 {
+                // println!("set: {target_triangle}, {:?}", came_from_map.iter().enumerate().filter(|(i, came)| came.is_some()).collect::<Vec<_>>());
+            }
             let mut found_path = false;
             if let Some(came_from) = came_from_map[target_triangle] {
-                self.path = vec![];
+                let first = center_of_triangle_obj(triangulation, points, target_triangle);
+                self.path = vec![[first.x, first.y]];
+                found_path = true;
                 let mut traverser = Some(came_from);
                 while let Some(next) = traverser {
                     if next == this_triangle {
@@ -79,7 +84,6 @@ impl Agent {
                     let p = center_of_triangle_obj(triangulation, points, next);
                     self.path.push([p.x, p.y]);
                     traverser = came_from_map[next];
-                    found_path = true;
                 }
             }
             if !found_path {
