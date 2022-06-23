@@ -50,19 +50,20 @@ impl Agent {
 
     fn orient_to(&mut self, target: [f64; 2]) -> bool {
         use std::f64::consts::PI;
-        const ANGLE_SPEED: f64 = PI / 20.;
+        const TWOPI: f64 = PI * 2.;
+        const ANGLE_SPEED: f64 = PI / 50.;
         let delta = Vector2::from(target) - Vector2::from(self.pos);
         let target_angle = delta.y.atan2(delta.x);
         let delta_angle = target_angle - self.orient;
-        let wrap_angle = (delta_angle + PI) % (PI * 2.) - PI;
+        let wrap_angle = ((delta_angle + PI) - ((delta_angle + PI) / TWOPI).floor() * TWOPI) - PI;
         if wrap_angle.abs() < ANGLE_SPEED {
             self.orient = target_angle;
             true
         } else if wrap_angle < 0. {
-            self.orient = (self.orient - ANGLE_SPEED) % (PI * 2.);
+            self.orient = (self.orient - ANGLE_SPEED) % TWOPI;
             wrap_angle.abs() < PI / 4.
         } else {
-            self.orient = (self.orient + ANGLE_SPEED) % (PI * 2.);
+            self.orient = (self.orient + ANGLE_SPEED) % TWOPI;
             wrap_angle.abs() < PI / 4.
         }
     }
