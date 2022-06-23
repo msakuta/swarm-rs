@@ -1,5 +1,5 @@
 use crate::{agent::Agent, agent::Bullet, app_data::AppData, spawner::Spawner};
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::VecDeque};
 
 #[derive(Clone, Debug)]
 pub(crate) enum Entity {
@@ -68,6 +68,13 @@ impl Entity {
     pub(crate) fn get_orient(&self) -> Option<f64> {
         match self {
             Entity::Agent(agent) => Some(agent.orient),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn get_trace(&self) -> Option<&VecDeque<[f64; 2]>> {
+        match self {
+            Entity::Agent(agent) => Some(&agent.trace),
             _ => None,
         }
     }

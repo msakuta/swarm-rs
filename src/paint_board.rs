@@ -252,6 +252,21 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
             }
         }
 
+        if data.entity_trace_visible {
+            if let Some(deque) = agent.get_trace() {
+                let mut iter = deque.iter();
+                if let Some(first) = iter.next() {
+                    let mut bez_path = BezPath::new();
+                    bez_path.move_to(to_point(*first));
+                    for point in iter {
+                        bez_path.line_to(to_point(*point));
+                    }
+                    bez_path.line_to(to_point(agent.get_pos()));
+                    ctx.stroke(view_transform * bez_path, brush, 0.5);
+                }
+            }
+        }
+
         if data.entity_label_visible {
             let mut layout =
                 TextLayout::<String>::from_text(if let Some(target) = agent.get_target() {

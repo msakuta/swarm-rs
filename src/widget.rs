@@ -79,6 +79,11 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                         .padding(5.),
                 )
                 .with_child(
+                    Checkbox::new("Entity trace")
+                        .lens(AppData::entity_trace_visible)
+                        .padding(5.),
+                )
+                .with_child(
                     Flex::row()
                         .with_child(Label::new("X size:").padding(3.0))
                         .with_child(TextBox::new().lens(AppData::rows_text))

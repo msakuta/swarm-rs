@@ -61,6 +61,7 @@ pub(crate) struct AppData {
     pub(crate) path_visible: bool,
     pub(crate) target_visible: bool,
     pub(crate) entity_label_visible: bool,
+    pub(crate) entity_trace_visible: bool,
 }
 
 impl AppData {
@@ -127,8 +128,9 @@ impl AppData {
             rng: Rc::new(Xor128::new(9318245)),
             id_gen,
             path_visible: true,
-            target_visible: true,
+            target_visible: false,
             entity_label_visible: true,
+            entity_trace_visible: false,
         }
     }
 

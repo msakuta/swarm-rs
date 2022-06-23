@@ -6,7 +6,10 @@ use crate::{
     shape::{Idx, Shape},
 };
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
-use std::{cell::RefCell, collections::HashSet};
+use std::{
+    cell::RefCell,
+    collections::{HashSet, VecDeque},
+};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Bullet {
@@ -28,6 +31,7 @@ pub(crate) struct Agent {
     pub team: usize,
     cooldown: f64,
     pub path: Vec<[f64; 2]>,
+    pub trace: VecDeque<[f64; 2]>,
 }
 
 impl Agent {
@@ -44,12 +48,13 @@ impl Agent {
             team,
             cooldown: 5.,
             path: vec![],
+            trace: VecDeque::new(),
         }
     }
 
     fn orient_to(&mut self, target: [f64; 2]) -> bool {
         use std::f64::consts::PI;
-        const ANGLE_SPEED: f64 = PI / 10.;
+        const ANGLE_SPEED: f64 = PI / 20.;
         let delta = Vector2::from(target) - Vector2::from(self.pos);
         let target_angle = delta.y.atan2(delta.x);
         let delta_angle = target_angle - self.orient;
@@ -67,7 +72,7 @@ impl Agent {
     }
 
     pub(crate) fn move_to<'a>(&'a mut self, board: &[bool], shape: Shape, target_pos: [f64; 2]) {
-        const SPEED: f64 = 1.;
+        const SPEED: f64 = 0.5;
 
         if self.orient_to(target_pos) {
             let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
@@ -79,6 +84,10 @@ impl Agent {
                 (Vector2::from(self.pos) + SPEED * forward).into()
             };
             if board[shape.idx(newpos[0] as isize, newpos[1] as isize)] {
+                if 100 < self.trace.len() {
+                    self.trace.pop_front();
+                }
+                self.trace.push_back(self.pos);
                 self.pos = newpos;
             }
         }
