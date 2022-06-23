@@ -2,11 +2,11 @@ use crate::{
     app_data::{AppData, LineMode},
     board_widget::BoardWidget,
 };
-use druid::widget::prelude::*;
 use druid::widget::{
     Button, Checkbox, CrossAxisAlignment, Flex, Label, RadioGroup, TextBox, WidgetExt,
 };
 use druid::Color;
+use druid::{lens::Field, widget::prelude::*};
 
 const BG: Color = Color::rgb8(0, 0, 53 as u8);
 
@@ -25,7 +25,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                                 let ys = data.rows_text.parse().unwrap_or(64);
                                 let seed = data.seed_text.parse().unwrap_or(1);
                                 let simplify = data.simplify_text.parse().unwrap_or(1.);
-                                data.new_board((xs, ys), seed, simplify);
+                                data.game.new_board((xs, ys), seed, simplify);
                                 ctx.request_paint();
                             })
                             .padding(5.0),
@@ -35,7 +35,14 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     // Validity label
                     Label::new(|data: &AppData, _env: &_| data.message.clone()).padding(5.),
                 )
-                .with_child(Checkbox::new("Pause").lens(AppData::paused).padding(5.))
+                .with_child(
+                    Checkbox::new("Pause")
+                        .lens(Field::new(
+                            |app_data: &AppData| &app_data.game.paused,
+                            |app_data| &mut app_data.game.paused,
+                        ))
+                        .padding(5.),
+                )
                 .with_child(
                     Flex::row()
                         .with_child(Label::new("Border line mode:").padding(3.0))

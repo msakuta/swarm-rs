@@ -22,12 +22,13 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     ctx.save().unwrap();
     ctx.transform(view_transform);
 
-    let (xs, ys) = (data.xs, data.ys);
+    let (xs, ys) = (data.game.xs, data.game.ys);
 
     match ctx.make_image(
         xs,
         ys,
         &data
+            .game
             .board
             .iter()
             .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
@@ -51,7 +52,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
 
     const RED_COLOR: Color = Color::rgb8(255, 0, 0);
 
-    let field = BoolField::new(data.board.as_ref(), shape);
+    let field = BoolField::new(data.game.board.as_ref(), shape);
 
     let mut contours = 0;
     match data.line_mode {
@@ -124,7 +125,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     if data.triangulation_visible {
         let mut rng = Xor128::new(616516);
 
-        let max_label = *data.triangle_labels.iter().max().unwrap_or(&0) as usize + 1;
+        let max_label = *data.game.triangle_labels.iter().max().unwrap_or(&0) as usize + 1;
         let label_colors = (0..max_label)
             .map(|_| {
                 Color::rgb8(
@@ -135,34 +136,35 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
             })
             .collect::<Vec<_>>();
 
-        let triangles = &data.triangulation.triangles;
+        let triangles = &data.game.triangulation.triangles;
         for (i, triangle) in triangles.chunks(3).enumerate() {
             use ::delaunator::EMPTY;
-            let label = data.triangle_labels[i];
+            let label = data.game.triangle_labels[i];
             if triangles[i * 3] == EMPTY
                 || triangles[i * 3 + 1] == EMPTY
                 || triangles[i * 3 + 2] == EMPTY
             {
                 continue;
             }
-            let color = if data.triangle_passable[i] && label >= 0 {
+            let color = if data.game.triangle_passable[i] && label >= 0 {
                 label_colors[label as usize].clone()
             } else {
                 Color::RED
             };
 
-            if data.triangle_passable[i] && label >= 0 || data.unpassable_visible {
+            if data.game.triangle_passable[i] && label >= 0 || data.unpassable_visible {
                 let vertices: [usize; 4] = [triangle[0], triangle[1], triangle[2], triangle[0]];
                 for (start, end) in vertices.iter().zip(vertices.iter().skip(1)) {
                     let line = Line::new(
-                        delaunator_to_druid_point(&data.points[*start]),
-                        delaunator_to_druid_point(&data.points[*end]),
+                        delaunator_to_druid_point(&data.game.points[*start]),
+                        delaunator_to_druid_point(&data.game.points[*end]),
                     );
                     ctx.stroke(scale_transform * line, &color, 1.0);
                 }
             }
 
-            if data.triangle_label_visible && (data.triangle_passable[i] || data.unpassable_visible)
+            if data.triangle_label_visible
+                && (data.game.triangle_passable[i] || data.unpassable_visible)
             {
                 let mut layout = TextLayout::<String>::from_text(format!("{}", i));
                 layout.set_font(FontDescriptor::new(FontFamily::SANS_SERIF).with_size(16.0));
@@ -172,8 +174,8 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
                     ctx,
                     scale_transform
                         * delaunator_to_druid_point(&center_of_triangle_obj(
-                            &data.triangulation,
-                            &data.points,
+                            &data.game.triangulation,
+                            &data.game.points,
                             i,
                         )),
                 );
@@ -184,7 +186,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     if data.simplified_visible {
         let mut rng = Xor128::new(32132);
 
-        for bez_path in data.simplified_border.as_ref() {
+        for bez_path in data.game.simplified_border.as_ref() {
             let stroke_color = Color::rgb8(
                 (rng.nexti() % 0x80 + 0x7f) as u8,
                 (rng.nexti() % 0x80 + 0x7f) as u8,
@@ -202,7 +204,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
 
     const AGENT_COLORS: [Color; 2] = [Color::rgb8(63, 255, 63), Color::RED];
 
-    for agent in data.entities.iter() {
+    for agent in data.game.entities.iter() {
         let agent = agent.borrow();
         let pos = to_point(agent.get_pos());
         let circle = Circle::new(view_transform * pos, 5.);
@@ -228,6 +230,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
         if data.target_visible {
             if let Some(target) = agent.get_target() {
                 if let Some(target) = data
+                    .game
                     .entities
                     .iter()
                     .find(|agent| agent.borrow().get_id() == target)
@@ -281,7 +284,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
         }
     }
 
-    for bullet in data.bullets.iter() {
+    for bullet in data.game.bullets.iter() {
         let circle = Circle::new(view_transform * to_point(bullet.pos), 3.);
         ctx.fill(
             circle,
@@ -297,6 +300,6 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     *data.render_stats.borrow_mut() = format!(
         "Drawn {} contours, {} triangles",
         contours,
-        data.triangulation.triangles.len()
+        data.game.triangulation.triangles.len()
     );
 }

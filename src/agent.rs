@@ -1,10 +1,6 @@
 mod find_path;
 
-use crate::{
-    app_data::AppData,
-    entity::Entity,
-    shape::{Idx, Shape},
-};
+use crate::{entity::Entity, game::Game, triangle_utils::find_triangle_at};
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
 use std::{
     cell::RefCell,
@@ -71,7 +67,7 @@ impl Agent {
         }
     }
 
-    pub(crate) fn move_to<'a>(&'a mut self, board: &[bool], shape: Shape, target_pos: [f64; 2]) {
+    pub(crate) fn move_to<'a>(&'a mut self, game: &Game, target_pos: [f64; 2]) {
         const SPEED: f64 = 0.5;
 
         if self.orient_to(target_pos) {
@@ -83,12 +79,16 @@ impl Agent {
                 let forward = Vector2::new(self.orient.cos(), self.orient.sin());
                 (Vector2::from(self.pos) + SPEED * forward).into()
             };
-            if board[shape.idx(newpos[0] as isize, newpos[1] as isize)] {
-                if 100 < self.trace.len() {
-                    self.trace.pop_front();
+            if let Some(next_triangle) =
+                find_triangle_at(&game.triangulation, &game.points, target_pos)
+            {
+                if game.triangle_passable[next_triangle] {
+                    if 100 < self.trace.len() {
+                        self.trace.pop_front();
+                    }
+                    self.trace.push_back(self.pos);
+                    self.pos = newpos;
                 }
-                self.trace.push_back(self.pos);
-                self.pos = newpos;
             }
         }
     }
@@ -146,15 +146,13 @@ impl Agent {
 
     pub fn update<'a, 'b>(
         &'a mut self,
-        app_data: &mut AppData,
+        game: &mut Game,
         entities: &[RefCell<Entity>],
         bullets: &mut Vec<Bullet>,
     ) {
-        let triangulation = &app_data.triangulation;
-        let points = &app_data.points;
-        let triangle_passable = &app_data.triangle_passable;
-        let board = &app_data.board;
-        let shape = (app_data.xs as isize, app_data.ys as isize);
+        let triangulation = &game.triangulation;
+        let points = &game.points;
+        let triangle_passable = &game.triangle_passable;
         if let Some(target) = self.target.and_then(|target| {
             entities.iter().find(|a| {
                 a.try_borrow()
@@ -170,10 +168,10 @@ impl Agent {
                 {
                     if let Some(target) = self.path.last() {
                         let target_pos = *target;
-                        self.move_to(board, shape, target_pos);
+                        self.move_to(game, target_pos);
                     }
                 } else {
-                    self.move_to(board, shape, target.get_pos());
+                    self.move_to(game, target.get_pos());
                 }
             } else {
                 // println!("Orienting {}", self.id);

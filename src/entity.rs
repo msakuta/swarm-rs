@@ -1,4 +1,4 @@
-use crate::{agent::Agent, agent::Bullet, app_data::AppData, spawner::Spawner};
+use crate::{agent::Agent, agent::Bullet, game::Game, spawner::Spawner};
 use std::{cell::RefCell, collections::VecDeque};
 
 #[derive(Clone, Debug)]
@@ -91,7 +91,7 @@ impl Entity {
 
     pub(crate) fn update(
         &mut self,
-        app_data: &mut AppData,
+        app_data: &mut Game,
         entities: &[RefCell<Entity>],
         bullets: &mut Vec<Bullet>,
     ) -> Vec<GameEvent> {

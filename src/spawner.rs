@@ -1,6 +1,6 @@
 use crate::{
-    app_data::AppData,
     entity::{Entity, GameEvent},
+    game::Game,
 };
 use std::{cell::RefCell, rc::Rc};
 
@@ -28,11 +28,11 @@ impl Spawner {
 
     pub(crate) fn update(
         &mut self,
-        app_data: &mut AppData,
+        game: &mut Game,
         entities: &[RefCell<Entity>],
     ) -> Vec<GameEvent> {
         let mut ret = vec![];
-        let rng = Rc::make_mut(&mut app_data.rng);
+        let rng = Rc::make_mut(&mut game.rng);
         if entities
             .iter()
             .filter(|entity| {

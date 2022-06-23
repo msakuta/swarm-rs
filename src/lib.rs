@@ -10,6 +10,7 @@ mod widget;
 mod macros;
 mod agent;
 mod entity;
+mod game;
 mod spawner;
 mod triangle_utils;
 
