@@ -38,11 +38,8 @@ pub fn main() {
         .expect("launch failed");
 }
 
-#[macro_export]
-macro_rules! measure_time {
-    {$exec:expr} => {{
-        let start = std::time::Instant::now();
-        $exec;
-        start.elapsed().as_micros() as f64 / 1e6
-    }}
+fn measure_time<T>(f: impl FnOnce() -> T) -> (T, f64) {
+    let start = std::time::Instant::now();
+    let ret = f();
+    (ret, start.elapsed().as_secs_f64())
 }

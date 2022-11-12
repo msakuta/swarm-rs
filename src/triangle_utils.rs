@@ -1,7 +1,7 @@
 use ::delaunator::{Point, Triangulation};
 use std::collections::HashSet;
 
-use crate::game::Profiler;
+use crate::{game::Profiler, measure_time};
 
 pub(crate) fn center_of_triangle(v1: Point, v2: Point, v3: Point) -> Point {
     Point {
@@ -48,22 +48,23 @@ pub(crate) fn find_triangle_at(
     point: [f64; 2],
     profiler: &mut Profiler,
 ) -> Option<usize> {
-    let timer = std::time::Instant::now();
-    let triangles = &triangulation.triangles;
-    let point = to_point(point);
-    for (i, triangle) in triangles.chunks(3).enumerate() {
-        let [v1, v2, v3] = [
-            points[triangle[0]].clone(),
-            points[triangle[1]].clone(),
-            points[triangle[2]].clone(),
-        ];
-        if point_in_triangle(point.clone(), v1, v2, v3) {
-            profiler.add(timer.elapsed().as_nanos() as f64 / 1e9);
-            return Some(i);
+    let (ret, time) = measure_time(move || {
+        let triangles = &triangulation.triangles;
+        let point = to_point(point);
+        for (i, triangle) in triangles.chunks(3).enumerate() {
+            let [v1, v2, v3] = [
+                points[triangle[0]].clone(),
+                points[triangle[1]].clone(),
+                points[triangle[2]].clone(),
+            ];
+            if point_in_triangle(point.clone(), v1, v2, v3) {
+                return Some(i);
+            }
         }
-    }
-    profiler.add(timer.elapsed().as_nanos() as f64 / 1e9);
-    None
+        None
+    });
+    profiler.add(time);
+    ret
 }
 
 pub(crate) fn label_triangles(

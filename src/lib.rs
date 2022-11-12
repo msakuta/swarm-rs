@@ -45,10 +45,6 @@ pub fn main() {
         .expect("launch failed");
 }
 
-#[macro_export]
-macro_rules! measure_time {
-    {$exec:expr} => {{
-        $exec;
-        0.
-    }}
+fn measure_time<T>(f: impl FnOnce() -> T) -> (T, f64) {
+    (f(), 0.)
 }

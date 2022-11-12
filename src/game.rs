@@ -8,6 +8,7 @@ use crate::{
     app_data::is_passable_at,
     entity::{Entity, GameEvent},
     marching_squares::{trace_lines, BoolField},
+    measure_time,
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
     spawner::Spawner,
     triangle_utils::{center_of_triangle_obj, find_triangle_at, label_triangles},
@@ -392,11 +393,9 @@ impl Game {
         if pos[0] < 0. || self.xs <= pos[0] as usize || pos[1] < 0. || self.ys <= pos[1] as usize {
             false
         } else {
-            let timer = std::time::Instant::now();
-            let ret = self.board[pos[0] as usize + pos[1] as usize * self.xs];
-            self.pixel_profiler
-                .borrow_mut()
-                .add(timer.elapsed().as_nanos() as f64 / 1e9);
+            let (ret, time) =
+                measure_time(|| self.board[pos[0] as usize + pos[1] as usize * self.xs]);
+            self.pixel_profiler.borrow_mut().add(time);
             ret
         }
     }

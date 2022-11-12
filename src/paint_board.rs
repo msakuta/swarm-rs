@@ -114,10 +114,7 @@ pub(crate) fn paint_board(
 
                 let lines = cell_lines(bits);
                 let to_point = |p: [f32; 2]| {
-                    Point::new(
-                        p[0] as f64 + x as f64 - 0.5,
-                        p[1] as f64 + y as f64 - 0.5,
-                    )
+                    Point::new(p[0] as f64 + x as f64 - 0.5, p[1] as f64 + y as f64 - 0.5)
                 };
                 for line in lines {
                     let line = *view_transform * Line::new(to_point(line[0]), to_point(line[1]));
