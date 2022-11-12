@@ -347,7 +347,7 @@ fn paint_bullets(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
             let pos = to_vec2(bullet.pos);
             let velo = to_vec2(bullet.velo).normalize();
             let perp = Vec2::new(velo.y, -velo.x) * BULLET_RADIUS;
-            let length = 2. * BULLET_SPEED;
+            let length = bullet.traveled.min(2. * BULLET_SPEED);
             let tail = pos - velo * length;
             let mut trail = BezPath::new();
             trail.move_to((pos + perp).to_point());

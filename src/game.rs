@@ -1,4 +1,4 @@
-use cgmath::{MetricSpace, Vector2};
+use cgmath::{InnerSpace, MetricSpace, Vector2};
 use delaunator::{triangulate, Triangulation};
 use druid::{piet::kurbo::BezPath, Data, Point};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -372,6 +372,7 @@ impl Game {
                     }
                     let mut ret = bullet.clone();
                     ret.pos = newpos;
+                    ret.traveled += Vector2::from(bullet.velo).magnitude();
                     Some(ret)
                 })
                 .collect(),

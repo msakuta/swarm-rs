@@ -12,6 +12,8 @@ pub(crate) struct Bullet {
     pub pos: [f64; 2],
     pub velo: [f64; 2],
     pub team: usize,
+    /// Distance traveled, used for rendering
+    pub traveled: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -175,6 +177,7 @@ impl Agent {
             pos: self.pos,
             velo: (dir * BULLET_SPEED).into(),
             team: self.team,
+            traveled: 0.,
         };
 
         bullets.push(bullet);
