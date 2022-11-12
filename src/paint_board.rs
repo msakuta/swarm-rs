@@ -17,9 +17,6 @@ const BACKGROUND_COLOR: u8 = 127u8;
 pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     let view_transform = data.view_transform();
 
-    ctx.save().unwrap();
-    ctx.transform(view_transform);
-
     let contours = paint_board(ctx, data, env, &view_transform);
 
     paint_agents(ctx, data, env, &view_transform);
@@ -41,66 +38,42 @@ pub(crate) fn paint_board(
 
     let (xs, ys) = (data.game.xs, data.game.ys);
 
-    match ctx.make_image(
-        xs,
-        ys,
-        &data
-            .game
-            .board
-            .iter()
-            .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
-            .collect::<Vec<_>>(),
-        ImageFormat::Grayscale,
-    ) {
-        Ok(res) => {
-            ctx.draw_image(
-                &res,
-                (
-                    Point::new(-w0, -h0),
-                    Point::new(w0 * (xs as f64 - 1.), h0 * (ys as f64 - 1.)),
-                ),
-                InterpolationMode::NearestNeighbor,
-            );
-        }
-        Err(e) => println!("Make image error: {}", e.to_string()),
-    }
-
-    let shape = (xs as isize, ys as isize);
+    let mut contours = 0;
 
     const RED_COLOR: Color = Color::rgb8(255, 0, 0);
 
+    let shape = (xs as isize, ys as isize);
+
     let field = BoolField::new(data.game.board.as_ref(), shape);
 
-    let mut contours = 0;
-    match data.line_mode {
-        LineMode::None => ctx.restore().unwrap(),
-        LineMode::Line => {
-            ctx.restore().unwrap();
-            for y in 0..ys - 1 {
-                for x in 0..xs - 1 {
-                    let bits = pick_bits(&field, (x as isize, y as isize));
+    ctx.with_save(|ctx| {
+        ctx.transform(*view_transform);
 
-                    if bits == 0 || bits == 15 {
-                        continue;
-                    }
-
-                    let lines = cell_lines(bits);
-                    let to_point = |p: [f32; 2]| {
-                        Point::new(
-                            (p[0] as f64 + x as f64 - 0.5) * w0,
-                            (p[1] as f64 + y as f64 - 0.5) * h0,
-                        )
-                    };
-                    for line in lines {
-                        let line =
-                            *view_transform * Line::new(to_point(line[0]), to_point(line[1]));
-                        ctx.stroke(line, &RED_COLOR, 2.0);
-                    }
-                    contours += 1;
-                }
+        match ctx.make_image(
+            xs,
+            ys,
+            &data
+                .game
+                .board
+                .iter()
+                .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
+                .collect::<Vec<_>>(),
+            ImageFormat::Grayscale,
+        ) {
+            Ok(res) => {
+                ctx.draw_image(
+                    &res,
+                    (
+                        Point::new(-w0, -h0),
+                        Point::new(w0 * (xs as f64 - 1.), h0 * (ys as f64 - 1.)),
+                    ),
+                    InterpolationMode::NearestNeighbor,
+                );
             }
+            Err(e) => println!("Make image error: {}", e.to_string()),
         }
-        LineMode::Polygon => {
+
+        if let LineMode::Polygon = data.line_mode {
             let scale_transform = /*view_transform*/ Affine::scale(w0);
 
             for y in 0..ys - 1 {
@@ -130,7 +103,31 @@ pub(crate) fn paint_board(
                     contours += 1;
                 }
             }
-            ctx.restore().unwrap();
+        }
+    });
+
+    if let LineMode::Line = data.line_mode {
+        for y in 0..ys - 1 {
+            for x in 0..xs - 1 {
+                let bits = pick_bits(&field, (x as isize, y as isize));
+
+                if bits == 0 || bits == 15 {
+                    continue;
+                }
+
+                let lines = cell_lines(bits);
+                let to_point = |p: [f32; 2]| {
+                    Point::new(
+                        (p[0] as f64 + x as f64 - 0.5) * w0,
+                        (p[1] as f64 + y as f64 - 0.5) * h0,
+                    )
+                };
+                for line in lines {
+                    let line = *view_transform * Line::new(to_point(line[0]), to_point(line[1]));
+                    ctx.stroke(line, &RED_COLOR, 2.0);
+                }
+                contours += 1;
+            }
         }
     }
 
