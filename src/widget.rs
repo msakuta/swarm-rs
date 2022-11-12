@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     app_data::{AppData, LineMode},
     board_widget::BoardWidget,
@@ -117,9 +119,21 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 .with_child(Flex::row().with_flex_child(
                     Label::new(|data: &AppData, _: &_| {
                         format!(
-                            "Render board: {:.06}s, Get board: {:.06}s",
-                            data.render_board_time.get(),
-                            &data.get_board_time
+                            "Triangle time: {:.09}s, calls: {} size: {}, refs: {}",
+                            data.game.triangle_profiler.get_average(),
+                            data.game.triangle_profiler.get_count(),
+                            std::mem::size_of::<AppData>(),
+                            Rc::strong_count(&data.game.triangulation)
+                        )
+                    }),
+                    1.,
+                ))
+                .with_child(Flex::row().with_flex_child(
+                    Label::new(|data: &AppData, _: &_| {
+                        format!(
+                            "Pixel time: {:.09}s, calls: {}",
+                            data.game.pixel_profiler.borrow().get_average(),
+                            data.game.pixel_profiler.borrow().get_count()
                         )
                     }),
                     1.,

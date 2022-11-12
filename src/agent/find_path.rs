@@ -1,10 +1,11 @@
 use super::Agent;
 use crate::{
     entity::Entity,
+    game::Game,
     triangle_utils::{center_of_triangle_obj, find_triangle_at},
 };
 use ::cgmath::{InnerSpace, Vector2};
-use ::delaunator::Triangulation;
+
 use std::{cmp::Reverse, collections::BinaryHeap};
 
 fn delaunator_to_vector(p: delaunator::Point) -> Vector2<f64> {
@@ -20,14 +21,21 @@ impl Agent {
     pub fn find_path<'a, 'b>(
         &'a mut self,
         target: Option<&Entity>,
-        triangulation: &Triangulation,
-        points: &[delaunator::Point],
-        triangle_passable: &[bool],
+        game: &mut Game,
     ) -> Result<(), ()> {
         if let Some(target) = target {
-            let this_triangle = find_triangle_at(&triangulation, &points, self.pos).ok_or(())?;
-            let target_triangle =
-                find_triangle_at(&triangulation, &points, target.get_pos()).ok_or(())?;
+            let triangulation = &game.triangulation;
+            let points = &game.points;
+            let this_triangle =
+                find_triangle_at(triangulation, points, self.pos, &mut game.triangle_profiler)
+                    .ok_or(())?;
+            let target_triangle = find_triangle_at(
+                triangulation,
+                points,
+                target.get_pos(),
+                &mut game.triangle_profiler,
+            )
+            .ok_or(())?;
             if this_triangle == target_triangle {
                 // self.path_line = vec![
                 //         self.pos,
@@ -45,7 +53,9 @@ impl Agent {
                 let top_cost = costmap[top];
                 for j in 0..3 {
                     let next_halfedge = triangulation.halfedges[top * 3 + j];
-                    if next_halfedge == delaunator::EMPTY || !triangle_passable[next_halfedge / 3] {
+                    if next_halfedge == delaunator::EMPTY
+                        || !game.triangle_passable[next_halfedge / 3]
+                    {
                         continue;
                     }
                     let next_triangle = next_halfedge / 3;

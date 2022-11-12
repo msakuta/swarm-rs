@@ -1,4 +1,4 @@
-use crate::{app_data::AppData, paint_board::paint_board};
+use crate::{app_data::AppData, paint_board::paint_game};
 use druid::widget::prelude::*;
 use druid::{Affine, TimerToken, Vec2};
 use std::time::Duration;
@@ -101,6 +101,6 @@ impl Widget<AppData> for BoardWidget {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &AppData, env: &Env) {
-        paint_board(ctx, data, env);
+        paint_game(ctx, data, env);
     }
 }

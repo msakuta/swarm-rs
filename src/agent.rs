@@ -68,7 +68,7 @@ impl Agent {
         }
     }
 
-    pub(crate) fn move_to<'a>(&'a mut self, game: &Game, target_pos: [f64; 2]) {
+    pub(crate) fn move_to<'a>(&'a mut self, game: &mut Game, target_pos: [f64; 2]) {
         const SPEED: f64 = 0.5;
 
         if self.orient_to(target_pos) {
@@ -80,9 +80,12 @@ impl Agent {
                 let forward = Vector2::new(self.orient.cos(), self.orient.sin());
                 (Vector2::from(self.pos) + SPEED * forward).into()
             };
-            if let Some(next_triangle) =
-                find_triangle_at(&game.triangulation, &game.points, target_pos)
-            {
+            if let Some(next_triangle) = find_triangle_at(
+                &game.triangulation,
+                &game.points,
+                target_pos,
+                &mut game.triangle_profiler,
+            ) {
                 if game.triangle_passable[next_triangle] {
                     if 100 < self.trace.len() {
                         self.trace.pop_front();
@@ -151,9 +154,6 @@ impl Agent {
         entities: &[RefCell<Entity>],
         bullets: &mut Vec<Bullet>,
     ) {
-        let triangulation = &game.triangulation;
-        let points = &game.points;
-        let triangle_passable = &game.triangle_passable;
         if let Some(target) = self.target.and_then(|target| {
             entities.iter().find(|a| {
                 a.try_borrow()
@@ -163,10 +163,7 @@ impl Agent {
         }) {
             let target = target.borrow_mut();
             if 5. < Vector2::from(target.get_pos()).distance(Vector2::from(self.pos)) {
-                if self
-                    .find_path(Some(&target), triangulation, points, triangle_passable)
-                    .is_ok()
-                {
+                if self.find_path(Some(&target), game).is_ok() {
                     if let Some(target) = self.path.last() {
                         let target_pos = *target;
                         self.move_to(game, target_pos);

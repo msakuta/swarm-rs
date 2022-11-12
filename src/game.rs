@@ -16,6 +16,38 @@ use crate::{
 pub(crate) type Board = Vec<bool>;
 
 #[derive(Debug, Clone, Data)]
+pub(crate) struct Profiler {
+    total: f64,
+    count: usize,
+}
+
+impl Profiler {
+    pub(crate) fn new() -> Self {
+        Self {
+            total: 0.,
+            count: 0,
+        }
+    }
+
+    pub(crate) fn get_average(&self) -> f64 {
+        if self.count == 0 {
+            0.
+        } else {
+            self.total / self.count as f64
+        }
+    }
+
+    pub(crate) fn get_count(&self) -> usize {
+        self.count
+    }
+
+    pub(crate) fn add(&mut self, sample: f64) {
+        self.total += sample;
+        self.count += 1;
+    }
+}
+
+#[derive(Debug, Clone, Data)]
 pub(crate) struct Game {
     pub(crate) xs: usize,
     pub(crate) ys: usize,
@@ -33,6 +65,8 @@ pub(crate) struct Game {
     pub(crate) interval: f64,
     pub(crate) rng: Rc<Xor128>,
     pub(crate) id_gen: usize,
+    pub(crate) triangle_profiler: Profiler,
+    pub(crate) pixel_profiler: Rc<RefCell<Profiler>>,
 }
 
 impl Game {
@@ -79,9 +113,11 @@ impl Game {
             entities: Rc::new(vec![]),
             bullets: Rc::new(vec![]),
             paused: false,
-            interval: 100.,
+            interval: 16.,
             rng: Rc::new(Xor128::new(9318245)),
             id_gen,
+            triangle_profiler: Profiler::new(),
+            pixel_profiler: Rc::new(RefCell::new(Profiler::new())),
         }
     }
 
@@ -235,7 +271,12 @@ impl Game {
                 pos[1] + rng.next() * 10. - 5.,
             ];
             let orient_candidate = rng.next() * std::f64::consts::PI * 2.;
-            if let Some(tri) = find_triangle_at(&triangulation, &points, pos_candidate) {
+            if let Some(tri) = find_triangle_at(
+                &triangulation,
+                &points,
+                pos_candidate,
+                &mut self.triangle_profiler,
+            ) {
                 if Some(triangle_labels[tri]) == largest_label {
                     return Some(Entity::Agent(Agent::new(
                         id_gen,
@@ -253,7 +294,12 @@ impl Game {
         for _ in 0..10 {
             let rng = Rc::make_mut(&mut self.rng);
             let pos_candidate = [rng.next() * self.xs as f64, rng.next() * self.ys as f64];
-            if let Some(tri) = find_triangle_at(&self.triangulation, &self.points, pos_candidate) {
+            if let Some(tri) = find_triangle_at(
+                &self.triangulation,
+                &self.points,
+                pos_candidate,
+                &mut self.triangle_profiler,
+            ) {
                 if Some(self.triangle_labels[tri]) == self.largest_label {
                     if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
                         return Some(Entity::Spawner(Spawner::new(
@@ -346,7 +392,12 @@ impl Game {
         if pos[0] < 0. || self.xs <= pos[0] as usize || pos[1] < 0. || self.ys <= pos[1] as usize {
             false
         } else {
-            self.board[pos[0] as usize + pos[1] as usize * self.xs]
+            let timer = std::time::Instant::now();
+            let ret = self.board[pos[0] as usize + pos[1] as usize * self.xs];
+            self.pixel_profiler
+                .borrow_mut()
+                .add(timer.elapsed().as_nanos() as f64 / 1e9);
+            ret
         }
     }
 

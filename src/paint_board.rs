@@ -14,13 +14,30 @@ use druid::{
 const OBSTACLE_COLOR: u8 = 63u8;
 const BACKGROUND_COLOR: u8 = 127u8;
 
-pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
-    let (w0, h0) = (32., 32.);
-
+pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     let view_transform = data.view_transform();
 
     ctx.save().unwrap();
     ctx.transform(view_transform);
+
+    let contours = paint_board(ctx, data, env, &view_transform);
+
+    paint_agents(ctx, data, env, &view_transform);
+
+    *data.render_stats.borrow_mut() = format!(
+        "Drawn {} contours, {} triangles",
+        contours,
+        data.game.triangulation.triangles.len()
+    );
+}
+
+pub(crate) fn paint_board(
+    ctx: &mut PaintCtx,
+    data: &AppData,
+    env: &Env,
+    view_transform: &Affine,
+) -> usize {
+    let (w0, h0) = (32., 32.);
 
     let (xs, ys) = (data.game.xs, data.game.ys);
 
@@ -75,7 +92,8 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
                         )
                     };
                     for line in lines {
-                        let line = view_transform * Line::new(to_point(line[0]), to_point(line[1]));
+                        let line =
+                            *view_transform * Line::new(to_point(line[0]), to_point(line[1]));
                         ctx.stroke(line, &RED_COLOR, 2.0);
                     }
                     contours += 1;
@@ -116,7 +134,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
         }
     }
 
-    let scale_transform = view_transform * Affine::scale(w0);
+    let scale_transform = *view_transform * Affine::scale(w0);
 
     fn delaunator_to_druid_point(p: &delaunator::Point) -> Point {
         Point { x: p.x, y: p.y }
@@ -197,6 +215,12 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
         }
     }
 
+    contours
+}
+
+fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &Affine) {
+    let (w0, h0) = (32., 32.);
+
     let to_point = |pos: [f64; 2]| Point {
         x: pos[0] * w0,
         y: pos[1] * h0,
@@ -207,18 +231,18 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     for agent in data.game.entities.iter() {
         let agent = agent.borrow();
         let pos = to_point(agent.get_pos());
-        let circle = Circle::new(view_transform * pos, 5.);
+        let circle = Circle::new(*view_transform * pos, 5.);
         let brush = &AGENT_COLORS[agent.get_team() % AGENT_COLORS.len()];
         ctx.fill(circle, brush);
 
         if !agent.is_agent() {
-            let big_circle = Circle::new(view_transform * pos, 10.);
+            let big_circle = Circle::new(*view_transform * pos, 10.);
             ctx.stroke(big_circle, brush, 3.);
         }
 
         if let Some(orient) = agent.get_orient() {
             let length = 10.;
-            let view_pos = view_transform * pos;
+            let view_pos = *view_transform * pos;
             let dest = Point::new(
                 view_pos.x + orient.cos() * length,
                 view_pos.y + orient.sin() * length,
@@ -238,7 +262,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
                     let target_pos = target.borrow().get_pos();
                     let line = Line::new(pos, to_point(target_pos));
 
-                    ctx.stroke(view_transform * line, brush, 1.);
+                    ctx.stroke(*view_transform * line, brush, 1.);
                 }
             }
         }
@@ -251,7 +275,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
                     bez_path.line_to(to_point(*point));
                 }
                 bez_path.line_to(to_point(agent.get_pos()));
-                ctx.stroke(view_transform * bez_path, brush, 1.);
+                ctx.stroke(*view_transform * bez_path, brush, 1.);
             }
         }
 
@@ -265,7 +289,7 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
                         bez_path.line_to(to_point(*point));
                     }
                     bez_path.line_to(to_point(agent.get_pos()));
-                    ctx.stroke(view_transform * bez_path, brush, 0.5);
+                    ctx.stroke(*view_transform * bez_path, brush, 0.5);
                 }
             }
         }
@@ -280,12 +304,12 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
             layout.set_font(FontDescriptor::new(FontFamily::SANS_SERIF).with_size(16.0));
             layout.set_text_color(brush.clone());
             layout.rebuild_if_needed(ctx.text(), env);
-            layout.draw(ctx, view_transform * pos);
+            layout.draw(ctx, *view_transform * pos);
         }
     }
 
     for bullet in data.game.bullets.iter() {
-        let circle = Circle::new(view_transform * to_point(bullet.pos), 3.);
+        let circle = Circle::new(*view_transform * to_point(bullet.pos), 3.);
         ctx.fill(
             circle,
             if bullet.team == 0 {
@@ -296,10 +320,4 @@ pub(crate) fn paint_board(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
         );
         ctx.stroke(circle, &Color::YELLOW, 1.);
     }
-
-    *data.render_stats.borrow_mut() = format!(
-        "Drawn {} contours, {} triangles",
-        contours,
-        data.game.triangulation.triangles.len()
-    );
 }

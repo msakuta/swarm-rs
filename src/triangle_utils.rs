@@ -1,6 +1,8 @@
 use ::delaunator::{Point, Triangulation};
 use std::collections::HashSet;
 
+use crate::game::Profiler;
+
 pub(crate) fn center_of_triangle(v1: Point, v2: Point, v3: Point) -> Point {
     Point {
         x: (v1.x + v2.x + v3.x) / 3.,
@@ -44,7 +46,9 @@ pub(crate) fn find_triangle_at(
     triangulation: &Triangulation,
     points: &[Point],
     point: [f64; 2],
+    profiler: &mut Profiler,
 ) -> Option<usize> {
+    let timer = std::time::Instant::now();
     let triangles = &triangulation.triangles;
     let point = to_point(point);
     for (i, triangle) in triangles.chunks(3).enumerate() {
@@ -54,9 +58,11 @@ pub(crate) fn find_triangle_at(
             points[triangle[2]].clone(),
         ];
         if point_in_triangle(point.clone(), v1, v2, v3) {
+            profiler.add(timer.elapsed().as_nanos() as f64 / 1e9);
             return Some(i);
         }
     }
+    profiler.add(timer.elapsed().as_nanos() as f64 / 1e9);
     None
 }
 
