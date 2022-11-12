@@ -35,8 +35,6 @@ pub(crate) fn paint_board(
     env: &Env,
     view_transform: &Affine,
 ) -> usize {
-    let (w0, h0) = (32., 32.);
-
     let (xs, ys) = (data.game.xs, data.game.ys);
 
     let mut contours = 0;
@@ -65,8 +63,8 @@ pub(crate) fn paint_board(
                 ctx.draw_image(
                     &res,
                     (
-                        Point::new(-w0, -h0),
-                        Point::new(w0 * (xs as f64 - 1.), h0 * (ys as f64 - 1.)),
+                        Point::new(-1., -1.),
+                        Point::new(xs as f64 - 1., ys as f64 - 1.),
                     ),
                     InterpolationMode::NearestNeighbor,
                 );
@@ -75,8 +73,6 @@ pub(crate) fn paint_board(
         }
 
         if let LineMode::Polygon = data.line_mode {
-            let scale_transform = /*view_transform*/ Affine::scale(w0);
-
             for y in 0..ys - 1 {
                 for x in 0..xs - 1 {
                     let bits = pick_bits(&field, (x as isize, y as isize));
@@ -95,10 +91,10 @@ pub(crate) fn paint_board(
                             (poly[i * 2 + 1] as f64) / 2. + y as f64,
                         )
                     };
-                    path.move_to(scale_transform * to_point(0));
-                    path.line_to(scale_transform * to_point(1));
-                    path.line_to(scale_transform * to_point(2));
-                    path.line_to(scale_transform * to_point(3));
+                    path.move_to(to_point(0));
+                    path.line_to(to_point(1));
+                    path.line_to(to_point(2));
+                    path.line_to(to_point(3));
                     path.close_path();
                     ctx.fill(path, &RED_COLOR);
                     contours += 1;
@@ -119,8 +115,8 @@ pub(crate) fn paint_board(
                 let lines = cell_lines(bits);
                 let to_point = |p: [f32; 2]| {
                     Point::new(
-                        (p[0] as f64 + x as f64 - 0.5) * w0,
-                        (p[1] as f64 + y as f64 - 0.5) * h0,
+                        p[0] as f64 + x as f64 - 0.5,
+                        p[1] as f64 + y as f64 - 0.5,
                     )
                 };
                 for line in lines {
@@ -132,7 +128,7 @@ pub(crate) fn paint_board(
         }
     }
 
-    let scale_transform = *view_transform * Affine::scale(w0);
+    let scale_transform = *view_transform;
 
     fn delaunator_to_druid_point(p: &delaunator::Point) -> Point {
         Point { x: p.x, y: p.y }
@@ -217,11 +213,9 @@ pub(crate) fn paint_board(
 }
 
 fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &Affine) {
-    let (w0, h0) = (32., 32.);
-
     let to_point = |pos: [f64; 2]| Point {
-        x: pos[0] * w0,
-        y: pos[1] * h0,
+        x: pos[0],
+        y: pos[1],
     };
 
     const AGENT_COLORS: [Color; 2] = [Color::rgb8(63, 255, 63), Color::RED];

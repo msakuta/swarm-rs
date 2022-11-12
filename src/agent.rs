@@ -30,8 +30,8 @@ pub(crate) struct Agent {
     pub trace: VecDeque<[f64; 2]>,
 }
 
-pub(crate) const AGENT_HALFWIDTH: f64 = 10.;
-pub(crate) const AGENT_HALFLENGTH: f64 = 20.;
+pub(crate) const AGENT_HALFWIDTH: f64 = 0.3;
+pub(crate) const AGENT_HALFLENGTH: f64 = 0.6;
 
 impl Agent {
     pub(crate) fn new(id_gen: &mut usize, pos: [f64; 2], orient: f64, team: usize) -> Self {
@@ -71,12 +71,31 @@ impl Agent {
         }
     }
 
-    pub(crate) fn move_to<'a>(&'a mut self, game: &mut Game, target_pos: [f64; 2]) {
-        const SPEED: f64 = 0.5;
+    pub(crate) fn move_to<'a>(
+        &'a mut self,
+        game: &mut Game,
+        target_pos: [f64; 2],
+        others: &[RefCell<Entity>],
+    ) {
+        const SPEED: f64 = 0.25;
 
         if self.orient_to(target_pos) {
             let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
             let distance = delta.magnitude();
+
+            for entity in others.iter() {
+                if let Ok(entity) = entity.try_borrow() {
+                    if entity.get_id() == self.id {
+                        continue;
+                    }
+                    let dist2 =
+                        Vector2::from(entity.get_pos()).distance2(Vector2::from(target_pos));
+                    if dist2 < (AGENT_HALFLENGTH * 2.).powf(2.) {
+                        // Collision with another entity
+                        return;
+                    }
+                }
+            }
             let newpos = if distance <= SPEED {
                 target_pos
             } else {
@@ -169,10 +188,10 @@ impl Agent {
                 if self.find_path(Some(&target), game).is_ok() {
                     if let Some(target) = self.path.last() {
                         let target_pos = *target;
-                        self.move_to(game, target_pos);
+                        self.move_to(game, target_pos, entities);
                     }
                 } else {
-                    self.move_to(game, target.get_pos());
+                    self.move_to(game, target.get_pos(), entities);
                 }
             } else {
                 // println!("Orienting {}", self.id);

@@ -42,8 +42,7 @@ impl AppData {
     pub(crate) fn new() -> Self {
         let game = Game::new();
         let seed = 123513;
-        let width = 32.;
-        let scale = WINDOW_HEIGHT / width / game.ys as f64;
+        let scale = WINDOW_HEIGHT / game.ys as f64;
 
         Self {
             rows_text: game.xs.to_string(),
