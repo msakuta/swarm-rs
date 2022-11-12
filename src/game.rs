@@ -4,7 +4,7 @@ use druid::{piet::kurbo::BezPath, Data, Point};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    agent::{Agent, Bullet},
+    agent::{Agent, Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH},
     app_data::is_passable_at,
     entity::{Entity, GameEvent},
     marching_squares::{trace_lines, BoolField},
@@ -362,7 +362,30 @@ impl Game {
                             continue;
                         }
                         let dist2 = Vector2::from(agent.get_pos()).distance2(Vector2::from(newpos));
-                        if dist2 < 3. * 3. {
+                        let agent_pos = Vector2::from(agent.get_pos());
+                        let agent_vertices = [
+                            [
+                                agent_pos.x - AGENT_HALFLENGTH,
+                                agent_pos.y - AGENT_HALFWIDTH,
+                            ],
+                            [
+                                agent_pos.x - AGENT_HALFLENGTH,
+                                agent_pos.y + AGENT_HALFWIDTH,
+                            ],
+                            [
+                                agent_pos.x + AGENT_HALFLENGTH,
+                                agent_pos.y + AGENT_HALFWIDTH,
+                            ],
+                            [
+                                agent_pos.x + AGENT_HALFLENGTH,
+                                agent_pos.y - AGENT_HALFWIDTH,
+                            ],
+                        ];
+                        if separating_axis(
+                            &Vector2::from(bullet.pos),
+                            &Vector2::from(bullet.velo),
+                            agent_vertices.into_iter().map(Vector2::from),
+                        ) {
                             if !agent.damage() {
                                 agent.set_active(false);
                             }
@@ -418,4 +441,27 @@ impl Game {
     //         board[pos[0] as usize + pos[1] as usize * shape.0]
     //     }
     // }
+}
+
+fn separating_axis(
+    org: &Vector2<f64>,
+    dir: &Vector2<f64>,
+    polygon: impl Iterator<Item = Vector2<f64>>,
+) -> bool {
+    let xhat = dir.normalize();
+    let yhat = Vector2::new(xhat.y, -xhat.x);
+
+    if let Some(bbox) = polygon.fold(None, |acc: Option<[f64; 4]>, vertex| {
+        let x = xhat.dot(vertex - org);
+        let y = yhat.dot(vertex - org);
+        if let Some(acc) = acc {
+            Some([acc[0].min(x), acc[1].min(y), acc[2].max(x), acc[3].max(y)])
+        } else {
+            Some([x, y, x, y])
+        }
+    }) {
+        0. < bbox[2] && bbox[0] < dir.magnitude() && 0. < bbox[3] && bbox[1] < 0.
+    } else {
+        false
+    }
 }
