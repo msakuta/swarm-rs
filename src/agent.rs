@@ -83,25 +83,26 @@ impl Agent {
             let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
             let distance = delta.magnitude();
 
-            for entity in others.iter() {
-                if let Ok(entity) = entity.try_borrow() {
-                    if entity.get_id() == self.id {
-                        continue;
-                    }
-                    let dist2 =
-                        Vector2::from(entity.get_pos()).distance2(Vector2::from(target_pos));
-                    if dist2 < (AGENT_HALFLENGTH * 2.).powf(2.) {
-                        // Collision with another entity
-                        return;
-                    }
-                }
-            }
             let newpos = if distance <= SPEED {
                 target_pos
             } else {
                 let forward = Vector2::new(self.orient.cos(), self.orient.sin());
                 (Vector2::from(self.pos) + SPEED * forward).into()
             };
+
+            for entity in others.iter() {
+                if let Ok(entity) = entity.try_borrow() {
+                    if entity.get_id() == self.id {
+                        continue;
+                    }
+                    let dist2 = Vector2::from(entity.get_pos()).distance2(Vector2::from(newpos));
+                    if dist2 < (AGENT_HALFLENGTH * 2.).powf(2.) {
+                        // Collision with another entity
+                        return;
+                    }
+                }
+            }
+
             if let Some(next_triangle) = find_triangle_at(
                 &game.triangulation,
                 &game.points,
