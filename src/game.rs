@@ -259,7 +259,12 @@ impl Game {
         self.bullets = Rc::new(vec![]);
     }
 
-    pub(crate) fn try_new_agent(&mut self, pos: [f64; 2], team: usize) -> Option<Entity> {
+    pub(crate) fn try_new_agent(
+        &mut self,
+        pos: [f64; 2],
+        team: usize,
+        entities: &[RefCell<Entity>],
+    ) -> Option<Entity> {
         let rng = Rc::make_mut(&mut self.rng);
         let id_gen = &mut self.id_gen;
         let triangulation = &self.triangulation;
@@ -271,6 +276,11 @@ impl Game {
                 pos[0] + rng.next() * 10. - 5.,
                 pos[1] + rng.next() * 10. - 5.,
             ];
+
+            if Agent::collision_check(None, pos_candidate, entities) {
+                continue;
+            }
+
             let orient_candidate = rng.next() * std::f64::consts::PI * 2.;
             if let Some(tri) = find_triangle_at(
                 &triangulation,
@@ -327,7 +337,7 @@ impl Game {
         for event in events {
             match event {
                 GameEvent::SpawnAgent { pos, team } => {
-                    if let Some(agent) = self.try_new_agent(pos, team) {
+                    if let Some(agent) = self.try_new_agent(pos, team, &entities) {
                         entities.push(RefCell::new(agent));
                     }
                 }

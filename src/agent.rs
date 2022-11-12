@@ -90,17 +90,8 @@ impl Agent {
                 (Vector2::from(self.pos) + SPEED * forward).into()
             };
 
-            for entity in others.iter() {
-                if let Ok(entity) = entity.try_borrow() {
-                    if entity.get_id() == self.id {
-                        continue;
-                    }
-                    let dist2 = Vector2::from(entity.get_pos()).distance2(Vector2::from(newpos));
-                    if dist2 < (AGENT_HALFLENGTH * 2.).powf(2.) {
-                        // Collision with another entity
-                        return;
-                    }
-                }
+            if Self::collision_check(Some(self.id), newpos, others) {
+                return;
             }
 
             if let Some(next_triangle) = find_triangle_at(
@@ -118,6 +109,26 @@ impl Agent {
                 }
             }
         }
+    }
+
+    pub(crate) fn collision_check(
+        ignore: Option<usize>,
+        newpos: [f64; 2],
+        others: &[RefCell<Entity>],
+    ) -> bool {
+        for entity in others.iter() {
+            if let Ok(entity) = entity.try_borrow() {
+                if Some(entity.get_id()) == ignore {
+                    continue;
+                }
+                let dist2 = Vector2::from(entity.get_pos()).distance2(Vector2::from(newpos));
+                if dist2 < (AGENT_HALFLENGTH * 2.).powf(2.) {
+                    // Collision with another entity
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     pub(crate) fn find_enemy<'a>(&'a mut self, agents: &[RefCell<Entity>]) {
