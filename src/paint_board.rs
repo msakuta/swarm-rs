@@ -1,4 +1,5 @@
 use crate::{
+    agent::{AGENT_HALFLENGTH, AGENT_HALFWIDTH},
     app_data::{AppData, LineMode},
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
@@ -225,6 +226,8 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
 
     const AGENT_COLORS: [Color; 2] = [Color::rgb8(63, 255, 63), Color::RED];
 
+    let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
+
     for agent in data.game.entities.iter() {
         let agent = agent.borrow();
         let pos = to_point(agent.get_pos());
@@ -246,6 +249,18 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             );
             let orient_line = Line::new(view_pos, dest);
             ctx.stroke(orient_line, brush, 3.);
+
+            if draw_rectangle {
+                let rot_transform =
+                    *view_transform * Affine::translate(pos.to_vec2()) * Affine::rotate(orient);
+                let mut path = BezPath::new();
+                path.move_to(Point::new(-AGENT_HALFLENGTH, -AGENT_HALFWIDTH));
+                path.line_to(Point::new(AGENT_HALFLENGTH, -AGENT_HALFWIDTH));
+                path.line_to(Point::new(AGENT_HALFLENGTH, AGENT_HALFWIDTH));
+                path.line_to(Point::new(-AGENT_HALFLENGTH, AGENT_HALFWIDTH));
+                path.close_path();
+                ctx.stroke(rot_transform * path, brush, 1.);
+            }
         }
 
         if data.target_visible {

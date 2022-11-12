@@ -30,6 +30,9 @@ pub(crate) struct Agent {
     pub trace: VecDeque<[f64; 2]>,
 }
 
+pub(crate) const AGENT_HALFWIDTH: f64 = 10.;
+pub(crate) const AGENT_HALFLENGTH: f64 = 20.;
+
 impl Agent {
     pub(crate) fn new(id_gen: &mut usize, pos: [f64; 2], orient: f64, team: usize) -> Self {
         let id = *id_gen;
