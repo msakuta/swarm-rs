@@ -113,6 +113,10 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                         .padding(5.0),
                 )
                 .with_child(Flex::row().with_flex_child(
+                    Label::new(|data: &AppData, _: &_| format!("Scale: {}", data.scale)),
+                    1.,
+                ))
+                .with_child(Flex::row().with_flex_child(
                     Label::new(|data: &AppData, _: &_| data.render_stats.borrow().clone()),
                     1.,
                 ))

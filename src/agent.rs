@@ -32,6 +32,8 @@ pub(crate) struct Agent {
 
 pub(crate) const AGENT_HALFWIDTH: f64 = 0.3;
 pub(crate) const AGENT_HALFLENGTH: f64 = 0.6;
+pub(crate) const BULLET_RADIUS: f64 = 0.15;
+pub(crate) const BULLET_SPEED: f64 = 2.;
 
 impl Agent {
     pub(crate) fn new(id_gen: &mut usize, pos: [f64; 2], orient: f64, team: usize) -> Self {
@@ -162,7 +164,6 @@ impl Agent {
     }
 
     pub fn shoot_bullet(&mut self, bullets: &mut Vec<Bullet>, target_pos: [f64; 2]) -> bool {
-        const BULLET_SPEED: f64 = 5.;
         if 0. < self.cooldown {
             return false;
         }

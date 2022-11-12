@@ -114,7 +114,7 @@ impl Game {
             entities: Rc::new(vec![]),
             bullets: Rc::new(vec![]),
             paused: false,
-            interval: 16.,
+            interval: 32.,
             rng: Rc::new(Xor128::new(9318245)),
             id_gen,
             triangle_profiler: Profiler::new(),

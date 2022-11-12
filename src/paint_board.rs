@@ -1,16 +1,16 @@
 use crate::{
-    agent::{AGENT_HALFLENGTH, AGENT_HALFWIDTH},
+    agent::{Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS, BULLET_SPEED},
     app_data::{AppData, LineMode},
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
     triangle_utils::center_of_triangle_obj,
 };
-use druid::widget::prelude::*;
 use druid::{
     piet::kurbo::{BezPath, Circle, Line},
     piet::{FontFamily, ImageFormat, InterpolationMode},
     Affine, Color, FontDescriptor, Point, TextLayout,
 };
+use druid::{widget::prelude::*, Vec2};
 
 const OBSTACLE_COLOR: u8 = 63u8;
 const BACKGROUND_COLOR: u8 = 127u8;
@@ -21,6 +21,8 @@ pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     let contours = paint_board(ctx, data, env, &view_transform);
 
     paint_agents(ctx, data, env, &view_transform);
+
+    paint_bullets(ctx, data, &view_transform);
 
     *data.render_stats.borrow_mut() = format!(
         "Drawn {} contours, {} triangles",
@@ -209,12 +211,21 @@ pub(crate) fn paint_board(
     contours
 }
 
-fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &Affine) {
-    let to_point = |pos: [f64; 2]| Point {
+fn to_point(pos: [f64; 2]) -> Point {
+    Point {
         x: pos[0],
         y: pos[1],
-    };
+    }
+}
 
+fn to_vec2(pos: [f64; 2]) -> Vec2 {
+    Vec2 {
+        x: pos[0],
+        y: pos[1],
+    }
+}
+
+fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &Affine) {
     const AGENT_COLORS: [Color; 2] = [Color::rgb8(63, 255, 63), Color::RED];
 
     let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
@@ -310,17 +321,50 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             layout.draw(ctx, *view_transform * pos);
         }
     }
+}
 
-    for bullet in data.game.bullets.iter() {
-        let circle = Circle::new(*view_transform * to_point(bullet.pos), 3.);
+fn paint_bullets(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
+    let draw_bullet = |ctx: &mut PaintCtx, bullet: &Bullet, pos: Point, radius: f64| {
+        let circle = Circle::new(pos, radius);
         ctx.fill(
             circle,
             if bullet.team == 0 {
                 &Color::WHITE
             } else {
-                &Color::PURPLE
+                &Color::FUCHSIA
             },
         );
-        ctx.stroke(circle, &Color::YELLOW, 1.);
+        ctx.stroke(circle, &Color::YELLOW, radius / 10.);
+    };
+
+    const TARGET_PIXELS: f64 = 3.;
+
+    let draw_small = data.scale < TARGET_PIXELS / BULLET_RADIUS;
+
+    ctx.with_save(|ctx| {
+        ctx.transform(*view_transform);
+        for bullet in data.game.bullets.iter() {
+            let pos = to_vec2(bullet.pos);
+            let velo = to_vec2(bullet.velo).normalize();
+            let perp = Vec2::new(velo.y, -velo.x) * BULLET_RADIUS;
+            let length = 2. * BULLET_SPEED;
+            let tail = pos - velo * length;
+            let mut trail = BezPath::new();
+            trail.move_to((pos + perp).to_point());
+            trail.line_to((pos - perp).to_point());
+            trail.line_to(tail.to_point());
+            trail.close_path();
+            ctx.fill(trail, &Color::rgb8(255, 191, 63));
+            if !draw_small {
+                draw_bullet(ctx, bullet, to_point(bullet.pos), BULLET_RADIUS);
+            }
+        }
+    });
+
+    if draw_small {
+        for bullet in data.game.bullets.iter() {
+            let view_pos = *view_transform * to_point(bullet.pos);
+            draw_bullet(ctx, bullet, view_pos, TARGET_PIXELS);
+        }
     }
 }
