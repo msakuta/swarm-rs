@@ -1,13 +1,11 @@
 mod behavior_nodes;
 mod find_path;
 
-use self::behavior_nodes::{build_tree, BehaviorTree};
-use crate::{
-    agent::behavior_nodes::{FindEnemyCommand, FindPathCommand, FollowPathCommand, MoveCommand},
-    entity::Entity,
-    game::Game,
-    triangle_utils::find_triangle_at,
+use self::behavior_nodes::{
+    build_tree, BehaviorTree, FindEnemyCommand, FindPathCommand, FollowPathCommand, MoveCommand,
+    ShootCommand,
 };
+use crate::{entity::Entity, game::Game, triangle_utils::find_triangle_at};
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
 use std::{
@@ -195,37 +193,6 @@ impl Agent {
         true
     }
 
-    // pub fn update_elem<'a, 'b>(
-    //     game: &mut Game,
-    //     entities: &[RefCell<Entity>],
-    //     idx: usize,
-    //     bullets: &mut Vec<Bullet>,
-    // ) {
-    //     let tree = {
-    //         let mut borrow = entities[idx].borrow_mut();
-    //         if let Entity::Agent(agent) = &mut *borrow {
-    //             agent.behavior_tree.take()
-    //         } else {
-    //             return;
-    //         }
-    //     };
-    //     if let Some(mut tree) = tree {
-    //         let mut env = RefCell::new(BehaviorContext {
-    //             agent: &entities[idx],
-    //             game,
-    //             entities,
-    //         });
-    //         let mut ctx = Context::default();
-    //         let res = tree.0.tick(&mut env, &mut ctx);
-    //         eprintln!("BehaviorTree ticked! {:?}", res);
-    //         let mut borrow = entities[idx].borrow_mut();
-    //         if let Entity::Agent(agent) = &mut *borrow {
-    //             agent.behavior_tree = tree;
-    //         }
-    //         // self.behavior_tree = Some(tree);
-    //     }
-    // }
-
     pub fn update<'a, 'b>(
         &'a mut self,
         game: &mut Game,
@@ -241,15 +208,13 @@ impl Agent {
                     let drive = match &com.0 as &str {
                         "forward" => 1.,
                         "backward" => -1.,
-                        _ => return,
+                        _ => return None,
                     };
                     self.drive(drive, game, entities);
-                }
-                if f.downcast_ref::<FindEnemyCommand>().is_some() {
+                } else if f.downcast_ref::<FindEnemyCommand>().is_some() {
                     // println!("FindEnemy process");
                     self.find_enemy(entities);
-                }
-                if f.downcast_ref::<FindPathCommand>().is_some() {
+                } else if f.downcast_ref::<FindPathCommand>().is_some() {
                     if let Some(target) = self.target.and_then(|target| {
                         entities.iter().find(|a| {
                             a.try_borrow()
@@ -260,16 +225,19 @@ impl Agent {
                         let target = target.borrow_mut();
                         self.find_path(Some(&target), game);
                     }
-                }
-                if f.downcast_ref::<FollowPathCommand>().is_some() {
+                } else if f.downcast_ref::<FollowPathCommand>().is_some() {
                     self.follow_path(game, entities);
+                } else if f.downcast_ref::<ShootCommand>().is_some() {
+                    let forward = Vector2::new(self.orient.cos(), self.orient.sin());
+                    self.shoot_bullet(bullets, (Vector2::from(self.pos) + forward).into());
                 }
+                None
                 // if let Some(f) = f.downcast_ref::<dyn Fn(&Agent)>() {
                 //     f(self);
                 // }
             };
             let res = tree.0.tick(&mut process, &mut ctx);
-            eprintln!("[{}] BehaviorTree ticked! {:?}", self.id, res);
+            // eprintln!("[{}] BehaviorTree ticked! {:?}", self.id, res);
             self.behavior_tree = Some(tree);
         }
         // if let Some(target) = self.target.and_then(|target| {
