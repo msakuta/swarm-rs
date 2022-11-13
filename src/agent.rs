@@ -270,8 +270,12 @@ impl Agent {
 
     fn follow_path(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) {
         if let Some(target) = self.path.last() {
-            let target_pos = *target;
-            self.move_to(game, target_pos, entities);
+            if 5. < Vector2::from(*target).distance(Vector2::from(self.pos)) {
+                let target_pos = *target;
+                self.move_to(game, target_pos, entities);
+            } else {
+                self.path.pop();
+            }
         }
     }
 }
