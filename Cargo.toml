@@ -20,4 +20,4 @@ console_error_panic_hook = "0.1.6"
 [dependencies.behavior-tree-lite]
 # path = "../rusty-behavior-tree-lite"
 git = "https://github.com/msakuta/rusty-behavior-tree-lite"
-branch = "symbol"
+branch = "symbol-env"
