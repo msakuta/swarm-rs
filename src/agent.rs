@@ -1,12 +1,13 @@
+mod behavior_nodes;
 mod find_path;
 
+use self::behavior_nodes::{build_tree, BehaviorTree};
 use crate::{entity::Entity, game::Game, triangle_utils::find_triangle_at};
+use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
-use behavior_tree_lite::{load, parse_file, BehaviorNode, BehaviorResult, Context, Registry};
 use std::{
     cell::RefCell,
     collections::{HashSet, VecDeque},
-    rc::Rc,
 };
 
 #[derive(Clone, Debug)]
@@ -18,22 +19,11 @@ pub(crate) struct Bullet {
     pub traveled: f64,
 }
 
-/// Boundary to skip Debug trait from propagating to BehaviorNode trait
-struct BehaviorTree(Box<dyn BehaviorNode>);
-
-impl std::fmt::Debug for BehaviorTree {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        std::fmt::Result::Ok(())
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct Agent {
     pub target: Option<usize>,
     pub active: bool,
-    // path: Path,
     pub unreachables: HashSet<usize>,
-    // behaviorTree = new BT.BehaviorTree();
     pub id: usize,
     pub pos: [f64; 2],
     pub orient: f64,
@@ -49,59 +39,10 @@ pub(crate) const AGENT_HALFLENGTH: f64 = 0.6;
 pub(crate) const BULLET_RADIUS: f64 = 0.15;
 pub(crate) const BULLET_SPEED: f64 = 2.;
 
-struct PrintMe;
-
-impl BehaviorNode for PrintMe {
-    fn tick(
-        &mut self,
-        ctx: &mut behavior_tree_lite::Context,
-    ) -> behavior_tree_lite::BehaviorResult {
-        let target = ctx.get::<Option<usize>>("target".into());
-        println!("PrintTarget: {target:?}");
-        behavior_tree_lite::BehaviorResult::Success
-    }
-}
-
-struct HasTarget;
-
-impl BehaviorNode for HasTarget {
-    fn tick(
-        &mut self,
-        ctx: &mut behavior_tree_lite::Context,
-    ) -> behavior_tree_lite::BehaviorResult {
-        if ctx
-            .get::<Option<usize>>("target".into())
-            .map(|target| target.is_some())
-            .unwrap_or(false)
-        {
-            behavior_tree_lite::BehaviorResult::Success
-        } else {
-            behavior_tree_lite::BehaviorResult::Fail
-        }
-    }
-}
-
 impl Agent {
     pub(crate) fn new(id_gen: &mut usize, pos: [f64; 2], orient: f64, team: usize) -> Self {
         let id = *id_gen;
         *id_gen += 1;
-
-        let mut registry = Registry::default();
-        registry.register("HasTarget", Box::new(|| Box::new(HasTarget)));
-        registry.register("PrintTarget", Box::new(|| Box::new(PrintMe)));
-
-        let behavior_tree = load(
-            &parse_file(
-                "tree main = Sequence {
-            HasTarget (target <- target)
-            PrintTarget (target <- target)
-        }",
-            )
-            .unwrap()
-            .1,
-            &registry,
-        )
-        .unwrap();
 
         Self {
             target: None,
@@ -114,7 +55,7 @@ impl Agent {
             cooldown: 5.,
             path: vec![],
             trace: VecDeque::new(),
-            behavior_tree: BehaviorTree(behavior_tree),
+            behavior_tree: build_tree(),
         }
     }
 
