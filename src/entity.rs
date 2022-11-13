@@ -1,7 +1,7 @@
 use crate::{agent::Agent, agent::Bullet, game::Game, spawner::Spawner};
 use std::{cell::RefCell, collections::VecDeque};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) enum Entity {
     Agent(Agent),
     Spawner(Spawner),

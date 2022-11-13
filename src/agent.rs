@@ -2,9 +2,11 @@ mod find_path;
 
 use crate::{entity::Entity, game::Game, triangle_utils::find_triangle_at};
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
+use behavior_tree_lite::{load, parse_file, BehaviorNode, BehaviorResult, Context, Registry};
 use std::{
     cell::RefCell,
     collections::{HashSet, VecDeque},
+    rc::Rc,
 };
 
 #[derive(Clone, Debug)]
@@ -16,7 +18,16 @@ pub(crate) struct Bullet {
     pub traveled: f64,
 }
 
-#[derive(Clone, Debug)]
+/// Boundary to skip Debug trait from propagating to BehaviorNode trait
+struct BehaviorTree(Box<dyn BehaviorNode>);
+
+impl std::fmt::Debug for BehaviorTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        std::fmt::Result::Ok(())
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct Agent {
     pub target: Option<usize>,
     pub active: bool,
@@ -30,6 +41,7 @@ pub(crate) struct Agent {
     cooldown: f64,
     pub path: Vec<[f64; 2]>,
     pub trace: VecDeque<[f64; 2]>,
+    behavior_tree: BehaviorTree,
 }
 
 pub(crate) const AGENT_HALFWIDTH: f64 = 0.3;
@@ -37,10 +49,60 @@ pub(crate) const AGENT_HALFLENGTH: f64 = 0.6;
 pub(crate) const BULLET_RADIUS: f64 = 0.15;
 pub(crate) const BULLET_SPEED: f64 = 2.;
 
+struct PrintMe;
+
+impl BehaviorNode for PrintMe {
+    fn tick(
+        &mut self,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> behavior_tree_lite::BehaviorResult {
+        let target = ctx.get::<Option<usize>>("target".into());
+        println!("PrintTarget: {target:?}");
+        behavior_tree_lite::BehaviorResult::Success
+    }
+}
+
+struct HasTarget;
+
+impl BehaviorNode for HasTarget {
+    fn tick(
+        &mut self,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> behavior_tree_lite::BehaviorResult {
+        if ctx
+            .get::<Option<usize>>("target".into())
+            .map(|target| target.is_some())
+            .unwrap_or(false)
+        {
+            behavior_tree_lite::BehaviorResult::Success
+        } else {
+            behavior_tree_lite::BehaviorResult::Fail
+        }
+    }
+}
+
 impl Agent {
     pub(crate) fn new(id_gen: &mut usize, pos: [f64; 2], orient: f64, team: usize) -> Self {
         let id = *id_gen;
         *id_gen += 1;
+
+        let mut registry = Registry::default();
+        registry.register("HasTarget", Box::new(|| Box::new(HasTarget)));
+        registry.register("PrintTarget", Box::new(|| Box::new(PrintMe)));
+
+        let behavior_tree = load(
+            &parse_file(
+                "tree main = Sequence {
+            HasTarget (target <- target)
+            PrintTarget (target <- target)
+        }",
+            )
+            .unwrap()
+            .1,
+            &registry,
+        )
+        .unwrap();
+
         Self {
             target: None,
             active: true,
@@ -52,6 +114,7 @@ impl Agent {
             cooldown: 5.,
             path: vec![],
             trace: VecDeque::new(),
+            behavior_tree: BehaviorTree(behavior_tree),
         }
     }
 
@@ -192,31 +255,35 @@ impl Agent {
         entities: &[RefCell<Entity>],
         bullets: &mut Vec<Bullet>,
     ) {
-        if let Some(target) = self.target.and_then(|target| {
-            entities.iter().find(|a| {
-                a.try_borrow()
-                    .map(|a| a.get_id() == target)
-                    .unwrap_or(false)
-            })
-        }) {
-            let target = target.borrow_mut();
-            if 5. < Vector2::from(target.get_pos()).distance(Vector2::from(self.pos)) {
-                if self.find_path(Some(&target), game).is_ok() {
-                    if let Some(target) = self.path.last() {
-                        let target_pos = *target;
-                        self.move_to(game, target_pos, entities);
-                    }
-                } else {
-                    self.move_to(game, target.get_pos(), entities);
-                }
-            } else {
-                // println!("Orienting {}", self.id);
-                self.orient_to(target.get_pos());
-            }
-            self.shoot_bullet(bullets, target.get_pos());
-        } else {
-            self.path = vec![];
-        }
+        let mut ctx = Context::default();
+        ctx.set("target".into(), self.target);
+        let res = self.behavior_tree.0.tick(&mut ctx);
+        eprintln!("BehaviorTree ticked! {:?}", res);
+        // if let Some(target) = self.target.and_then(|target| {
+        //     entities.iter().find(|a| {
+        //         a.try_borrow()
+        //             .map(|a| a.get_id() == target)
+        //             .unwrap_or(false)
+        //     })
+        // }) {
+        //     let target = target.borrow_mut();
+        //     if 5. < Vector2::from(target.get_pos()).distance(Vector2::from(self.pos)) {
+        //         if self.find_path(Some(&target), game).is_ok() {
+        //             if let Some(target) = self.path.last() {
+        //                 let target_pos = *target;
+        //                 self.move_to(game, target_pos, entities);
+        //             }
+        //         } else {
+        //             self.move_to(game, target.get_pos(), entities);
+        //         }
+        //     } else {
+        //         // println!("Orienting {}", self.id);
+        //         self.orient_to(target.get_pos());
+        //     }
+        //     self.shoot_bullet(bullets, target.get_pos());
+        // } else {
+        //     self.path = vec![];
+        // }
         self.cooldown = (self.cooldown - 1.).max(0.);
     }
 }
