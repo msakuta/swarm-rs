@@ -83,13 +83,18 @@ impl Agent {
         }
     }
 
-    pub(crate) fn drive(&mut self, drive: f64, game: &mut Game, others: &[RefCell<Entity>]) {
+    pub(crate) fn drive(
+        &mut self,
+        drive: f64,
+        game: &mut Game,
+        others: &[RefCell<Entity>],
+    ) -> bool {
         let forward = Vector2::new(self.orient.cos(), self.orient.sin());
         let target_pos =
             (Vector2::from(self.pos) + drive.min(AGENT_SPEED).max(-AGENT_SPEED) * forward).into();
 
         if Self::collision_check(Some(self.id), target_pos, others) {
-            return;
+            return false;
         }
 
         if let Some(next_triangle) = find_triangle_at(
@@ -106,6 +111,7 @@ impl Agent {
                 self.pos = target_pos;
             }
         }
+        true
     }
 
     pub(crate) fn move_to<'a>(
@@ -113,12 +119,14 @@ impl Agent {
         game: &mut Game,
         target_pos: [f64; 2],
         others: &[RefCell<Entity>],
-    ) {
+    ) -> bool {
         if self.orient_to(target_pos) {
             let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
             let distance = delta.magnitude();
 
-            self.drive(distance, game, others);
+            self.drive(distance, game, others)
+        } else {
+            true
         }
     }
 
@@ -210,7 +218,8 @@ impl Agent {
                         "backward" => -1.,
                         _ => return None,
                     };
-                    self.drive(drive, game, entities);
+                    let drive_result = self.drive(drive, game, entities);
+                    return Some(Box::new(drive_result) as Box<dyn std::any::Any>);
                 } else if f.downcast_ref::<FindEnemyCommand>().is_some() {
                     // println!("FindEnemy process");
                     self.find_enemy(entities);
@@ -226,7 +235,8 @@ impl Agent {
                         self.find_path(Some(&target), game);
                     }
                 } else if f.downcast_ref::<FollowPathCommand>().is_some() {
-                    self.follow_path(game, entities);
+                    let ret = self.follow_path(game, entities);
+                    return Some(Box::new(ret) as Box<dyn std::any::Any>);
                 } else if f.downcast_ref::<ShootCommand>().is_some() {
                     let forward = Vector2::new(self.orient.cos(), self.orient.sin());
                     self.shoot_bullet(bullets, (Vector2::from(self.pos) + forward).into());
@@ -268,14 +278,17 @@ impl Agent {
         self.cooldown = (self.cooldown - 1.).max(0.);
     }
 
-    fn follow_path(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) {
+    fn follow_path(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) -> bool {
         if let Some(target) = self.path.last() {
             if 5. < Vector2::from(*target).distance(Vector2::from(self.pos)) {
                 let target_pos = *target;
-                self.move_to(game, target_pos, entities);
+                self.move_to(game, target_pos, entities)
             } else {
                 self.path.pop();
+                true
             }
+        } else {
+            false
         }
     }
 }

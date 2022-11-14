@@ -29,6 +29,7 @@ pub(super) fn build_tree() -> BehaviorTree {
     registry.register("Move", boxify(|| Move));
     registry.register("FollowPath", boxify(|| FollowPath));
     registry.register("Shoot", boxify(|| ShootNode));
+    registry.register("Timeout", boxify(|| TimeoutNode(None)));
 
     BehaviorTree(
         load(
@@ -45,7 +46,13 @@ tree main = Sequence {
     }
     Sequence {
         HasPath (has_path <- has_path)
-        FollowPath
+        Fallback {
+            FollowPath
+            ReactiveSequence {
+                Move (direction <- "backward")
+                Timeout (time <- "10")
+            }
+        }
         Shoot
     }
 }"#,
@@ -85,7 +92,7 @@ impl BehaviorNode for PrintTarget {
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         let target = ctx.get::<Option<usize>>("target".into());
-        println!("PrintTarget: {target:?}");
+        // println!("PrintTarget: {target:?}");
         BehaviorResult::Success
     }
 }
@@ -166,8 +173,18 @@ impl BehaviorNode for FollowPath {
         arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        arg(&FollowPathCommand);
-        BehaviorResult::Success
+        let res = arg(&FollowPathCommand);
+        if res
+            .as_ref()
+            .and_then(|res| res.downcast_ref::<bool>())
+            .map(|b| *b)
+            .unwrap_or(false)
+        {
+            BehaviorResult::Success
+        } else {
+            // println!("Can't follow path!");
+            BehaviorResult::Fail
+        }
     }
 }
 
@@ -182,7 +199,6 @@ impl BehaviorNode for Move {
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         if let Some(direction) = ctx.get::<String>("direction".into()) {
-            println!("Direction: {direction:?}");
             arg(&MoveCommand(direction.clone()));
         }
         BehaviorResult::Success
@@ -201,5 +217,33 @@ impl BehaviorNode for ShootNode {
     ) -> BehaviorResult {
         arg(&ShootCommand);
         BehaviorResult::Success
+    }
+}
+
+struct TimeoutNode(Option<usize>);
+
+impl BehaviorNode for TimeoutNode {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if let Some(ref mut remaining) = self.0 {
+            if *remaining == 0 {
+                // println!("Timed out");
+                self.0 = None;
+                return BehaviorResult::Success;
+            } else {
+                *remaining -= 1;
+                return BehaviorResult::Running;
+            }
+        } else if let Some(input) = ctx
+            .get::<String>("time".into())
+            .and_then(|s| s.parse::<usize>().ok())
+        {
+            // println!("Timer set! {}", input);
+            self.0 = Some(input);
+        }
+        BehaviorResult::Fail
     }
 }
