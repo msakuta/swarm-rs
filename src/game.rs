@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, MetricSpace, Vector2};
+use cgmath::{InnerSpace, Vector2};
 use delaunator::{triangulate, Triangulation};
 use druid::{piet::kurbo::BezPath, Data, Point};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -68,6 +68,7 @@ pub(crate) struct Game {
     pub(crate) id_gen: usize,
     pub(crate) triangle_profiler: Profiler,
     pub(crate) pixel_profiler: Rc<RefCell<Profiler>>,
+    pub(crate) source: Rc<String>,
 }
 
 impl Game {
@@ -119,6 +120,7 @@ impl Game {
             id_gen,
             triangle_profiler: Profiler::new(),
             pixel_profiler: Rc::new(RefCell::new(Profiler::new())),
+            source: Rc::new(String::new()),
         }
     }
 
@@ -294,6 +296,7 @@ impl Game {
                         pos_candidate,
                         orient_candidate,
                         team,
+                        &self.source,
                     )));
                 }
             }
@@ -363,8 +366,6 @@ impl Game {
                             if agent.get_team() == bullet.team {
                                 continue;
                             }
-                            let dist2 =
-                                Vector2::from(agent.get_pos()).distance2(Vector2::from(newpos));
                             let agent_pos = Vector2::from(agent.get_pos());
                             let agent_vertices = [
                                 [

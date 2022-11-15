@@ -18,12 +18,11 @@ where
     Box::new(move || Box::new(cons()))
 }
 
-pub(super) fn build_tree() -> BehaviorTree {
+pub(super) fn build_tree(source: &str) -> BehaviorTree {
     let mut registry = Registry::default();
     registry.register("SetBool", boxify(|| SetBool));
     registry.register("HasTarget", boxify(|| HasTarget));
     registry.register("FindEnemy", boxify(|| FindEnemy));
-    registry.register("PrintTarget", boxify(|| PrintTarget));
     registry.register("HasPath", boxify(|| HasPath));
     registry.register("FindPath", boxify(|| FindPath));
     registry.register("Move", boxify(|| Move));
@@ -31,38 +30,7 @@ pub(super) fn build_tree() -> BehaviorTree {
     registry.register("Shoot", boxify(|| ShootNode));
     registry.register("Timeout", boxify(|| TimeoutNode(None)));
 
-    BehaviorTree(
-        load(
-            &parse_file(
-                r#"
-tree main = Sequence {
-    Fallback {
-        HasTarget (target <- target)
-        FindEnemy
-    }
-    Fallback {
-        HasPath (has_path <- has_path)
-        FindPath
-    }
-    Sequence {
-        HasPath (has_path <- has_path)
-        Fallback {
-            FollowPath
-            ReactiveSequence {
-                Move (direction <- "backward")
-                Timeout (time <- "10")
-            }
-        }
-        Shoot
-    }
-}"#,
-            )
-            .unwrap()
-            .1,
-            &registry,
-        )
-        .unwrap(),
-    )
+    BehaviorTree(load(&parse_file(source).unwrap().1, &registry).unwrap())
 }
 
 pub(super) struct SetBool;
@@ -80,20 +48,6 @@ impl BehaviorNode for SetBool {
         } else {
             BehaviorResult::Fail
         }
-    }
-}
-
-pub(super) struct PrintTarget;
-
-impl BehaviorNode for PrintTarget {
-    fn tick(
-        &mut self,
-        arg: BehaviorCallback,
-        ctx: &mut behavior_tree_lite::Context,
-    ) -> BehaviorResult {
-        let target = ctx.get::<Option<usize>>("target".into());
-        // println!("PrintTarget: {target:?}");
-        BehaviorResult::Success
     }
 }
 
@@ -136,7 +90,7 @@ pub(super) struct HasPath;
 impl<'a> BehaviorNode for HasPath {
     fn tick(
         &mut self,
-        arg: BehaviorCallback,
+        _arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         let has_path = ctx.get::<bool>("has_path".into());
@@ -171,7 +125,7 @@ impl BehaviorNode for FollowPath {
     fn tick(
         &mut self,
         arg: BehaviorCallback,
-        ctx: &mut behavior_tree_lite::Context,
+        _ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         let res = arg(&FollowPathCommand);
         if res
@@ -213,7 +167,7 @@ impl BehaviorNode for ShootNode {
     fn tick(
         &mut self,
         arg: BehaviorCallback,
-        ctx: &mut behavior_tree_lite::Context,
+        _ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         arg(&ShootCommand);
         BehaviorResult::Success
@@ -225,7 +179,7 @@ struct TimeoutNode(Option<usize>);
 impl BehaviorNode for TimeoutNode {
     fn tick(
         &mut self,
-        arg: BehaviorCallback,
+        _arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         if let Some(ref mut remaining) = self.0 {

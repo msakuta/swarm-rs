@@ -44,7 +44,13 @@ pub(crate) const BULLET_RADIUS: f64 = 0.15;
 pub(crate) const BULLET_SPEED: f64 = 2.;
 
 impl Agent {
-    pub(crate) fn new(id_gen: &mut usize, pos: [f64; 2], orient: f64, team: usize) -> Self {
+    pub(crate) fn new(
+        id_gen: &mut usize,
+        pos: [f64; 2],
+        orient: f64,
+        team: usize,
+        behavior_source: &str,
+    ) -> Self {
         let id = *id_gen;
         *id_gen += 1;
 
@@ -59,7 +65,7 @@ impl Agent {
             cooldown: 5.,
             path: vec![],
             trace: VecDeque::new(),
-            behavior_tree: Some(build_tree()),
+            behavior_tree: Some(build_tree(behavior_source)),
         }
     }
 
@@ -232,7 +238,8 @@ impl Agent {
                         })
                     }) {
                         let target = target.borrow_mut();
-                        self.find_path(Some(&target), game);
+                        let found_path = self.find_path(Some(&target), game).is_ok();
+                        return Some(Box::new(found_path));
                     }
                 } else if f.downcast_ref::<FollowPathCommand>().is_some() {
                     let ret = self.follow_path(game, entities);
@@ -246,7 +253,7 @@ impl Agent {
                 //     f(self);
                 // }
             };
-            let res = tree.0.tick(&mut process, &mut ctx);
+            let _res = tree.0.tick(&mut process, &mut ctx);
             // eprintln!("[{}] BehaviorTree ticked! {:?}", self.id, res);
             self.behavior_tree = Some(tree);
         }
