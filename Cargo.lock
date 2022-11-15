@@ -80,8 +80,8 @@ checksum = "dc19a4937b4fbd3fe3379793130e42060d10627a360f2127802b10b87e7baf74"
 
 [[package]]
 name = "behavior-tree-lite"
-version = "0.1.0"
-source = "git+https://github.com/msakuta/rusty-behavior-tree-lite?branch=symbol-env#d15096cfffe7e236e54e45b708d18cd2149092ce"
+version = "0.1.1"
+source = "git+https://github.com/msakuta/rusty-behavior-tree-lite?tag=v0.1.1#9708c15a992024ba5311082b0a7849b232155adf"
 dependencies = [
  "nom",
  "serde",
