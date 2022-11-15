@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, MetricSpace, Vector2};
+use cgmath::{InnerSpace, Vector2};
 use delaunator::{triangulate, Triangulation};
 use druid::{piet::kurbo::BezPath, Data, Point};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -60,7 +60,7 @@ pub(crate) struct Game {
     pub(crate) triangle_labels: Rc<Vec<i32>>,
     pub(crate) points: Rc<Vec<delaunator::Point>>,
     pub(crate) largest_label: Option<i32>,
-    pub(crate) entities: Rc<Vec<RefCell<Entity>>>,
+    pub(crate) entities: Rc<RefCell<Vec<RefCell<Entity>>>>,
     pub(crate) bullets: Rc<Vec<Bullet>>,
     pub(crate) paused: bool,
     pub(crate) interval: f64,
@@ -68,6 +68,7 @@ pub(crate) struct Game {
     pub(crate) id_gen: usize,
     pub(crate) triangle_profiler: Profiler,
     pub(crate) pixel_profiler: Rc<RefCell<Profiler>>,
+    pub(crate) source: Rc<String>,
 }
 
 impl Game {
@@ -111,7 +112,7 @@ impl Game {
             triangle_labels: Rc::new(triangle_labels),
             largest_label,
             points: Rc::new(points),
-            entities: Rc::new(vec![]),
+            entities: Rc::new(RefCell::new(vec![])),
             bullets: Rc::new(vec![]),
             paused: false,
             interval: 32.,
@@ -119,6 +120,7 @@ impl Game {
             id_gen,
             triangle_profiler: Profiler::new(),
             pixel_profiler: Rc::new(RefCell::new(Profiler::new())),
+            source: Rc::new(String::new()),
         }
     }
 
@@ -255,7 +257,7 @@ impl Game {
         self.points = Rc::new(points);
         self.triangle_passable = Rc::new(triangle_passable);
         self.triangle_labels = Rc::new(triangle_labels);
-        self.entities = Rc::new(vec![]);
+        self.entities = Rc::new(RefCell::new(vec![]));
         self.bullets = Rc::new(vec![]);
     }
 
@@ -294,6 +296,7 @@ impl Game {
                         pos_candidate,
                         orient_candidate,
                         team,
+                        &self.source,
                     )));
                 }
             }
@@ -326,7 +329,7 @@ impl Game {
     }
 
     pub(crate) fn update(&mut self) {
-        let mut entities = std::mem::take(Rc::make_mut(&mut self.entities));
+        let mut entities = std::mem::take(&mut *self.entities.borrow_mut());
         let mut bullets = std::mem::take(Rc::make_mut(&mut self.bullets));
         let mut events = vec![];
         for entity in entities.iter() {
@@ -344,64 +347,66 @@ impl Game {
             }
         }
 
-        self.entities = Rc::new(entities);
+        *self.entities.borrow_mut() = entities;
         self.bullets = Rc::new(bullets);
 
-        let agents = &self.entities;
-        self.bullets = Rc::new(
-            self.bullets
-                .iter()
-                .filter_map(|bullet| {
-                    if !self.is_passable_at(bullet.pos) {
-                        return None;
-                    }
-                    let newpos = (Vector2::from(bullet.pos) + Vector2::from(bullet.velo)).into();
-                    for agent in agents.iter() {
-                        let mut agent = agent.borrow_mut();
-                        if agent.get_team() == bullet.team {
-                            continue;
-                        }
-                        let dist2 = Vector2::from(agent.get_pos()).distance2(Vector2::from(newpos));
-                        let agent_pos = Vector2::from(agent.get_pos());
-                        let agent_vertices = [
-                            [
-                                agent_pos.x - AGENT_HALFLENGTH,
-                                agent_pos.y - AGENT_HALFWIDTH,
-                            ],
-                            [
-                                agent_pos.x - AGENT_HALFLENGTH,
-                                agent_pos.y + AGENT_HALFWIDTH,
-                            ],
-                            [
-                                agent_pos.x + AGENT_HALFLENGTH,
-                                agent_pos.y + AGENT_HALFWIDTH,
-                            ],
-                            [
-                                agent_pos.x + AGENT_HALFLENGTH,
-                                agent_pos.y - AGENT_HALFWIDTH,
-                            ],
-                        ];
-                        if separating_axis(
-                            &Vector2::from(bullet.pos),
-                            &Vector2::from(bullet.velo),
-                            agent_vertices.into_iter().map(Vector2::from),
-                        ) {
-                            if !agent.damage() {
-                                agent.set_active(false);
-                            }
-                            println!("Agent {} is being killed", agent.get_id());
+        {
+            let agents = self.entities.as_ref().borrow();
+            self.bullets = Rc::new(
+                self.bullets
+                    .iter()
+                    .filter_map(|bullet| {
+                        if !self.is_passable_at(bullet.pos) {
                             return None;
                         }
-                    }
-                    let mut ret = bullet.clone();
-                    ret.pos = newpos;
-                    ret.traveled += Vector2::from(bullet.velo).magnitude();
-                    Some(ret)
-                })
-                .collect(),
-        );
+                        let newpos =
+                            (Vector2::from(bullet.pos) + Vector2::from(bullet.velo)).into();
+                        for agent in agents.iter() {
+                            let mut agent = agent.borrow_mut();
+                            if agent.get_team() == bullet.team {
+                                continue;
+                            }
+                            let agent_pos = Vector2::from(agent.get_pos());
+                            let agent_vertices = [
+                                [
+                                    agent_pos.x - AGENT_HALFLENGTH,
+                                    agent_pos.y - AGENT_HALFWIDTH,
+                                ],
+                                [
+                                    agent_pos.x - AGENT_HALFLENGTH,
+                                    agent_pos.y + AGENT_HALFWIDTH,
+                                ],
+                                [
+                                    agent_pos.x + AGENT_HALFLENGTH,
+                                    agent_pos.y + AGENT_HALFWIDTH,
+                                ],
+                                [
+                                    agent_pos.x + AGENT_HALFLENGTH,
+                                    agent_pos.y - AGENT_HALFWIDTH,
+                                ],
+                            ];
+                            if separating_axis(
+                                &Vector2::from(bullet.pos),
+                                &Vector2::from(bullet.velo),
+                                agent_vertices.into_iter().map(Vector2::from),
+                            ) {
+                                if !agent.damage() {
+                                    agent.set_active(false);
+                                }
+                                println!("Agent {} is being killed", agent.get_id());
+                                return None;
+                            }
+                        }
+                        let mut ret = bullet.clone();
+                        ret.pos = newpos;
+                        ret.traveled += Vector2::from(bullet.velo).magnitude();
+                        Some(ret)
+                    })
+                    .collect(),
+            );
+        }
 
-        let mut entities: Vec<_> = std::mem::take(Rc::make_mut(&mut self.entities))
+        let mut entities: Vec<_> = std::mem::take(&mut *self.entities.borrow_mut())
             .into_iter()
             .filter(|agent| agent.borrow().get_active())
             .collect();
@@ -420,7 +425,7 @@ impl Game {
                 }
             }
         }
-        self.entities = Rc::new(entities);
+        *self.entities.borrow_mut() = entities;
     }
 
     pub(crate) fn is_passable_at(&self, pos: [f64; 2]) -> bool {

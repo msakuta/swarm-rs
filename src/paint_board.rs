@@ -230,7 +230,7 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
 
     let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
 
-    for agent in data.game.entities.iter() {
+    for agent in data.game.entities.borrow().iter() {
         let agent = agent.borrow();
         let pos = to_point(agent.get_pos());
         let circle = Circle::new(*view_transform * pos, 5.);
@@ -270,6 +270,7 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                 if let Some(target) = data
                     .game
                     .entities
+                    .borrow()
                     .iter()
                     .find(|agent| agent.borrow().get_id() == target)
                 {

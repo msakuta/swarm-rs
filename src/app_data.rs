@@ -36,13 +36,43 @@ pub(crate) struct AppData {
     pub(crate) target_visible: bool,
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
+    pub(crate) source_visible: bool,
+    /// This buffer is not yet applied to the game.
+    pub(crate) source_buffer: Rc<String>,
 }
 
 impl AppData {
     pub(crate) fn new() -> Self {
-        let game = Game::new();
+        let mut game = Game::new();
         let seed = 123513;
         let scale = WINDOW_HEIGHT / game.ys as f64;
+
+        let source_buffer = Rc::new(
+            r#"tree main = Sequence {
+    Fallback {
+        HasTarget (target <- target)
+        FindEnemy
+    }
+    Fallback {
+        HasPath (has_path <- has_path)
+        FindPath
+    }
+    Sequence {
+        HasPath (has_path <- has_path)
+        Fallback {
+            FollowPath
+            ReactiveSequence {
+                Move (direction <- "backward")
+                Timeout (time <- "10")
+            }
+        }
+        Shoot
+    }
+}"#
+            .to_string(),
+        );
+
+        game.source = source_buffer.clone();
 
         Self {
             rows_text: game.xs.to_string(),
@@ -65,6 +95,8 @@ impl AppData {
             target_visible: false,
             entity_label_visible: true,
             entity_trace_visible: false,
+            source_visible: false,
+            source_buffer,
         }
     }
 
