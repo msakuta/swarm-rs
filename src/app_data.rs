@@ -63,7 +63,8 @@ impl AppData {
             FollowPath
             ReactiveSequence {
                 Move (direction <- "backward")
-                Timeout (time <- "10")
+                Randomize (max <- "20", value -> timeoutValue)
+                Timeout (time <- timeoutValue)
             }
         }
         Shoot

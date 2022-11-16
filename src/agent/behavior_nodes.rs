@@ -1,6 +1,7 @@
 use behavior_tree_lite::{
     load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Registry,
 };
+use rand::{distributions::Uniform, prelude::Distribution};
 
 /// Boundary to skip Debug trait from propagating to BehaviorNode trait
 pub(super) struct BehaviorTree(pub Box<dyn BehaviorNode>);
@@ -29,6 +30,7 @@ pub(super) fn build_tree(source: &str) -> BehaviorTree {
     registry.register("FollowPath", boxify(|| FollowPath));
     registry.register("Shoot", boxify(|| ShootNode));
     registry.register("Timeout", boxify(|| TimeoutNode(None)));
+    registry.register("Randomize", boxify(|| RandomizeNode));
 
     BehaviorTree(load(&parse_file(source).unwrap().1, &registry).unwrap())
 }
@@ -194,9 +196,32 @@ impl BehaviorNode for TimeoutNode {
         } else if let Some(input) = ctx
             .get::<String>("time".into())
             .and_then(|s| s.parse::<usize>().ok())
+            .or_else(|| ctx.get::<usize>("time".into()).copied())
         {
-            // println!("Timer set! {}", input);
+            println!("Timer set! {}", input);
             self.0 = Some(input);
+        }
+        BehaviorResult::Fail
+    }
+}
+
+struct RandomizeNode;
+
+impl BehaviorNode for RandomizeNode {
+    fn tick(
+        &mut self,
+        _arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if let Some(max) = ctx
+            .get::<String>("max".into())
+            .and_then(|s| s.parse::<usize>().ok())
+        {
+            let between = Uniform::from(0..max);
+            let value = between.sample(&mut rand::thread_rng());
+            // println!("Randomizing! {}/{}", value, max);
+            ctx.set::<usize>("value".into(), value);
+            return BehaviorResult::Success;
         }
         BehaviorResult::Fail
     }
