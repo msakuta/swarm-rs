@@ -135,7 +135,10 @@ impl Entity {
 
     pub(crate) fn damage(&mut self) -> bool {
         match self {
-            Entity::Agent(_) => false,
+            Entity::Agent(agent) => {
+                agent.health -= 1;
+                agent.health == 0
+            }
             Entity::Spawner(spawner) => {
                 spawner.health -= 1;
                 spawner.health == 0

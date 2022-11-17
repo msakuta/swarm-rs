@@ -3,6 +3,7 @@ use crate::{
     app_data::{AppData, LineMode},
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
+    temp_ents::MAX_TTL,
     triangle_utils::center_of_triangle_obj,
 };
 use druid::{
@@ -23,6 +24,8 @@ pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     paint_agents(ctx, data, env, &view_transform);
 
     paint_bullets(ctx, data, &view_transform);
+
+    paint_temp_ents(ctx, data, &view_transform);
 
     *data.render_stats.borrow_mut() = format!(
         "Drawn {} contours, {} triangles",
@@ -367,5 +370,14 @@ fn paint_bullets(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
             let view_pos = *view_transform * to_point(bullet.pos);
             draw_bullet(ctx, bullet, view_pos, TARGET_PIXELS);
         }
+    }
+}
+
+fn paint_temp_ents(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
+    for temp_ent in data.game.temp_ents.iter() {
+        let pos = to_point(temp_ent.pos);
+        let circle = Circle::new(pos, 2. * (MAX_TTL - temp_ent.ttl) / MAX_TTL);
+        let alpha = (temp_ent.ttl * 512. / MAX_TTL).min(255.) as u8;
+        ctx.fill(*view_transform * circle, &Color::rgba8(255, 127, 0, alpha));
     }
 }

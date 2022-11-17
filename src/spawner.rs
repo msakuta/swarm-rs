@@ -22,7 +22,7 @@ impl Spawner {
             pos,
             team,
             active: true,
-            health: 5,
+            health: 10,
         }
     }
 

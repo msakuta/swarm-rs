@@ -12,6 +12,7 @@ mod agent;
 mod entity;
 mod game;
 mod spawner;
+mod temp_ents;
 mod triangle_utils;
 
 use crate::{app_data::AppData, widget::make_widget};

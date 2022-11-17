@@ -4,13 +4,14 @@ use druid::{piet::kurbo::BezPath, Data, Point};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    agent::{Agent, Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH},
+    agent::{Agent, Bullet},
     app_data::is_passable_at,
     entity::{CollisionShape, Entity, GameEvent},
     marching_squares::{trace_lines, BoolField},
     measure_time,
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
     spawner::Spawner,
+    temp_ents::TempEnt,
     triangle_utils::{center_of_triangle_obj, find_triangle_at, label_triangles},
 };
 
@@ -66,6 +67,7 @@ pub(crate) struct Game {
     pub(crate) interval: f64,
     pub(crate) rng: Rc<Xor128>,
     pub(crate) id_gen: usize,
+    pub(crate) temp_ents: Rc<Vec<TempEnt>>,
     pub(crate) triangle_profiler: Profiler,
     pub(crate) pixel_profiler: Rc<RefCell<Profiler>>,
     pub(crate) source: Rc<String>,
@@ -118,6 +120,7 @@ impl Game {
             interval: 32.,
             rng: Rc::new(Xor128::new(9318245)),
             id_gen,
+            temp_ents: Rc::new(vec![]),
             triangle_profiler: Profiler::new(),
             pixel_profiler: Rc::new(RefCell::new(Profiler::new())),
             source: Rc::new(String::new()),
@@ -352,6 +355,7 @@ impl Game {
 
         {
             let agents = self.entities.as_ref().borrow();
+            let mut temp_ents = std::mem::take(Rc::make_mut(&mut self.temp_ents));
             self.bullets = Rc::new(
                 self.bullets
                     .iter()
@@ -373,6 +377,7 @@ impl Game {
                                         &Vector2::from(bullet.velo),
                                         agent_vertices.into_iter().map(Vector2::from),
                                     ) {
+                                        temp_ents.push(TempEnt::new(bullet.pos));
                                         if !agent.damage() {
                                             agent.set_active(false);
                                         }
@@ -390,6 +395,7 @@ impl Game {
                     })
                     .collect(),
             );
+            self.temp_ents = Rc::new(temp_ents);
         }
 
         let mut entities: Vec<_> = std::mem::take(&mut *self.entities.borrow_mut())
@@ -412,6 +418,13 @@ impl Game {
             }
         }
         *self.entities.borrow_mut() = entities;
+
+        self.temp_ents = Rc::new(
+            std::mem::take(Rc::make_mut(&mut self.temp_ents))
+                .into_iter()
+                .filter_map(|mut ent| if ent.update() { Some(ent) } else { None })
+                .collect(),
+        );
     }
 
     pub(crate) fn is_passable_at(&self, pos: [f64; 2]) -> bool {
