@@ -6,7 +6,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     agent::{Agent, Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH},
     app_data::is_passable_at,
-    entity::{Entity, GameEvent},
+    entity::{CollisionShape, Entity, GameEvent},
     marching_squares::{trace_lines, BoolField},
     measure_time,
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
@@ -366,35 +366,21 @@ impl Game {
                             if agent.get_team() == bullet.team {
                                 continue;
                             }
-                            let agent_pos = Vector2::from(agent.get_pos());
-                            let agent_vertices = [
-                                [
-                                    agent_pos.x - AGENT_HALFLENGTH,
-                                    agent_pos.y - AGENT_HALFWIDTH,
-                                ],
-                                [
-                                    agent_pos.x - AGENT_HALFLENGTH,
-                                    agent_pos.y + AGENT_HALFWIDTH,
-                                ],
-                                [
-                                    agent_pos.x + AGENT_HALFLENGTH,
-                                    agent_pos.y + AGENT_HALFWIDTH,
-                                ],
-                                [
-                                    agent_pos.x + AGENT_HALFLENGTH,
-                                    agent_pos.y - AGENT_HALFWIDTH,
-                                ],
-                            ];
-                            if separating_axis(
-                                &Vector2::from(bullet.pos),
-                                &Vector2::from(bullet.velo),
-                                agent_vertices.into_iter().map(Vector2::from),
-                            ) {
-                                if !agent.damage() {
-                                    agent.set_active(false);
+                            match agent.get_shape() {
+                                CollisionShape::BBox(agent_vertices) => {
+                                    if separating_axis(
+                                        &Vector2::from(bullet.pos),
+                                        &Vector2::from(bullet.velo),
+                                        agent_vertices.into_iter().map(Vector2::from),
+                                    ) {
+                                        if !agent.damage() {
+                                            agent.set_active(false);
+                                        }
+                                        println!("Agent {} is being killed", agent.get_id());
+                                        return None;
+                                    }
                                 }
-                                println!("Agent {} is being killed", agent.get_id());
-                                return None;
+                                _ => todo!(),
                             }
                         }
                         let mut ret = bullet.clone();

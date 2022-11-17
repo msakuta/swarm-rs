@@ -1,4 +1,11 @@
-use crate::{agent::Agent, agent::Bullet, game::Game, spawner::Spawner};
+use cgmath::Vector2;
+
+use crate::{
+    agent::Agent,
+    agent::{Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH},
+    game::Game,
+    spawner::Spawner,
+};
 use std::{cell::RefCell, collections::VecDeque};
 
 #[derive(Debug)]
@@ -10,6 +17,13 @@ pub(crate) enum Entity {
 pub(crate) enum GameEvent {
     SpawnAgent { pos: [f64; 2], team: usize },
 }
+
+pub(crate) enum CollisionShape {
+    // Circle(f64),
+    BBox([[f64; 2]; 4]),
+}
+
+const SPAWNER_RADIUS: f64 = 0.5;
 
 impl Entity {
     pub(crate) fn get_id(&self) -> usize {
@@ -30,6 +44,46 @@ impl Entity {
         match self {
             Entity::Agent(agent) => agent.pos,
             Entity::Spawner(spawner) => spawner.pos,
+        }
+    }
+
+    pub(crate) fn get_shape(&self) -> CollisionShape {
+        match self {
+            Entity::Agent(agent) => {
+                let agent_pos = Vector2::from(agent.pos);
+                let rot = cgmath::Matrix2::from_angle(cgmath::Rad(agent.orient));
+                let mut bbox = [
+                    [-AGENT_HALFLENGTH, -AGENT_HALFWIDTH],
+                    [-AGENT_HALFLENGTH, AGENT_HALFWIDTH],
+                    [AGENT_HALFLENGTH, AGENT_HALFWIDTH],
+                    [AGENT_HALFLENGTH, -AGENT_HALFWIDTH],
+                ];
+                for vertex in &mut bbox {
+                    *vertex = (agent_pos + rot * Vector2::from(*vertex)).into();
+                }
+                CollisionShape::BBox(bbox)
+            }
+            Entity::Spawner(spawner) => {
+                let spawner_pos = Vector2::from(spawner.pos);
+                CollisionShape::BBox([
+                    [
+                        spawner_pos.x - SPAWNER_RADIUS,
+                        spawner_pos.y - SPAWNER_RADIUS,
+                    ],
+                    [
+                        spawner_pos.x - SPAWNER_RADIUS,
+                        spawner_pos.y + SPAWNER_RADIUS,
+                    ],
+                    [
+                        spawner_pos.x + SPAWNER_RADIUS,
+                        spawner_pos.y + SPAWNER_RADIUS,
+                    ],
+                    [
+                        spawner_pos.x + SPAWNER_RADIUS,
+                        spawner_pos.y - SPAWNER_RADIUS,
+                    ],
+                ])
+            }
         }
     }
 
