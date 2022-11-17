@@ -67,7 +67,7 @@ pub(crate) struct Game {
     pub(crate) interval: f64,
     pub(crate) rng: Rc<Xor128>,
     pub(crate) id_gen: usize,
-    pub(crate) temp_ents: Rc<Vec<TempEnt>>,
+    pub(crate) temp_ents: Rc<RefCell<Vec<TempEnt>>>,
     pub(crate) triangle_profiler: Profiler,
     pub(crate) pixel_profiler: Rc<RefCell<Profiler>>,
     pub(crate) source: Rc<String>,
@@ -120,7 +120,7 @@ impl Game {
             interval: 32.,
             rng: Rc::new(Xor128::new(9318245)),
             id_gen,
-            temp_ents: Rc::new(vec![]),
+            temp_ents: Rc::new(RefCell::new(vec![])),
             triangle_profiler: Profiler::new(),
             pixel_profiler: Rc::new(RefCell::new(Profiler::new())),
             source: Rc::new(String::new()),
@@ -355,7 +355,7 @@ impl Game {
 
         {
             let agents = self.entities.as_ref().borrow();
-            let mut temp_ents = std::mem::take(Rc::make_mut(&mut self.temp_ents));
+            let mut temp_ents = std::mem::take(&mut *self.temp_ents.borrow_mut());
             self.bullets = Rc::new(
                 self.bullets
                     .iter()
@@ -395,7 +395,11 @@ impl Game {
                     })
                     .collect(),
             );
-            self.temp_ents = Rc::new(temp_ents);
+
+            *self.temp_ents.borrow_mut() = temp_ents
+                .into_iter()
+                .filter_map(|mut ent| if ent.update() { Some(ent) } else { None })
+                .collect();
         }
 
         let mut entities: Vec<_> = std::mem::take(&mut *self.entities.borrow_mut())
@@ -418,13 +422,6 @@ impl Game {
             }
         }
         *self.entities.borrow_mut() = entities;
-
-        self.temp_ents = Rc::new(
-            std::mem::take(Rc::make_mut(&mut self.temp_ents))
-                .into_iter()
-                .filter_map(|mut ent| if ent.update() { Some(ent) } else { None })
-                .collect(),
-        );
     }
 
     pub(crate) fn is_passable_at(&self, pos: [f64; 2]) -> bool {
