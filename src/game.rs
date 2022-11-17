@@ -378,7 +378,7 @@ impl Game {
                                         agent_vertices.into_iter().map(Vector2::from),
                                     ) {
                                         temp_ents.push(TempEnt::new(bullet.pos));
-                                        if !agent.damage() {
+                                        if agent.damage() {
                                             agent.set_active(false);
                                         }
                                         println!("Agent {} is being killed", agent.get_id());

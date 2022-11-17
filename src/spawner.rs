@@ -4,13 +4,15 @@ use crate::{
 };
 use std::{cell::RefCell, rc::Rc};
 
+const SPAWNER_MAX_HEALTH: u32 = 10;
+
 #[derive(Clone, Debug)]
 pub(crate) struct Spawner {
     pub id: usize,
     pub pos: [f64; 2],
     pub team: usize,
     pub active: bool,
-    pub health: usize,
+    pub health: u32,
 }
 
 impl Spawner {
@@ -22,8 +24,12 @@ impl Spawner {
             pos,
             team,
             active: true,
-            health: 10,
+            health: SPAWNER_MAX_HEALTH,
         }
+    }
+
+    pub(crate) fn get_health_rate(&self) -> f64 {
+        self.health as f64 / SPAWNER_MAX_HEALTH as f64
     }
 
     pub(crate) fn update(

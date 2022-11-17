@@ -198,7 +198,7 @@ impl BehaviorNode for TimeoutNode {
             .and_then(|s| s.parse::<usize>().ok())
             .or_else(|| ctx.get::<usize>("time".into()).copied())
         {
-            println!("Timer set! {}", input);
+            // println!("Timer set! {}", input);
             self.0 = Some(input);
         }
         BehaviorResult::Fail

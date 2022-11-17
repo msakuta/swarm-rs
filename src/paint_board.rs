@@ -7,9 +7,10 @@ use crate::{
     triangle_utils::center_of_triangle_obj,
 };
 use druid::{
+    kurbo::Shape,
     piet::kurbo::{BezPath, Circle, Line},
     piet::{FontFamily, ImageFormat, InterpolationMode},
-    Affine, Color, FontDescriptor, Point, TextLayout,
+    Affine, Color, FontDescriptor, Point, Rect, TextLayout,
 };
 use druid::{widget::prelude::*, Vec2};
 
@@ -229,7 +230,7 @@ fn to_vec2(pos: [f64; 2]) -> Vec2 {
 }
 
 fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &Affine) {
-    const AGENT_COLORS: [Color; 2] = [Color::rgb8(63, 255, 63), Color::RED];
+    const AGENT_COLORS: [Color; 2] = [Color::rgb8(0, 255, 127), Color::rgb8(255, 0, 63)];
 
     let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
 
@@ -323,6 +324,20 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             layout.set_text_color(brush.clone());
             layout.rebuild_if_needed(ctx.text(), env);
             layout.draw(ctx, *view_transform * pos);
+        }
+
+        if 5. < data.scale {
+            let health = agent.get_health_rate();
+            let view_pos_left = *view_transform * Point::new(pos.x - 1., pos.y - 1.);
+            let view_pos_right = *view_transform * Point::new(pos.x + 1., pos.y - 1.);
+            let l = view_pos_left.x;
+            let r = view_pos_right.x;
+            let t = view_pos_left.y - 15.;
+            let b = view_pos_left.y - 10.;
+            let rect = Rect::new(l, t, r, b);
+            ctx.fill(rect.to_path(0.1), &Color::RED);
+            let health_rect = Rect::new(l, t, l + health * (r - l), b);
+            ctx.fill(health_rect.to_path(0.1), &Color::rgb8(0, 191, 0));
         }
     }
 }

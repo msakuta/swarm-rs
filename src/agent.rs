@@ -41,6 +41,7 @@ pub(crate) struct Agent {
 pub(crate) const AGENT_HALFWIDTH: f64 = 0.3;
 pub(crate) const AGENT_HALFLENGTH: f64 = 0.6;
 pub(crate) const AGENT_SPEED: f64 = 0.25;
+pub(crate) const AGENT_MAX_HEALTH: u32 = 3;
 pub(crate) const BULLET_RADIUS: f64 = 0.15;
 pub(crate) const BULLET_SPEED: f64 = 2.;
 
@@ -64,11 +65,15 @@ impl Agent {
             orient,
             team,
             cooldown: 5.,
-            health: 3,
+            health: AGENT_MAX_HEALTH,
             path: vec![],
             trace: VecDeque::new(),
             behavior_tree: Some(build_tree(behavior_source)),
         }
+    }
+
+    pub(crate) fn get_health_rate(&self) -> f64 {
+        self.health as f64 / AGENT_MAX_HEALTH as f64
     }
 
     fn orient_to(&mut self, target: [f64; 2]) -> bool {
