@@ -33,6 +33,7 @@ pub(crate) struct AppData {
     pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
     pub(crate) path_visible: bool,
+    pub(crate) avoidance_visible: bool,
     pub(crate) target_visible: bool,
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
@@ -51,6 +52,7 @@ impl AppData {
             r#"tree main = Sequence {
                 PredictForward (output -> pos, distance <- "10")
                 Avoidance (goal <- pos)
+                FollowPath
             }"#
             .to_string(),
             //             r#"tree main = Sequence {
@@ -100,6 +102,7 @@ impl AppData {
             get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
             path_visible: true,
+            avoidance_visible: true,
             target_visible: false,
             entity_label_visible: true,
             entity_trace_visible: false,

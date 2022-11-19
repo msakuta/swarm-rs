@@ -66,9 +66,17 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     .padding(5.),
             )
             .with_child(
-                Checkbox::new("Path")
-                    .lens(AppData::path_visible)
-                    .padding(5.),
+                Flex::row()
+                    .with_child(
+                        Checkbox::new("Path")
+                            .lens(AppData::path_visible)
+                            .padding(5.),
+                    )
+                    .with_child(
+                        Checkbox::new("Avoidance")
+                            .lens(AppData::avoidance_visible)
+                            .padding(5.),
+                    ),
             )
             .with_child(
                 Checkbox::new("Target line")

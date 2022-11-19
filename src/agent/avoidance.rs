@@ -72,6 +72,7 @@ pub struct SearchState {
     treeSize: usize,
     start: State,
     goal: State,
+    found_path: Option<Vec<usize>>,
 }
 
 impl Agent {
@@ -102,12 +103,29 @@ impl Agent {
         game: &Game,
         callback: impl Fn(&StateWithCost, &StateWithCost),
         switchBack: bool,
-    ) -> Option<(Vec<StateWithCost>, Vec<usize>)> {
+    ) -> bool {
         println!(
             "search invoked: state: {} goal: {:?}",
             self.search_state.is_some(),
             self.goal
         );
+
+        // Restart search if the target has diverged
+        if let Some((search_state, goal)) = self.search_state.as_ref().zip(self.goal) {
+            if !compareState(&search_state.goal, &goal) {
+                self.search_state = None;
+            }
+        }
+
+        if self
+            .search_state
+            .as_ref()
+            .map(|ss| ss.found_path.is_some())
+            .unwrap_or(false)
+        {
+            return true;
+        }
+
         fn interpolate(
             start: &State,
             steer: f64,
@@ -142,9 +160,10 @@ impl Agent {
             nodes: &[StateWithCost],
         ) -> Option<Vec<usize>> {
             if let Some(goal) = goal.as_ref() {
-                if !compareState(&nodes[start].state, &goal) {
+                if !compareDistance(&nodes[start].state, &goal, distThreshold) {
                     return None;
                 }
+                println!("Found path! {goal:?}");
                 let mut node = start;
                 let mut path = vec![];
                 while let Some(next_node) = nodes[node].from {
@@ -187,11 +206,11 @@ impl Agent {
                 return Some(path);
             }
 
-            println!(
-                "Searching {} states from {start}/{}",
-                env.expandStates,
-                nodes.len()
-            );
+            // println!(
+            //     "Searching {} states from {start}/{}",
+            //     env.expandStates,
+            //     nodes.len()
+            // );
 
             for _i in 0..env.expandStates {
                 let State { x, y, heading } = nodes[start].state;
@@ -202,9 +221,9 @@ impl Agent {
                 } else {
                     direction
                 };
-                let distance: f64 = distRadius + rand::random::<f64>() * distRadius;
+                let distance: f64 = distRadius * 2. + rand::random::<f64>() * distRadius;
                 let next = Agent::stepMove(x, y, heading, steer, 1., nextDirection * distance);
-                println!("stepMove: {:?} -> {:?}", nodes[start], next);
+                // println!("stepMove: {:?} -> {:?}", nodes[start], next);
                 let hit = interpolate(
                     &nodes[start].state,
                     steer,
@@ -265,7 +284,11 @@ impl Agent {
                     node.id = new_node_id;
                     nodes.push(node);
                     // callback(start, node);
-                    search(this, new_node_id, depth - 1, nextDirection, env, nodes);
+                    if let Some(path) =
+                        search(this, new_node_id, depth - 1, nextDirection, env, nodes)
+                    {
+                        return Some(path);
+                    }
                 } else {
                     env.skipped_nodes += 1;
                 }
@@ -324,8 +347,6 @@ impl Agent {
             None
         }
 
-        let mut path = vec![];
-
         let searched_path =
             if let Some((mut search_state, goal)) = self.search_state.take().zip(self.goal) {
                 if compareDistance(&self.to_state(), &search_state.start, distThreshold * 100.)
@@ -347,7 +368,19 @@ impl Agent {
                         // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
                         for i in 0..SEARCH_NODES {
                             let idx = Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
-                            traceTree(self, idx, 1, 1, &mut env, nodes);
+                            if let Some(path) = traceTree(self, idx, 1, 1, &mut env, nodes) {
+                                self.path = path
+                                    .iter()
+                                    .map(|i| {
+                                        let node = nodes[*i].state;
+                                        [node.x, node.y]
+                                    })
+                                    .collect();
+                                println!("Materialized found path: {:?}", self.path);
+                                search_state.found_path = Some(path);
+                                self.search_state = Some(search_state);
+                                return true;
+                            }
                         }
                     }
 
@@ -374,9 +407,23 @@ impl Agent {
                     let root_id = nodes.len();
                     println!("Pushing the first node: {:?}", root);
                     nodes.push(root.clone());
-                    if let Some(found_path) = search(self, root_id, depth, 1., &mut env, &mut nodes)
-                    {
-                        path = found_path;
+                    if let Some(path) = search(self, root_id, depth, 1., &mut env, &mut nodes) {
+                        self.path = path
+                            .iter()
+                            .map(|i| {
+                                let node = nodes[*i].state;
+                                [node.x, node.y]
+                            })
+                            .collect();
+                        let tree_size = nodes.len();
+                        self.search_state = Some(SearchState {
+                            searchTree: nodes,
+                            start: root.state,
+                            treeSize: tree_size,
+                            goal,
+                            found_path: Some(path),
+                        });
+                        return true;
                     }
                     roots.push(root);
                 }
@@ -393,6 +440,7 @@ impl Agent {
                         start: self.to_state(),
                         treeSize,
                         goal: goal,
+                        found_path: None,
                     };
                     // else{
                     //     *search_state = SearchState{
@@ -459,15 +507,13 @@ impl Agent {
             // for node in &self.path {
             //     if(!(node.id in nodes)) throw `Path node not in nodes ${node.id}`;
             // }
-            Some((nodes, path))
-        } else {
-            None
         }
+        false
     }
 }
 
 mod render {
-    use super::SearchState;
+    use super::{distRadius, SearchState};
     use druid::{
         kurbo::Circle, piet::kurbo::BezPath, Affine, Color, Env, PaintCtx, Point, RenderContext,
     };
@@ -490,6 +536,8 @@ mod render {
                 }
                 let circle = Circle::new(*view_transform * point, 2.);
                 ctx.fill(circle, brush);
+                let circle = Circle::new(point, distRadius);
+                ctx.stroke(*view_transform * circle, brush, 0.5);
             }
             ctx.stroke(*view_transform * bez_path, brush, 0.5);
         }

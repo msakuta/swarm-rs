@@ -296,7 +296,9 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                 bez_path.line_to(to_point(agent.get_pos()));
                 ctx.stroke(*view_transform * bez_path, brush, 1.);
             }
+        }
 
+        if data.avoidance_visible {
             if let Some(goal) = agent.get_goal() {
                 const CROSS_SIZE: f64 = 5.;
                 let goal = *view_transform * Point::new(goal.x, goal.y);
