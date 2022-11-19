@@ -132,7 +132,7 @@ impl Agent {
             distance: f64,
             f: impl Fn(State) -> bool,
         ) -> bool {
-            const INTERPOLATE_INTERVAL: f64 = 10.;
+            const INTERPOLATE_INTERVAL: f64 = distRadius;
             let interpolates = (distance.abs() / INTERPOLATE_INTERVAL).floor() as usize;
             for i in 0..interpolates {
                 let sign = if distance < 0. { -1. } else { 1. };
@@ -154,13 +154,13 @@ impl Agent {
         let mut nodes: Vec<StateWithCost> = vec![];
         // let mut edges: Vec<[StateWithCost; 2]> = vec![];
 
-        fn checkGoal(
+        fn check_goal(
             start: usize,
             goal: &Option<State>,
             nodes: &[StateWithCost],
         ) -> Option<Vec<usize>> {
             if let Some(goal) = goal.as_ref() {
-                if !compareDistance(&nodes[start].state, &goal, distThreshold) {
+                if !compareDistance(&nodes[start].state, &goal, (distRadius * 2.).powf(2.)) {
                     return None;
                 }
                 println!("Found path! {goal:?}");
@@ -202,7 +202,7 @@ impl Agent {
             if depth < 1 || 10000 < nodes.len() {
                 return None;
             }
-            if let Some(path) = checkGoal(start, &this.goal, &nodes) {
+            if let Some(path) = check_goal(start, &this.goal, &nodes) {
                 return Some(path);
             }
 
@@ -228,9 +228,10 @@ impl Agent {
                     &nodes[start].state,
                     steer,
                     nextDirection * distance,
-                    |state| env.game.check_hit([state.x, state.y]),
+                    |state| !env.game.check_hit([state.x, state.y]),
                 );
                 if hit {
+                    println!("Search hit something!, {nextDirection} * {distance}");
                     continue;
                 }
                 // Changing direction costs
@@ -316,7 +317,7 @@ impl Agent {
             }
             // if
             /* !root || */
-            // checkGoal(root, &this.goal, &nodes).is_some() {
+            // check_goal(root, &this.goal, &nodes).is_some() {
             //     println!("Reached goal! {:?} -> {:?}", nodes[root], this.goal);
             //     return None;
             // }
