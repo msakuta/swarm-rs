@@ -80,13 +80,13 @@ checksum = "dc19a4937b4fbd3fe3379793130e42060d10627a360f2127802b10b87e7baf74"
 
 [[package]]
 name = "behavior-tree-lite"
-version = "0.1.1"
-source = "git+https://github.com/msakuta/rusty-behavior-tree-lite?tag=v0.1.1#9708c15a992024ba5311082b0a7849b232155adf"
+version = "0.1.2"
+source = "git+https://github.com/msakuta/rusty-behavior-tree-lite?tag=v0.1.2#34c0a96278ef899379c2ac3e30be8dc1d19395c3"
 dependencies = [
  "nom",
+ "once_cell",
  "serde",
  "serde_yaml",
- "symbol",
 ]
 
 [[package]]
@@ -914,9 +914,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.12.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7709cef83f0c1f58f666e746a08b21e0085f7440fa6a29cc194d68aac97a4225"
+checksum = "86f0b0d4bf799edbc74508c1e8bf170ff5f41238e5f8225603ca7caaae2b7860"
 
 [[package]]
 name = "pango"
@@ -1287,12 +1287,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2dd574626839106c320a323308629dcb1acfc96e32a8cba364ddc61ac23ee83"
 
 [[package]]
-name = "spin"
-version = "0.4.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceac490aa12c567115b40b7b7fceca03a6c9d53d5defea066123debc83c5dc1f"
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1387,16 +1381,6 @@ dependencies = [
  "rand",
  "serde_json",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "symbol"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79699c3ae2258766b51a8a11079a355f003e4a0a5cadbdbb66d5c3d8632d4423"
-dependencies = [
- "lazy_static",
- "spin",
 ]
 
 [[package]]

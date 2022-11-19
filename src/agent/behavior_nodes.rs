@@ -43,7 +43,7 @@ impl BehaviorNode for SetBool {
         _arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        let result = ctx.get::<Option<usize>>("direction".into());
+        let result = ctx.get::<Option<usize>>("direction");
         // println!("HasTarge node {result:?}");
         if result.map(|a| a.is_some()).unwrap_or(false) {
             BehaviorResult::Success
@@ -61,7 +61,7 @@ impl BehaviorNode for HasTarget {
         _arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        let result = ctx.get::<Option<usize>>("target".into());
+        let result = ctx.get::<Option<usize>>("target");
         // println!("HasTarge node {result:?}");
         if result.map(|a| a.is_some()).unwrap_or(false) {
             BehaviorResult::Success
@@ -95,7 +95,7 @@ impl<'a> BehaviorNode for HasPath {
         _arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        let has_path = ctx.get::<bool>("has_path".into());
+        let has_path = ctx.get::<bool>("has_path");
         if has_path.copied().unwrap_or(false) {
             BehaviorResult::Success
         } else {
@@ -154,7 +154,7 @@ impl BehaviorNode for Move {
         arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        if let Some(direction) = ctx.get::<String>("direction".into()) {
+        if let Some(direction) = ctx.get::<String>("direction") {
             arg(&MoveCommand(direction.clone()));
         }
         BehaviorResult::Success
@@ -194,9 +194,9 @@ impl BehaviorNode for TimeoutNode {
                 return BehaviorResult::Running;
             }
         } else if let Some(input) = ctx
-            .get::<String>("time".into())
+            .get::<String>("time")
             .and_then(|s| s.parse::<usize>().ok())
-            .or_else(|| ctx.get::<usize>("time".into()).copied())
+            .or_else(|| ctx.get::<usize>("time").copied())
         {
             // println!("Timer set! {}", input);
             self.0 = Some(input);
@@ -214,13 +214,13 @@ impl BehaviorNode for RandomizeNode {
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         if let Some(max) = ctx
-            .get::<String>("max".into())
+            .get::<String>("max")
             .and_then(|s| s.parse::<usize>().ok())
         {
             let between = Uniform::from(0..max);
             let value = between.sample(&mut rand::thread_rng());
             // println!("Randomizing! {}/{}", value, max);
-            ctx.set::<usize>("value".into(), value);
+            ctx.set::<usize>("value", value);
             return BehaviorResult::Success;
         }
         BehaviorResult::Fail

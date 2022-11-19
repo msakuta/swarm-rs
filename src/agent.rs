@@ -222,8 +222,8 @@ impl Agent {
     ) {
         if let Some(mut tree) = self.behavior_tree.take() {
             let mut ctx = Context::default();
-            ctx.set("target".into(), self.target);
-            ctx.set("has_path".into(), !self.path.is_empty());
+            ctx.set("target", self.target);
+            ctx.set("has_path", !self.path.is_empty());
             let mut process = |f: &dyn std::any::Any| {
                 if let Some(com) = f.downcast_ref::<MoveCommand>() {
                     let drive = match &com.0 as &str {
