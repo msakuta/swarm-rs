@@ -49,28 +49,35 @@ impl AppData {
 
         let source_buffer = Rc::new(
             r#"tree main = Sequence {
-    Fallback {
-        HasTarget (target <- target)
-        FindEnemy
-    }
-    Fallback {
-        HasPath (has_path <- has_path)
-        FindPath
-    }
-    Sequence {
-        HasPath (has_path <- has_path)
-        Fallback {
-            FollowPath
-            ReactiveSequence {
-                Move (direction <- "backward")
-                Randomize (max <- "20", value -> timeoutValue)
-                Timeout (time <- timeoutValue)
-            }
-        }
-        Shoot
-    }
-}"#
+                PredictForward (output -> pos, distance <- "10")
+                Avoidance (goal <- pos)
+            }"#
             .to_string(),
+            //             r#"tree main = Sequence {
+            //     Fallback {
+            //         HasTarget (target <- target)
+            //         FindEnemy
+            //     }
+            //     Fallback {
+            //         HasPath (has_path <- has_path)
+            //         FindPath
+            //     }
+            //     Sequence {
+            //         HasPath (has_path <- has_path)
+            //         Fallback {
+            //             FollowPath
+            //             ReactiveSequence {
+            //                 PathNextNode (output -> pathNext)
+            //                 Avoidance (goal <- pathNext)
+            //                 Move (direction <- "backward")
+            //                 Randomize (max <- "20", value -> timeoutValue)
+            //                 Timeout (time <- timeoutValue)
+            //             }
+            //         }
+            //         Shoot
+            //     }
+            // }"#
+            // .to_string(),
         );
 
         game.source = source_buffer.clone();

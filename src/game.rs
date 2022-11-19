@@ -68,7 +68,7 @@ pub(crate) struct Game {
     pub(crate) rng: Rc<Xor128>,
     pub(crate) id_gen: usize,
     pub(crate) temp_ents: Rc<RefCell<Vec<TempEnt>>>,
-    pub(crate) triangle_profiler: Profiler,
+    pub(crate) triangle_profiler: Rc<RefCell<Profiler>>,
     pub(crate) pixel_profiler: Rc<RefCell<Profiler>>,
     pub(crate) source: Rc<String>,
 }
@@ -117,11 +117,11 @@ impl Game {
             entities: Rc::new(RefCell::new(vec![])),
             bullets: Rc::new(vec![]),
             paused: false,
-            interval: 32.,
+            interval: 200.,
             rng: Rc::new(Xor128::new(9318245)),
             id_gen,
             temp_ents: Rc::new(RefCell::new(vec![])),
-            triangle_profiler: Profiler::new(),
+            triangle_profiler: Rc::new(RefCell::new(Profiler::new())),
             pixel_profiler: Rc::new(RefCell::new(Profiler::new())),
             source: Rc::new(String::new()),
         }
@@ -291,7 +291,7 @@ impl Game {
                 &triangulation,
                 &points,
                 pos_candidate,
-                &mut self.triangle_profiler,
+                &mut *self.triangle_profiler.borrow_mut(),
             ) {
                 if Some(triangle_labels[tri]) == largest_label {
                     return Some(Entity::Agent(Agent::new(
@@ -307,6 +307,24 @@ impl Game {
         None
     }
 
+    pub(crate) fn check_hit(&self, pos: [f64; 2]) -> bool {
+        let triangulation = &self.triangulation;
+        let points = &self.points;
+        let triangle_labels = &self.triangle_labels;
+        let largest_label = self.largest_label;
+        if let Some(tri) = find_triangle_at(
+            &triangulation,
+            &points,
+            pos,
+            &mut *self.triangle_profiler.borrow_mut(),
+        ) {
+            if Some(triangle_labels[tri]) == largest_label {
+                return true;
+            }
+        }
+        false
+    }
+
     fn try_new_spawner(&mut self, team: usize) -> Option<Entity> {
         for _ in 0..10 {
             let rng = Rc::make_mut(&mut self.rng);
@@ -315,7 +333,7 @@ impl Game {
                 &self.triangulation,
                 &self.points,
                 pos_candidate,
-                &mut self.triangle_profiler,
+                &mut *self.triangle_profiler.borrow_mut(),
             ) {
                 if Some(self.triangle_labels[tri]) == self.largest_label {
                     if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {

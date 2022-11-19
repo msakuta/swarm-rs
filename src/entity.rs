@@ -140,6 +140,20 @@ impl Entity {
         }
     }
 
+    pub(crate) fn get_goal(&self) -> Option<crate::agent::State> {
+        match self {
+            Entity::Agent(agent) => agent.goal,
+            _ => None,
+        }
+    }
+
+    pub(crate) fn get_search_state(&self) -> Option<&crate::agent::SearchState> {
+        match self {
+            Entity::Agent(agent) => agent.search_state.as_ref(),
+            _ => None,
+        }
+    }
+
     pub(crate) fn damage(&mut self) -> bool {
         match self {
             Entity::Agent(agent) => {

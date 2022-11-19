@@ -1,6 +1,8 @@
+use super::State;
 use behavior_tree_lite::{
-    load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Registry,
+    load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context, Registry,
 };
+use cgmath::{Matrix2, Rad, Vector2};
 use rand::{distributions::Uniform, prelude::Distribution};
 
 /// Boundary to skip Debug trait from propagating to BehaviorNode trait
@@ -31,6 +33,9 @@ pub(super) fn build_tree(source: &str) -> BehaviorTree {
     registry.register("Shoot", boxify(|| ShootNode));
     registry.register("Timeout", boxify(|| TimeoutNode(None)));
     registry.register("Randomize", boxify(|| RandomizeNode));
+    registry.register("Avoidance", boxify(|| AvoidanceNode));
+    registry.register("PathNextNode", boxify(|| PathNextNode));
+    registry.register("PredictForward", boxify(|| PredictForwardNode));
 
     BehaviorTree(load(&parse_file(source).unwrap().1, &registry).unwrap())
 }
@@ -222,6 +227,66 @@ impl BehaviorNode for RandomizeNode {
             // println!("Randomizing! {}/{}", value, max);
             ctx.set::<usize>("value", value);
             return BehaviorResult::Success;
+        }
+        BehaviorResult::Fail
+    }
+}
+
+pub(super) struct AvoidanceCommand(pub [f64; 2]);
+
+pub(super) struct AvoidanceNode;
+
+impl BehaviorNode for AvoidanceNode {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if let Some(goal) = ctx.get::<[f64; 2]>("goal") {
+            arg(&AvoidanceCommand(*goal));
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct GetPathNextNodeCommand;
+
+pub(super) struct PathNextNode;
+
+impl BehaviorNode for PathNextNode {
+    fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
+        if let Some(value) =
+            arg(&GetPathNextNodeCommand).and_then(|val| val.downcast_ref::<[f64; 2]>().copied())
+        {
+            ctx.set("output", value);
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct GetStateCommand;
+
+pub(super) struct PredictForwardNode;
+
+impl BehaviorNode for PredictForwardNode {
+    fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
+        if let Some(distance) = ctx.get::<f64>("distance").copied().or_else(|| {
+            ctx.get::<String>("distance")
+                .and_then(|val| val.parse::<f64>().ok())
+        }) {
+            if let Some(state) =
+                arg(&GetStateCommand).and_then(|val| val.downcast_ref::<State>().cloned())
+            {
+                let pos = Matrix2::from_angle(Rad(state.heading)) * Vector2::new(distance, 0.)
+                    + Vector2::new(state.x, state.y);
+                let pos: [f64; 2] = pos.into();
+                ctx.set("output", pos);
+                return BehaviorResult::Success;
+            }
         }
         BehaviorResult::Fail
     }

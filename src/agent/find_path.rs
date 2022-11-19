@@ -26,16 +26,12 @@ impl Agent {
         if let Some(target) = target {
             let triangulation = &game.triangulation;
             let points = &game.points;
+            let mut profiler = game.triangle_profiler.borrow_mut();
             let this_triangle =
-                find_triangle_at(triangulation, points, self.pos, &mut game.triangle_profiler)
+                find_triangle_at(triangulation, points, self.pos, &mut *profiler).ok_or(())?;
+            let target_triangle =
+                find_triangle_at(triangulation, points, target.get_pos(), &mut *profiler)
                     .ok_or(())?;
-            let target_triangle = find_triangle_at(
-                triangulation,
-                points,
-                target.get_pos(),
-                &mut game.triangle_profiler,
-            )
-            .ok_or(())?;
             if this_triangle == target_triangle {
                 // self.path_line = vec![
                 //         self.pos,

@@ -115,10 +115,11 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             ))
             .with_child(Flex::row().with_flex_child(
                 Label::new(|data: &AppData, _: &_| {
+                    let profiler = data.game.triangle_profiler.borrow();
                     format!(
                         "Triangle time: {:.09}s, calls: {} size: {}, refs: {}",
-                        data.game.triangle_profiler.get_average(),
-                        data.game.triangle_profiler.get_count(),
+                        profiler.get_average(),
+                        profiler.get_count(),
                         std::mem::size_of::<AppData>(),
                         Rc::strong_count(&data.game.triangulation)
                     )

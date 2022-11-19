@@ -1,9 +1,11 @@
+mod avoidance;
 mod behavior_nodes;
 mod find_path;
 
+pub(crate) use self::avoidance::{SearchState, State};
 use self::behavior_nodes::{
-    build_tree, BehaviorTree, FindEnemyCommand, FindPathCommand, FollowPathCommand, MoveCommand,
-    ShootCommand,
+    build_tree, AvoidanceCommand, BehaviorTree, FindEnemyCommand, FindPathCommand,
+    FollowPathCommand, GetPathNextNodeCommand, GetStateCommand, MoveCommand, ShootCommand,
 };
 use crate::{entity::Entity, game::Game, triangle_utils::find_triangle_at};
 use ::behavior_tree_lite::Context;
@@ -33,6 +35,8 @@ pub(crate) struct Agent {
     pub team: usize,
     cooldown: f64,
     pub health: u32,
+    pub goal: Option<State>,
+    pub search_state: Option<SearchState>,
     pub path: Vec<[f64; 2]>,
     pub trace: VecDeque<[f64; 2]>,
     behavior_tree: Option<BehaviorTree>,
@@ -66,6 +70,8 @@ impl Agent {
             team,
             cooldown: 5.,
             health: AGENT_MAX_HEALTH,
+            goal: None,
+            search_state: None,
             path: vec![],
             trace: VecDeque::new(),
             behavior_tree: Some(build_tree(behavior_source)),
@@ -114,7 +120,7 @@ impl Agent {
             &game.triangulation,
             &game.points,
             target_pos,
-            &mut game.triangle_profiler,
+            &mut *game.triangle_profiler.borrow_mut(),
         ) {
             if game.triangle_passable[next_triangle] {
                 if 100 < self.trace.len() {
@@ -254,6 +260,15 @@ impl Agent {
                 } else if f.downcast_ref::<ShootCommand>().is_some() {
                     let forward = Vector2::new(self.orient.cos(), self.orient.sin());
                     self.shoot_bullet(bullets, (Vector2::from(self.pos) + forward).into());
+                } else if let Some(goal) = f.downcast_ref::<AvoidanceCommand>() {
+                    self.goal = Some(avoidance::State::new(goal.0[0], goal.0[1], self.orient));
+                    self.search(1, game, |_, _| (), false);
+                } else if f.downcast_ref::<GetPathNextNodeCommand>().is_some() {
+                    if let Some(path) = self.path.last() {
+                        return Some(Box::new(*path));
+                    }
+                } else if f.downcast_ref::<GetStateCommand>().is_some() {
+                    return Some(Box::new(self.to_state()));
                 }
                 None
                 // if let Some(f) = f.downcast_ref::<dyn Fn(&Agent)>() {
