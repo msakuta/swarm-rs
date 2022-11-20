@@ -1,6 +1,7 @@
 mod avoidance;
 mod behavior_nodes;
 mod find_path;
+mod interpolation;
 
 pub(crate) use self::avoidance::{SearchState, State};
 use self::{
@@ -74,6 +75,10 @@ impl Agent {
         let id = *id_gen;
         *id_gen += 1;
 
+        let start = std::time::Instant::now();
+        let tree = build_tree(behavior_source);
+        println!("tree build: {}", start.elapsed().as_secs_f64());
+
         Self {
             target: None,
             active: true,
@@ -89,7 +94,7 @@ impl Agent {
             avoidance_path: vec![],
             path: vec![],
             trace: VecDeque::new(),
-            behavior_tree: Some(build_tree(behavior_source)),
+            behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
         }
     }
@@ -385,25 +390,7 @@ impl Agent {
         points: &[Point],
         profiler: &mut Profiler,
     ) -> bool {
-        fn lerp(a: &[f64; 2], b: &[f64; 2], f: f64) -> [f64; 2] {
-            [a[0] * (1. - f) + b[0] * f, a[1] * (1. - f) + a[1] * f]
-        }
-        fn interpolate(
-            start: [f64; 2],
-            target: [f64; 2],
-            mut f: impl FnMut([f64; 2]) -> bool,
-        ) -> bool {
-            const INTERPOLATE_INTERVAL: f64 = AGENT_HALFLENGTH;
-            let distance = Vector2::from(start).distance(Vector2::from(target));
-            let interpolates = (distance.abs() / INTERPOLATE_INTERVAL).floor() as usize;
-            for i in 0..interpolates {
-                let point = lerp(&start, &target, i as f64 * INTERPOLATE_INTERVAL);
-                if f(point) {
-                    return true;
-                }
-            }
-            return false;
-        }
+        const INTERPOLATE_INTERVAL: f64 = AGENT_HALFLENGTH;
 
         let self_pos = self.pos;
 
@@ -411,7 +398,7 @@ impl Agent {
         if AGENT_VISIBLE_DISTANCE < distance {
             return false;
         }
-        interpolate(self_pos, target, |point| {
+        interpolation::interpolate(self_pos, target, INTERPOLATE_INTERVAL, |point| {
             find_triangle_at(triangulation, points, point, profiler).is_some()
         })
     }

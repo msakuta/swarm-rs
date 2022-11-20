@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use rand::{distributions::Uniform, prelude::Distribution};
 
-use super::Agent;
+use super::{interpolation::interpolate_steer, Agent};
 use crate::{entity::Entity, game::Game};
 
 #[derive(Clone, Copy, Debug)]
@@ -78,7 +78,14 @@ pub struct SearchState {
 }
 
 impl Agent {
-    fn stepMove(px: f64, py: f64, heading: f64, steer: f64, speed: f64, deltaTime: f64) -> State {
+    pub(super) fn step_move(
+        px: f64,
+        py: f64,
+        heading: f64,
+        steer: f64,
+        speed: f64,
+        deltaTime: f64,
+    ) -> State {
         let [x, y] = [speed * deltaTime, 0.];
         let heading = heading + steer.min(1.).max(-1.) * x * 0.2 * MAX_STEER;
         let dx = heading.cos() * x - heading.sin() * y + px;
@@ -129,34 +136,10 @@ impl Agent {
             return true;
         }
 
-        fn interpolate(
-            start: &State,
-            steer: f64,
-            distance: f64,
-            f: impl Fn(State) -> bool,
-        ) -> bool {
-            const INTERPOLATE_INTERVAL: f64 = DIST_RADIUS;
-            let interpolates = (distance.abs() / INTERPOLATE_INTERVAL).floor() as usize;
-            for i in 0..interpolates {
-                let sign = if distance < 0. { -1. } else { 1. };
-                let next = Agent::stepMove(
-                    start.x,
-                    start.y,
-                    start.heading,
-                    steer,
-                    1.,
-                    sign * i as f64 * INTERPOLATE_INTERVAL,
-                );
-                if f(next) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
         let mut nodes: Vec<StateWithCost> = vec![];
         // let mut edges: Vec<[StateWithCost; 2]> = vec![];
 
+        /// Check if the goal is close enough to the added node, and if it was, return a built path
         fn check_goal(
             start: usize,
             goal: &Option<State>,
@@ -227,12 +210,13 @@ impl Agent {
                     direction
                 };
                 let distance: f64 = DIST_RADIUS * 2. + rand::random::<f64>() * DIST_RADIUS * 3.;
-                let next = Agent::stepMove(x, y, heading, steer, 1., nextDirection * distance);
+                let next = Agent::step_move(x, y, heading, steer, 1., nextDirection * distance);
                 // println!("stepMove: {:?} -> {:?}", nodes[start], next);
-                let hit = interpolate(
+                let hit = interpolate_steer(
                     &nodes[start].state,
                     steer,
                     nextDirection * distance,
+                    DIST_RADIUS,
                     |state| {
                         let pos = [state.x, state.y];
                         if Agent::collision_check(Some(this.id), pos, env.entities) {
