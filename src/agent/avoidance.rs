@@ -1,7 +1,9 @@
+use std::cell::RefCell;
+
 use rand::{distributions::Uniform, prelude::Distribution};
 
 use super::Agent;
-use crate::game::Game;
+use crate::{entity::Entity, game::Game};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct State {
@@ -41,8 +43,8 @@ impl StateWithCost {
     }
 }
 
-const distRadius: f64 = 0.5;
-const distThreshold: f64 = distRadius * distRadius;
+pub const DIST_RADIUS: f64 = 0.5;
+const DIST_THRESHOLD: f64 = DIST_RADIUS * DIST_RADIUS;
 
 /// Wrap the angle value in [0, 2pi)
 fn wrapAngle(x: f64) -> f64 {
@@ -55,7 +57,7 @@ fn wrapAngle(x: f64) -> f64 {
 fn compareState(s1: &State, s2: &State) -> bool {
     let deltaAngle = wrapAngle(s1.heading - s2.heading);
     // println!("compareState deltaAngle: {}", deltaAngle);
-    compareDistance(s1, s2, distThreshold) && deltaAngle.abs() < std::f64::consts::PI / 4.
+    compareDistance(s1, s2, DIST_THRESHOLD) && deltaAngle.abs() < std::f64::consts::PI / 4.
 }
 
 fn compareDistance(s1: &State, s2: &State, threshold: f64) -> bool {
@@ -101,14 +103,15 @@ impl Agent {
         &mut self,
         depth: usize,
         game: &Game,
+        entities: &[RefCell<Entity>],
         callback: impl Fn(&StateWithCost, &StateWithCost),
         switchBack: bool,
     ) -> bool {
-        println!(
-            "search invoked: state: {} goal: {:?}",
-            self.search_state.is_some(),
-            self.goal
-        );
+        // println!(
+        //     "search invoked: state: {} goal: {:?}",
+        //     self.search_state.is_some(),
+        //     self.goal
+        // );
 
         // Restart search if the target has diverged
         if let Some((search_state, goal)) = self.search_state.as_ref().zip(self.goal) {
@@ -132,7 +135,7 @@ impl Agent {
             distance: f64,
             f: impl Fn(State) -> bool,
         ) -> bool {
-            const INTERPOLATE_INTERVAL: f64 = distRadius;
+            const INTERPOLATE_INTERVAL: f64 = DIST_RADIUS;
             let interpolates = (distance.abs() / INTERPOLATE_INTERVAL).floor() as usize;
             for i in 0..interpolates {
                 let sign = if distance < 0. { -1. } else { 1. };
@@ -160,7 +163,7 @@ impl Agent {
             nodes: &[StateWithCost],
         ) -> Option<Vec<usize>> {
             if let Some(goal) = goal.as_ref() {
-                if !compareDistance(&nodes[start].state, &goal, (distRadius * 2.).powf(2.)) {
+                if !compareDistance(&nodes[start].state, &goal, (DIST_RADIUS * 2.).powf(2.)) {
                     return None;
                 }
                 println!("Found path! {goal:?}");
@@ -181,6 +184,7 @@ impl Agent {
             expandStates: usize,
             skipped_nodes: usize,
             tree_size: usize,
+            entities: &'a [RefCell<Entity>],
         }
 
         let mut env = SearchEnv {
@@ -189,6 +193,7 @@ impl Agent {
             expandStates: 1,
             skipped_nodes: 0,
             tree_size: 0,
+            entities,
         };
 
         fn search(
@@ -221,17 +226,24 @@ impl Agent {
                 } else {
                     direction
                 };
-                let distance: f64 = distRadius * 2. + rand::random::<f64>() * distRadius;
+                let distance: f64 = DIST_RADIUS * 2. + rand::random::<f64>() * DIST_RADIUS * 3.;
                 let next = Agent::stepMove(x, y, heading, steer, 1., nextDirection * distance);
                 // println!("stepMove: {:?} -> {:?}", nodes[start], next);
                 let hit = interpolate(
                     &nodes[start].state,
                     steer,
                     nextDirection * distance,
-                    |state| !env.game.check_hit([state.x, state.y]),
+                    |state| {
+                        let pos = [state.x, state.y];
+                        if Agent::collision_check(Some(this.id), pos, env.entities) {
+                            println!("Entity collided!");
+                            return false;
+                        }
+                        !env.game.check_hit(pos)
+                    },
                 );
                 if hit {
-                    println!("Search hit something!, {nextDirection} * {distance}");
+                    // println!("Search hit something!, {nextDirection} * {distance}");
                     continue;
                 }
                 // Changing direction costs
@@ -350,8 +362,8 @@ impl Agent {
 
         let searched_path =
             if let Some((mut search_state, goal)) = self.search_state.take().zip(self.goal) {
-                if compareDistance(&self.to_state(), &search_state.start, distThreshold * 100.)
-                    && compareDistance(&goal, &search_state.goal, distThreshold)
+                if compareDistance(&self.to_state(), &search_state.start, DIST_THRESHOLD * 100.)
+                    && compareDistance(&goal, &search_state.goal, DIST_THRESHOLD)
                 {
                     // for root in &search_state.searchTree {
                     //     enumTree(root, &mut nodes);
@@ -359,7 +371,7 @@ impl Agent {
 
                     let nodes = &mut search_state.searchTree;
 
-                    println!("Using existing tree with {} nodes", nodes.len());
+                    // println!("Using existing tree with {} nodes", nodes.len());
 
                     const SEARCH_NODES: usize = 10;
 
@@ -370,7 +382,7 @@ impl Agent {
                         for i in 0..SEARCH_NODES {
                             let idx = Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
                             if let Some(path) = traceTree(self, idx, 1, 1, &mut env, nodes) {
-                                self.path = path
+                                self.avoidance_path = path
                                     .iter()
                                     .map(|i| {
                                         let node = nodes[*i].state;
@@ -379,7 +391,7 @@ impl Agent {
                                     .collect();
                                 println!("Materialized found path: {:?}", self.path);
                                 search_state.found_path = Some(path);
-                                self.search_state = Some(search_state);
+                                self.search_state = None; //Some(search_state);
                                 return true;
                             }
                         }
@@ -409,7 +421,7 @@ impl Agent {
                     println!("Pushing the first node: {:?}", root);
                     nodes.push(root.clone());
                     if let Some(path) = search(self, root_id, depth, 1., &mut env, &mut nodes) {
-                        self.path = path
+                        self.avoidance_path = path
                             .iter()
                             .map(|i| {
                                 let node = nodes[*i].state;
@@ -417,13 +429,14 @@ impl Agent {
                             })
                             .collect();
                         let tree_size = nodes.len();
-                        self.search_state = Some(SearchState {
-                            searchTree: nodes,
-                            start: root.state,
-                            treeSize: tree_size,
-                            goal,
-                            found_path: Some(path),
-                        });
+                        self.search_state = None;
+                        //  Some(SearchState {
+                        //     searchTree: nodes,
+                        //     start: root.state,
+                        //     treeSize: tree_size,
+                        //     goal,
+                        //     found_path: Some(path),
+                        // });
                         return true;
                     }
                     roots.push(root);
@@ -514,7 +527,7 @@ impl Agent {
 }
 
 mod render {
-    use super::{distRadius, SearchState};
+    use super::{SearchState, DIST_RADIUS};
     use druid::{
         kurbo::Circle, piet::kurbo::BezPath, Affine, Color, Env, PaintCtx, Point, RenderContext,
     };
@@ -537,7 +550,7 @@ mod render {
                 }
                 let circle = Circle::new(*view_transform * point, 2.);
                 ctx.fill(circle, brush);
-                let circle = Circle::new(point, distRadius);
+                let circle = Circle::new(point, DIST_RADIUS);
                 ctx.stroke(*view_transform * circle, brush, 0.5);
             }
             ctx.stroke(*view_transform * bez_path, brush, 0.5);

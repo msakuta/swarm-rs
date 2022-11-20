@@ -115,6 +115,13 @@ impl Entity {
         }
     }
 
+    pub(crate) fn get_avoidance_path(&self) -> Option<&[[f64; 2]]> {
+        match self {
+            Entity::Agent(agent) => Some(&agent.avoidance_path),
+            _ => None,
+        }
+    }
+
     pub(crate) fn is_agent(&self) -> bool {
         matches!(self, Entity::Agent(_))
     }

@@ -3,13 +3,23 @@ mod behavior_nodes;
 mod find_path;
 
 pub(crate) use self::avoidance::{SearchState, State};
-use self::behavior_nodes::{
-    build_tree, AvoidanceCommand, BehaviorTree, FindEnemyCommand, FindPathCommand,
-    FollowPathCommand, GetPathNextNodeCommand, GetStateCommand, MoveCommand, ShootCommand,
+use self::{
+    avoidance::DIST_RADIUS,
+    behavior_nodes::{
+        build_tree, AvoidanceCommand, BehaviorTree, FaceToTargetCommand, FindEnemyCommand,
+        FindPathCommand, FollowPathCommand, GetPathNextNodeCommand, GetStateCommand,
+        IsTargetVisibleCommand, MoveCommand, ShootCommand,
+    },
 };
-use crate::{entity::Entity, game::Game, triangle_utils::find_triangle_at};
+use crate::{
+    entity::Entity,
+    game::{Game, Profiler},
+    triangle_utils::find_triangle_at,
+};
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
+use behavior_tree_lite::Blackboard;
+use delaunator::{Point, Triangulation};
 use std::{
     cell::RefCell,
     collections::{HashSet, VecDeque},
@@ -37,15 +47,19 @@ pub(crate) struct Agent {
     pub health: u32,
     pub goal: Option<State>,
     pub search_state: Option<SearchState>,
+    /// Avoidance path is more local.
+    pub avoidance_path: Vec<[f64; 2]>,
     pub path: Vec<[f64; 2]>,
     pub trace: VecDeque<[f64; 2]>,
     behavior_tree: Option<BehaviorTree>,
+    blackboard: Blackboard,
 }
 
 pub(crate) const AGENT_HALFWIDTH: f64 = 0.3;
 pub(crate) const AGENT_HALFLENGTH: f64 = 0.6;
 pub(crate) const AGENT_SPEED: f64 = 0.25;
 pub(crate) const AGENT_MAX_HEALTH: u32 = 3;
+const AGENT_VISIBLE_DISTANCE: f64 = 10.;
 pub(crate) const BULLET_RADIUS: f64 = 0.15;
 pub(crate) const BULLET_SPEED: f64 = 2.;
 
@@ -72,9 +86,11 @@ impl Agent {
             health: AGENT_MAX_HEALTH,
             goal: None,
             search_state: None,
+            avoidance_path: vec![],
             path: vec![],
             trace: VecDeque::new(),
             behavior_tree: Some(build_tree(behavior_source)),
+            blackboard: Blackboard::new(),
         }
     }
 
@@ -227,7 +243,7 @@ impl Agent {
         bullets: &mut Vec<Bullet>,
     ) {
         if let Some(mut tree) = self.behavior_tree.take() {
-            let mut ctx = Context::default();
+            let mut ctx = Context::new(std::mem::take(&mut self.blackboard));
             ctx.set("target", self.target);
             ctx.set("has_path", !self.path.is_empty());
             let mut process = |f: &dyn std::any::Any| {
@@ -262,13 +278,45 @@ impl Agent {
                     self.shoot_bullet(bullets, (Vector2::from(self.pos) + forward).into());
                 } else if let Some(goal) = f.downcast_ref::<AvoidanceCommand>() {
                     self.goal = Some(avoidance::State::new(goal.0[0], goal.0[1], self.orient));
-                    self.search(1, game, |_, _| (), false);
+                    return Some(Box::new(self.search(1, game, entities, |_, _| (), false))
+                        as Box<dyn std::any::Any>);
                 } else if f.downcast_ref::<GetPathNextNodeCommand>().is_some() {
                     if let Some(path) = self.path.last() {
                         return Some(Box::new(*path));
                     }
                 } else if f.downcast_ref::<GetStateCommand>().is_some() {
                     return Some(Box::new(self.to_state()));
+                } else if let Some(com) = f.downcast_ref::<IsTargetVisibleCommand>() {
+                    if let Some(target) = entities.get(com.0).and_then(|e| e.try_borrow().ok()) {
+                        let target_pos = target.get_pos();
+                        let target_triangle = find_triangle_at(
+                            &game.triangulation,
+                            &game.points,
+                            target_pos,
+                            &mut *game.triangle_profiler.borrow_mut(),
+                        );
+                        let self_triangle = find_triangle_at(
+                            &game.triangulation,
+                            &game.points,
+                            self.pos,
+                            &mut *game.triangle_profiler.borrow_mut(),
+                        );
+                        if target_triangle == self_triangle {
+                            return Some(Box::new(true));
+                        }
+                        return Some(Box::new(self.is_position_visible(
+                            target_pos,
+                            &game.triangulation,
+                            &game.points,
+                            &mut *game.triangle_profiler.borrow_mut(),
+                        )));
+                    }
+                } else if let Some(com) = f.downcast_ref::<FaceToTargetCommand>() {
+                    if let Some(target) = entities.get(com.0).and_then(|e| e.try_borrow().ok()) {
+                        let target_pos = target.get_pos();
+                        let res = self.orient_to(target_pos);
+                        return Some(Box::new(res));
+                    }
                 }
                 None
                 // if let Some(f) = f.downcast_ref::<dyn Fn(&Agent)>() {
@@ -278,6 +326,7 @@ impl Agent {
             let _res = tree.0.tick(&mut process, &mut ctx);
             // eprintln!("[{}] BehaviorTree ticked! {:?}", self.id, res);
             self.behavior_tree = Some(tree);
+            self.blackboard = ctx.take_blackboard();
         }
         // if let Some(target) = self.target.and_then(|target| {
         //     entities.iter().find(|a| {
@@ -308,7 +357,15 @@ impl Agent {
     }
 
     fn follow_path(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) -> bool {
-        if let Some(target) = self.path.last() {
+        if let Some(target) = self.avoidance_path.last() {
+            if DIST_RADIUS < Vector2::from(*target).distance(Vector2::from(self.pos)) {
+                let target_pos = *target;
+                self.move_to(game, target_pos, entities)
+            } else {
+                self.avoidance_path.pop();
+                true
+            }
+        } else if let Some(target) = self.path.last() {
             if 5. < Vector2::from(*target).distance(Vector2::from(self.pos)) {
                 let target_pos = *target;
                 self.move_to(game, target_pos, entities)
@@ -319,5 +376,43 @@ impl Agent {
         } else {
             false
         }
+    }
+
+    fn is_position_visible(
+        &self,
+        target: [f64; 2],
+        triangulation: &Triangulation,
+        points: &[Point],
+        profiler: &mut Profiler,
+    ) -> bool {
+        fn lerp(a: &[f64; 2], b: &[f64; 2], f: f64) -> [f64; 2] {
+            [a[0] * (1. - f) + b[0] * f, a[1] * (1. - f) + a[1] * f]
+        }
+        fn interpolate(
+            start: [f64; 2],
+            target: [f64; 2],
+            mut f: impl FnMut([f64; 2]) -> bool,
+        ) -> bool {
+            const INTERPOLATE_INTERVAL: f64 = AGENT_HALFLENGTH;
+            let distance = Vector2::from(start).distance(Vector2::from(target));
+            let interpolates = (distance.abs() / INTERPOLATE_INTERVAL).floor() as usize;
+            for i in 0..interpolates {
+                let point = lerp(&start, &target, i as f64 * INTERPOLATE_INTERVAL);
+                if f(point) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        let self_pos = self.pos;
+
+        let distance = Vector2::from(self_pos).distance(Vector2::from(target));
+        if AGENT_VISIBLE_DISTANCE < distance {
+            return false;
+        }
+        interpolate(self_pos, target, |point| {
+            find_triangle_at(triangulation, points, point, profiler).is_some()
+        })
     }
 }

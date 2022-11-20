@@ -307,6 +307,7 @@ impl Game {
         None
     }
 
+    /// Check collision with the environment
     pub(crate) fn check_hit(&self, pos: [f64; 2]) -> bool {
         let triangulation = &self.triangulation;
         let points = &self.points;

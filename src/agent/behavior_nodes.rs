@@ -36,6 +36,8 @@ pub(super) fn build_tree(source: &str) -> BehaviorTree {
     registry.register("Avoidance", boxify(|| AvoidanceNode));
     registry.register("PathNextNode", boxify(|| PathNextNode));
     registry.register("PredictForward", boxify(|| PredictForwardNode));
+    registry.register("IsTargetVisible", boxify(|| IsTargetVisibleNode));
+    registry.register("FaceToTarget", boxify(|| FaceToTargetNode));
 
     BehaviorTree(load(&parse_file(source).unwrap().1, &registry).unwrap())
 }
@@ -191,7 +193,7 @@ impl BehaviorNode for TimeoutNode {
     ) -> BehaviorResult {
         if let Some(ref mut remaining) = self.0 {
             if *remaining == 0 {
-                // println!("Timed out");
+                println!("Timed out");
                 self.0 = None;
                 return BehaviorResult::Success;
             } else {
@@ -203,7 +205,7 @@ impl BehaviorNode for TimeoutNode {
             .and_then(|s| s.parse::<usize>().ok())
             .or_else(|| ctx.get::<usize>("time").copied())
         {
-            // println!("Timer set! {}", input);
+            println!("Timer set! {}", input);
             self.0 = Some(input);
         }
         BehaviorResult::Fail
@@ -222,7 +224,11 @@ impl BehaviorNode for RandomizeNode {
             .get::<String>("max")
             .and_then(|s| s.parse::<usize>().ok())
         {
-            let between = Uniform::from(0..max);
+            let min = ctx
+                .get::<String>("min")
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(0);
+            let between = Uniform::from(min..max);
             let value = between.sample(&mut rand::thread_rng());
             // println!("Randomizing! {}/{}", value, max);
             ctx.set::<usize>("value", value);
@@ -242,10 +248,19 @@ impl BehaviorNode for AvoidanceNode {
         arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
+        println!("Avoidance node ticked!");
         if let Some(goal) = ctx.get::<[f64; 2]>("goal") {
-            arg(&AvoidanceCommand(*goal));
-            BehaviorResult::Success
+            let res = arg(&AvoidanceCommand(*goal))
+                .and_then(|res| res.downcast_ref::<bool>().copied())
+                .unwrap_or(false);
+            println!("Avoidance returns {res}");
+            if res {
+                BehaviorResult::Success
+            } else {
+                BehaviorResult::Fail
+            }
         } else {
+            println!("Avoidance could not get goal!");
             BehaviorResult::Fail
         }
     }
@@ -289,5 +304,48 @@ impl BehaviorNode for PredictForwardNode {
             }
         }
         BehaviorResult::Fail
+    }
+}
+
+pub(super) struct IsTargetVisibleCommand(pub usize);
+pub(crate) struct IsTargetVisibleNode;
+
+impl BehaviorNode for IsTargetVisibleNode {
+    fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
+        if let Some(target) = ctx.get::<Option<usize>>("target").copied().flatten() {
+            let res = arg(&IsTargetVisibleCommand(target))
+                .and_then(|res| res.downcast_ref::<bool>().copied())
+                .unwrap_or(false);
+            if res {
+                BehaviorResult::Success
+            } else {
+                BehaviorResult::Fail
+            }
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct FaceToTargetCommand(pub usize);
+
+pub(super) struct FaceToTargetNode;
+
+impl BehaviorNode for FaceToTargetNode {
+    fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
+        if let Some(target) = ctx.get::<Option<usize>>("target").copied().flatten() {
+            let val = arg(&FaceToTargetCommand(target))
+                .and_then(|val| val.downcast_ref::<bool>().copied())
+                .unwrap_or(false);
+
+            println!("FaceToTargetNode: {val}");
+            if val {
+                BehaviorResult::Success
+            } else {
+                BehaviorResult::Running
+            }
+        } else {
+            BehaviorResult::Fail
+        }
     }
 }
