@@ -1,6 +1,7 @@
 use cgmath::{InnerSpace, Vector2};
 use delaunator::{triangulate, Triangulation};
 use druid::{piet::kurbo::BezPath, Data, Point};
+use image::GenericImageView;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
@@ -132,27 +133,48 @@ impl Game {
         seed: u32,
         simplify_epsilon: f64,
     ) -> (Vec<bool>, Vec<BezPath>, Vec<delaunator::Point>) {
-        let bits = 6;
-        let mut xor128 = Xor128::new(seed);
-        let terms = gen_terms(&mut xor128, bits);
+        let (board, shape): (Vec<bool>, _) = if let Ok(img) = image::open("Rust_logo_middle.png") {
+            let dims = img.dimensions();
+            println!("dimensions {:?}, color: {:?}", dims, img.color());
 
-        let mut board = vec![false; xs * ys];
-        for (i, cell) in board.iter_mut().enumerate() {
-            let xi = i % xs;
-            let yi = i / ys;
-            let dx = (xi as isize - xs as isize / 2) as f64;
-            let dy = (yi as isize - ys as isize / 2) as f64;
-            let noise_val = perlin_noise_pixel(xi as f64, yi as f64, bits, &terms, 0.5);
-            *cell = 0. + (noise_val - 0.5 * (dx * dx + dy * dy).sqrt() / xs as f64) > -0.125;
-        }
+            let img2 = img.into_luma8();
+            let flat_samples = img2.as_flat_samples();
 
-        println!(
-            "true: {}, false: {}",
-            board.iter().filter(|c| **c).count(),
-            board.iter().filter(|c| !**c).count()
-        );
+            let im_slice = flat_samples.image_slice().unwrap();
+            let shape = (dims.0 as isize, dims.1 as isize);
+            (
+                if true {
+                    im_slice.into_iter().map(|b| *b == 0).collect()
+                } else {
+                    im_slice.into_iter().map(|b| *b != 0).collect()
+                },
+                shape,
+            )
+        } else {
+            let bits = 6;
+            let mut xor128 = Xor128::new(seed);
+            let terms = gen_terms(&mut xor128, bits);
 
-        let shape = (xs as isize, ys as isize);
+            let mut board = vec![false; xs * ys];
+            for (i, cell) in board.iter_mut().enumerate() {
+                let xi = i % xs;
+                let yi = i / ys;
+                let dx = (xi as isize - xs as isize / 2) as f64;
+                let dy = (yi as isize - ys as isize / 2) as f64;
+                let noise_val = perlin_noise_pixel(xi as f64, yi as f64, bits, &terms, 0.5);
+                *cell = 0. + (noise_val - 0.5 * (dx * dx + dy * dy).sqrt() / xs as f64) > -0.125;
+            }
+
+            println!(
+                "true: {}, false: {}",
+                board.iter().filter(|c| **c).count(),
+                board.iter().filter(|c| !**c).count()
+            );
+
+            let shape = (xs as isize, ys as isize);
+
+            (board, shape)
+        };
 
         let field = BoolField::new(&board, shape);
 
