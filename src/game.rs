@@ -404,7 +404,7 @@ impl Game {
                                         return None;
                                     }
                                 }
-                                _ => todo!(),
+                                // _ => todo!(),
                             }
                         }
                         let mut ret = bullet.clone();

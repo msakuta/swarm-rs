@@ -27,7 +27,7 @@ pub(crate) struct StateWithCost {
     cost: f64,
     speed: f64,
     id: usize,
-    steer: f64,
+    _steer: f64,
     from: Option<usize>,
     to: Vec<usize>,
 }
@@ -37,7 +37,7 @@ impl StateWithCost {
         Self {
             state,
             cost,
-            steer,
+            _steer: steer,
             speed,
             id: 0,
             from: None,
@@ -50,20 +50,20 @@ pub const DIST_RADIUS: f64 = 0.5;
 const DIST_THRESHOLD: f64 = DIST_RADIUS * DIST_RADIUS;
 
 /// Wrap the angle value in [0, 2pi)
-fn wrapAngle(x: f64) -> f64 {
+fn wrap_angle(x: f64) -> f64 {
     use std::f64::consts::PI;
     const TWOPI: f64 = PI * 2.;
     // ((x + PI) - ((x + PI) / TWOPI).floor() * TWOPI) - PI
     x - (x + PI).div_euclid(TWOPI)
 }
 
-fn compareState(s1: &State, s2: &State) -> bool {
-    let deltaAngle = wrapAngle(s1.heading - s2.heading);
+fn compare_state(s1: &State, s2: &State) -> bool {
+    let delta_angle = wrap_angle(s1.heading - s2.heading);
     // println!("compareState deltaAngle: {}", deltaAngle);
-    compareDistance(s1, s2, DIST_THRESHOLD) && deltaAngle.abs() < std::f64::consts::PI / 4.
+    compare_distance(s1, s2, DIST_THRESHOLD) && delta_angle.abs() < std::f64::consts::PI / 4.
 }
 
-fn compareDistance(s1: &State, s2: &State, threshold: f64) -> bool {
+fn compare_distance(s1: &State, s2: &State, threshold: f64) -> bool {
     let delta_x = s1.x - s2.x;
     let delta_y = s1.y - s2.y;
     delta_x * delta_x + delta_y * delta_y < threshold
@@ -73,8 +73,8 @@ const MAX_STEER: f64 = std::f64::consts::PI;
 
 #[derive(Debug)]
 pub struct SearchState {
-    searchTree: Vec<StateWithCost>,
-    treeSize: usize,
+    search_tree: Vec<StateWithCost>,
+    tree_size: usize,
     start: State,
     goal: State,
     found_path: Option<Vec<usize>>,
@@ -87,9 +87,9 @@ impl Agent {
         heading: f64,
         steer: f64,
         speed: f64,
-        deltaTime: f64,
+        delta_time: f64,
     ) -> State {
-        let [x, y] = [speed * deltaTime, 0.];
+        let [x, y] = [speed * delta_time, 0.];
         let heading = heading + steer.min(1.).max(-1.) * x * 0.2 * MAX_STEER;
         let dx = heading.cos() * x - heading.sin() * y + px;
         let dy = heading.sin() * x + heading.cos() * y + py;
@@ -115,7 +115,7 @@ impl Agent {
         game: &Game,
         entities: &[RefCell<Entity>],
         callback: impl Fn(&StateWithCost, &StateWithCost),
-        switchBack: bool,
+        switch_back: bool,
     ) -> bool {
         // println!(
         //     "search invoked: state: {} goal: {:?}",
@@ -125,7 +125,7 @@ impl Agent {
 
         // Restart search if the target has diverged
         if let Some((search_state, goal)) = self.search_state.as_ref().zip(self.goal) {
-            if !compareState(&search_state.goal, &goal) {
+            if !compare_state(&search_state.goal, &goal) {
                 self.search_state = None;
             }
         }
@@ -149,7 +149,7 @@ impl Agent {
             nodes: &[StateWithCost],
         ) -> Option<Vec<usize>> {
             if let Some(goal) = goal.as_ref() {
-                if !compareDistance(&nodes[start].state, &goal, (DIST_RADIUS * 2.).powf(2.)) {
+                if !compare_distance(&nodes[start].state, &goal, (DIST_RADIUS * 2.).powf(2.)) {
                     return None;
                 }
                 println!("Found path! {goal:?}");
@@ -167,7 +167,7 @@ impl Agent {
         struct SearchEnv<'a> {
             game: &'a Game,
             switch_back: bool,
-            expandStates: usize,
+            expand_states: usize,
             skipped_nodes: usize,
             tree_size: usize,
             entities: &'a [RefCell<Entity>],
@@ -175,8 +175,8 @@ impl Agent {
 
         let mut env = SearchEnv {
             game,
-            switch_back: switchBack,
-            expandStates: 1,
+            switch_back,
+            expand_states: 1,
             skipped_nodes: 0,
             tree_size: 0,
             entities,
@@ -203,17 +203,17 @@ impl Agent {
             //     nodes.len()
             // );
 
-            for _i in 0..env.expandStates {
+            for _i in 0..env.expand_states {
                 let State { x, y, heading } = nodes[start].state;
                 let steer = rand::random::<f64>() - 0.5;
-                let changeDirection = env.switch_back && rand::random::<f64>() < 0.2;
-                let nextDirection = if changeDirection {
+                let change_direction = env.switch_back && rand::random::<f64>() < 0.2;
+                let next_direction = if change_direction {
                     -direction
                 } else {
                     direction
                 };
                 let distance: f64 = DIST_RADIUS * 2. + rand::random::<f64>() * DIST_RADIUS * 3.;
-                let next = Agent::step_move(x, y, heading, steer, 1., nextDirection * distance);
+                let next = Agent::step_move(x, y, heading, steer, 1., next_direction * distance);
                 // println!("stepMove: {:?} -> {:?}", nodes[start], next);
                 const USE_STEER: bool = false;
                 let collision_checker = |pos: [f64; 2]| {
@@ -227,7 +227,7 @@ impl Agent {
                     interpolate_steer(
                         &nodes[start].state,
                         steer,
-                        nextDirection * distance,
+                        next_direction * distance,
                         DIST_RADIUS,
                         &collision_checker,
                     )
@@ -241,23 +241,23 @@ impl Agent {
                 // Changing direction costs
                 let mut node = StateWithCost::new(
                     next,
-                    nodes[start].cost + distance + if changeDirection { 1000. } else { 0. },
+                    nodes[start].cost + distance + if change_direction { 1000. } else { 0. },
                     steer,
                     1.,
                 );
-                let mut foundNode = None;
+                let mut found_node = None;
                 let mut skip = false;
                 for i in 0..nodes.len() {
-                    if compareState(&nodes[i].state, &node.state) {
-                        let mut existingNode = nodes[i].clone();
-                        if let Some(existing_from) = existingNode.from {
+                    if compare_state(&nodes[i].state, &node.state) {
+                        let mut existing_node = nodes[i].clone();
+                        if let Some(existing_from) = existing_node.from {
                             if i != start
                                 && existing_from != start
                                 && nodes[start].to.iter().any(|j| *j == i)
                             {
-                                if existingNode.cost > node.cost {
-                                    existingNode.cost = node.cost;
-                                    if let Some(&to_index) = existingNode
+                                if existing_node.cost > node.cost {
+                                    existing_node.cost = node.cost;
+                                    if let Some(&to_index) = existing_node
                                         .from
                                         .and_then(|from| nodes.get(from))
                                         .and_then(|from| from.to.iter().find(|j| **j == i))
@@ -267,11 +267,11 @@ impl Agent {
                                         return None;
                                         // throw "Shouldn't happen";
                                     }
-                                    existingNode.from = Some(start);
+                                    existing_node.from = Some(start);
                                     nodes[start].to.push(i);
-                                    existingNode.state = node.state;
+                                    existing_node.state = node.state;
                                 }
-                                foundNode = Some(i);
+                                found_node = Some(i);
                                 break;
                             } else {
                                 skip = true;
@@ -282,7 +282,7 @@ impl Agent {
                 if skip {
                     continue;
                 }
-                if foundNode.is_none() {
+                if found_node.is_none() {
                     node.from = Some(start);
                     let new_node_id = nodes.len();
                     nodes[start].to.push(new_node_id);
@@ -290,7 +290,7 @@ impl Agent {
                     nodes.push(node);
                     // callback(start, node);
                     if let Some(path) =
-                        search(this, new_node_id, depth - 1, nextDirection, env, nodes)
+                        search(this, new_node_id, depth - 1, next_direction, env, nodes)
                     {
                         return Some(path);
                     }
@@ -308,11 +308,11 @@ impl Agent {
         //     }
         // }
 
-        fn traceTree(
+        fn trace_tree(
             this: &Agent,
             root: usize,
             depth: usize,
-            expandDepth: usize,
+            expand_depth: usize,
             env: &mut SearchEnv,
             nodes: &mut Vec<StateWithCost>,
         ) -> Option<Vec<usize>> {
@@ -327,13 +327,13 @@ impl Agent {
             // }
             let root_node = &nodes[root];
             if env.switch_back || -0.1 < root_node.speed {
-                if let Some(path) = search(this, root, expandDepth, 1., env, nodes) {
+                if let Some(path) = search(this, root, expand_depth, 1., env, nodes) {
                     return Some(path);
                 }
             }
             let root_node = &nodes[root];
             if env.switch_back || root_node.speed < 0.1 {
-                if let Some(path) = search(this, root, expandDepth, -1., env, nodes) {
+                if let Some(path) = search(this, root, expand_depth, -1., env, nodes) {
                     return Some(path);
                 }
             }
@@ -342,7 +342,7 @@ impl Agent {
                 for _ in 0..2 {
                     let idx = Uniform::from(0..root_node_to.len()).sample(&mut rand::thread_rng());
                     if let Some(path) =
-                        traceTree(this, root_node_to[idx], depth - 1, expandDepth, env, nodes)
+                        trace_tree(this, root_node_to[idx], depth - 1, expand_depth, env, nodes)
                     {
                         return Some(path);
                     }
@@ -354,14 +354,14 @@ impl Agent {
 
         let searched_path =
             if let Some((mut search_state, goal)) = self.search_state.take().zip(self.goal) {
-                if compareDistance(&self.to_state(), &search_state.start, DIST_THRESHOLD * 100.)
-                    && compareDistance(&goal, &search_state.goal, DIST_THRESHOLD)
+                if compare_distance(&self.to_state(), &search_state.start, DIST_THRESHOLD * 100.)
+                    && compare_distance(&goal, &search_state.goal, DIST_THRESHOLD)
                 {
                     // for root in &search_state.searchTree {
                     //     enumTree(root, &mut nodes);
                     // }
 
-                    let nodes = &mut search_state.searchTree;
+                    let nodes = &mut search_state.search_tree;
 
                     // println!("Using existing tree with {} nodes", nodes.len());
 
@@ -371,9 +371,9 @@ impl Agent {
                         // Descending the tree is not a good way to sample a random node in a tree, since
                         // the chances are much higher on shallow nodes. We want to give chances uniformly
                         // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
-                        for i in 0..SEARCH_NODES {
+                        for _i in 0..SEARCH_NODES {
                             let idx = Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
-                            if let Some(path) = traceTree(self, idx, 1, 1, &mut env, nodes) {
+                            if let Some(path) = trace_tree(self, idx, 1, 1, &mut env, nodes) {
                                 self.avoidance_path = path
                                     .iter()
                                     .map(|i| {
@@ -390,7 +390,7 @@ impl Agent {
                     }
 
                     // let treeSize = env.tree_size;
-                    search_state.treeSize = 0;
+                    search_state.tree_size = 0;
                     search_state.goal = goal;
                     self.search_state = Some(search_state);
                     true
@@ -405,7 +405,7 @@ impl Agent {
             if let Some(goal) = self.goal {
                 println!("Rebuilding tree with {} nodes should be 0", nodes.len());
                 let mut roots = vec![];
-                if switchBack || true
+                if switch_back || true
                 /* || -0.1 < self.velocity.magnitude()*/
                 {
                     let root = StateWithCost::new(self.to_state(), 0., 0., 1.);
@@ -420,7 +420,7 @@ impl Agent {
                                 [node.x, node.y]
                             })
                             .collect();
-                        let tree_size = nodes.len();
+                        // let tree_size = nodes.len();
                         self.search_state = None;
                         //  Some(SearchState {
                         //     searchTree: nodes,
@@ -440,11 +440,11 @@ impl Agent {
                 //     roots.push(root);
                 // }
                 if !roots.is_empty() {
-                    let treeSize = roots.len();
+                    let tree_size = roots.len();
                     let search_state = SearchState {
-                        searchTree: roots,
+                        search_tree: roots,
                         start: self.to_state(),
-                        treeSize,
+                        tree_size,
                         goal: goal,
                         found_path: None,
                     };
@@ -466,7 +466,7 @@ impl Agent {
                 .enumerate()
                 .for_each(|(index, node)| node.id = index);
             let mut connections: Vec<(usize, usize)> = vec![];
-            for (index, node) in nodes.iter().enumerate() {
+            for node in nodes.iter() {
                 if let Some(from) = node.from {
                     callback(&nodes[from], node);
                     if !(node.id < nodes.len()) {
@@ -528,15 +528,15 @@ mod render {
         pub fn render(
             &self,
             ctx: &mut PaintCtx,
-            env: &Env,
+            _env: &Env,
             view_transform: &Affine,
             brush: &Color,
         ) {
             let mut bez_path = BezPath::new();
-            for state in &self.searchTree {
+            for state in &self.search_tree {
                 let point = Point::new(state.state.x, state.state.y);
                 if let Some(from) = state.from {
-                    let from_state = self.searchTree[from].state;
+                    let from_state = self.search_tree[from].state;
                     bez_path.move_to(Point::new(from_state.x, from_state.y));
                     bez_path.line_to(point);
                 }
