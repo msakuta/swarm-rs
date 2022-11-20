@@ -6,8 +6,10 @@ tree main = Sequence {
     Fallback {
         Sequence {
             IsTargetVisible (target <- target)
+            Print (input <- "IsTargetVisible")
             FaceToTarget (target <- target)
             Shoot
+            Print (input <- "Shot at visible")
         }
         FollowPathAndAvoid
     }
@@ -33,9 +35,10 @@ tree FollowPathAndAvoid = Sequence {
                     Randomize (min <- "20", max <- "100", value -> timeoutValue)
                     ReactiveFallback {
                         Avoidance (goal <- pathNext)
-                        ForceSuccess {
+                        ForceFailure {
                             Timeout (time <- timeoutValue)
                         }
+                        ClearAvoidance
                     }
                 }
             }

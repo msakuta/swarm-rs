@@ -7,9 +7,9 @@ pub(crate) use self::avoidance::{SearchState, State};
 use self::{
     avoidance::DIST_RADIUS,
     behavior_nodes::{
-        build_tree, AvoidanceCommand, BehaviorTree, FaceToTargetCommand, FindEnemyCommand,
-        FindPathCommand, FollowPathCommand, GetPathNextNodeCommand, GetStateCommand,
-        IsTargetVisibleCommand, MoveCommand, ShootCommand,
+        build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, FaceToTargetCommand,
+        FindEnemyCommand, FindPathCommand, FollowPathCommand, GetPathNextNodeCommand,
+        GetStateCommand, IsTargetVisibleCommand, MoveCommand, ShootCommand,
     },
 };
 use crate::{
@@ -20,7 +20,7 @@ use crate::{
 };
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
-use behavior_tree_lite::Blackboard;
+use behavior_tree_lite::{error::LoadError, Blackboard};
 use delaunator::{Point, Triangulation};
 use std::{
     cell::RefCell,
@@ -72,14 +72,15 @@ impl Agent {
         orient: f64,
         team: usize,
         behavior_source: &str,
-    ) -> Self {
+    ) -> Result<Self, LoadError> {
         let id = *id_gen;
         *id_gen += 1;
 
         let (tree, build_time) = measure_time(|| build_tree(behavior_source));
+        let tree = tree?;
         println!("tree build: {}", build_time);
 
-        Self {
+        Ok(Self {
             target: None,
             active: true,
             unreachables: HashSet::new(),
@@ -96,7 +97,7 @@ impl Agent {
             trace: VecDeque::new(),
             behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
-        }
+        })
     }
 
     pub(crate) fn get_health_rate(&self) -> f64 {
@@ -285,6 +286,8 @@ impl Agent {
                     self.goal = Some(avoidance::State::new(goal.0[0], goal.0[1], self.orient));
                     return Some(Box::new(self.search(1, game, entities, |_, _| (), false))
                         as Box<dyn std::any::Any>);
+                } else if f.downcast_ref::<ClearAvoidanceCommand>().is_some() {
+                    self.search_state = None;
                 } else if f.downcast_ref::<GetPathNextNodeCommand>().is_some() {
                     if let Some(path) = self.path.last() {
                         return Some(Box::new(*path));

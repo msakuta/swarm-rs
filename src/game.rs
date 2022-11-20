@@ -294,13 +294,12 @@ impl Game {
                 &mut *self.triangle_profiler.borrow_mut(),
             ) {
                 if Some(triangle_labels[tri]) == largest_label {
-                    return Some(Entity::Agent(Agent::new(
-                        id_gen,
-                        pos_candidate,
-                        orient_candidate,
-                        team,
-                        &self.source,
-                    )));
+                    let agent =
+                        Agent::new(id_gen, pos_candidate, orient_candidate, team, &self.source);
+                    match agent {
+                        Ok(agent) => return Some(Entity::Agent(agent)),
+                        Err(e) => println!("Failed to create an Agent! {e}"),
+                    }
                 }
             }
         }
@@ -403,8 +402,7 @@ impl Game {
                                         println!("Agent {} is being killed", agent.get_id());
                                         return None;
                                     }
-                                }
-                                // _ => todo!(),
+                                } // _ => todo!(),
                             }
                         }
                         let mut ret = bullet.clone();

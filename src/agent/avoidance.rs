@@ -218,7 +218,6 @@ impl Agent {
                 const USE_STEER: bool = false;
                 let collision_checker = |pos: [f64; 2]| {
                     if Agent::collision_check(Some(this.id), pos, env.entities) {
-                        println!("Entity collided!");
                         return false;
                     }
                     !env.game.check_hit(pos)
@@ -381,7 +380,7 @@ impl Agent {
                                         [node.x, node.y]
                                     })
                                     .collect();
-                                println!("Materialized found path: {:?}", self.path);
+                                // println!("Materialized found path: {:?}", self.path);
                                 search_state.found_path = Some(path);
                                 self.search_state = None; //Some(search_state);
                                 return true;
@@ -403,14 +402,14 @@ impl Agent {
 
         if !searched_path {
             if let Some(goal) = self.goal {
-                println!("Rebuilding tree with {} nodes should be 0", nodes.len());
+                // println!("Rebuilding tree with {} nodes should be 0", nodes.len());
                 let mut roots = vec![];
                 if switch_back || true
                 /* || -0.1 < self.velocity.magnitude()*/
                 {
                     let root = StateWithCost::new(self.to_state(), 0., 0., 1.);
                     let root_id = nodes.len();
-                    println!("Pushing the first node: {:?}", root);
+                    // println!("Pushing the first node: {:?}", root);
                     nodes.push(root.clone());
                     if let Some(path) = search(self, root_id, depth, 1., &mut env, &mut nodes) {
                         self.avoidance_path = path
@@ -456,7 +455,7 @@ impl Agent {
                     //         goal: this.goal,
                     //     };
                     // }
-                    println!("Search state: {search_state:?}");
+                    // println!("Search state: {search_state:?}");
                     self.search_state = Some(search_state);
                 }
             }

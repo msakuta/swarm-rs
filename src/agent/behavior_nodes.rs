@@ -1,6 +1,7 @@
 use super::State;
 use behavior_tree_lite::{
-    load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context, Registry,
+    error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context,
+    Registry,
 };
 use cgmath::{Matrix2, Rad, Vector2};
 use rand::{distributions::Uniform, prelude::Distribution};
@@ -21,9 +22,10 @@ where
     Box::new(move || Box::new(cons()))
 }
 
-pub(super) fn build_tree(source: &str) -> BehaviorTree {
+pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     let mut registry = Registry::default();
     registry.register("SetBool", boxify(|| SetBool));
+    registry.register("Print", boxify(|| PrintNode));
     registry.register("HasTarget", boxify(|| HasTarget));
     registry.register("FindEnemy", boxify(|| FindEnemy));
     registry.register("HasPath", boxify(|| HasPath));
@@ -34,12 +36,16 @@ pub(super) fn build_tree(source: &str) -> BehaviorTree {
     registry.register("Timeout", boxify(|| TimeoutNode(None)));
     registry.register("Randomize", boxify(|| RandomizeNode));
     registry.register("Avoidance", boxify(|| AvoidanceNode));
+    registry.register("ClearAvoidance", boxify(|| ClearAvoidanceNode));
     registry.register("PathNextNode", boxify(|| PathNextNode));
     registry.register("PredictForward", boxify(|| PredictForwardNode));
     registry.register("IsTargetVisible", boxify(|| IsTargetVisibleNode));
     registry.register("FaceToTarget", boxify(|| FaceToTargetNode));
 
-    BehaviorTree(load(&parse_file(source).unwrap().1, &registry).unwrap())
+    Ok(BehaviorTree(load(
+        &parse_file(source).unwrap().1,
+        &registry,
+    )?))
 }
 
 pub(super) struct SetBool;
@@ -53,6 +59,23 @@ impl BehaviorNode for SetBool {
         let result = ctx.get::<Option<usize>>("direction");
         // println!("HasTarge node {result:?}");
         if result.map(|a| a.is_some()).unwrap_or(false) {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct PrintNode;
+
+impl BehaviorNode for PrintNode {
+    fn tick(
+        &mut self,
+        _arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if let Some(result) = ctx.get::<String>("input") {
+            println!("PrintNode: {result:?}");
             BehaviorResult::Success
         } else {
             BehaviorResult::Fail
@@ -193,7 +216,7 @@ impl BehaviorNode for TimeoutNode {
     ) -> BehaviorResult {
         if let Some(ref mut remaining) = self.0 {
             if *remaining == 0 {
-                println!("Timed out");
+                // println!("Timed out");
                 self.0 = None;
                 return BehaviorResult::Success;
             } else {
@@ -205,7 +228,7 @@ impl BehaviorNode for TimeoutNode {
             .and_then(|s| s.parse::<usize>().ok())
             .or_else(|| ctx.get::<usize>("time").copied())
         {
-            println!("Timer set! {}", input);
+            // println!("Timer set! {}", input);
             self.0 = Some(input);
         }
         BehaviorResult::Fail
@@ -248,12 +271,10 @@ impl BehaviorNode for AvoidanceNode {
         arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        println!("Avoidance node ticked!");
         if let Some(goal) = ctx.get::<[f64; 2]>("goal") {
             let res = arg(&AvoidanceCommand(*goal))
                 .and_then(|res| res.downcast_ref::<bool>().copied())
                 .unwrap_or(false);
-            println!("Avoidance returns {res}");
             if res {
                 BehaviorResult::Success
             } else {
@@ -261,6 +282,30 @@ impl BehaviorNode for AvoidanceNode {
             }
         } else {
             println!("Avoidance could not get goal!");
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct ClearAvoidanceCommand;
+
+/// Clear avoidance path search state
+pub(super) struct ClearAvoidanceNode;
+
+impl BehaviorNode for ClearAvoidanceNode {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        println!("ClearAvoidance node ticked!");
+        let res = arg(&ClearAvoidanceCommand)
+            .and_then(|res| res.downcast_ref::<bool>().copied())
+            .unwrap_or(false);
+        // println!("ClearAvoidance returns {res}");
+        if res {
+            BehaviorResult::Success
+        } else {
             BehaviorResult::Fail
         }
     }
@@ -338,7 +383,6 @@ impl BehaviorNode for FaceToTargetNode {
                 .and_then(|val| val.downcast_ref::<bool>().copied())
                 .unwrap_or(false);
 
-            println!("FaceToTargetNode: {val}");
             if val {
                 BehaviorResult::Success
             } else {
