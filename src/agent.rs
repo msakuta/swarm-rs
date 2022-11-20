@@ -15,6 +15,7 @@ use self::{
 use crate::{
     entity::Entity,
     game::{Game, Profiler},
+    measure_time,
     triangle_utils::find_triangle_at,
 };
 use ::behavior_tree_lite::Context;
@@ -75,9 +76,8 @@ impl Agent {
         let id = *id_gen;
         *id_gen += 1;
 
-        let start = std::time::Instant::now();
-        let tree = build_tree(behavior_source);
-        println!("tree build: {}", start.elapsed().as_secs_f64());
+        let (tree, build_time) = measure_time(|| build_tree(behavior_source));
+        println!("tree build: {}", build_time);
 
         Self {
             target: None,
