@@ -1,7 +1,7 @@
 use super::State;
 use behavior_tree_lite::{
     error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context,
-    Registry,
+    Lazy, Registry, Symbol,
 };
 use cgmath::{Matrix2, Rad, Vector2};
 use rand::{distributions::Uniform, prelude::Distribution};
@@ -30,7 +30,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("FindEnemy", boxify(|| FindEnemy));
     registry.register("HasPath", boxify(|| HasPath));
     registry.register("FindPath", boxify(|| FindPath));
-    registry.register("Move", boxify(|| Move));
+    registry.register("Move", boxify(|| MoveNode));
     registry.register("FollowPath", boxify(|| FollowPath));
     registry.register("Shoot", boxify(|| ShootNode));
     registry.register("Timeout", boxify(|| TimeoutNode(None)));
@@ -45,6 +45,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     Ok(BehaviorTree(load(
         &parse_file(source).unwrap().1,
         &registry,
+        true,
     )?))
 }
 
@@ -69,6 +70,10 @@ impl BehaviorNode for SetBool {
 pub(super) struct PrintNode;
 
 impl BehaviorNode for PrintNode {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec!["input".into()]
+    }
+
     fn tick(
         &mut self,
         _arg: BehaviorCallback,
@@ -85,13 +90,19 @@ impl BehaviorNode for PrintNode {
 
 pub(super) struct HasTarget;
 
+static TARGET: Lazy<Symbol> = Lazy::new(|| "target".into());
+
 impl BehaviorNode for HasTarget {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec![*TARGET]
+    }
+
     fn tick(
         &mut self,
         _arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        let result = ctx.get::<Option<usize>>("target");
+        let result = ctx.get::<Option<usize>>(*TARGET);
         // println!("HasTarge node {result:?}");
         if result.map(|a| a.is_some()).unwrap_or(false) {
             BehaviorResult::Success
@@ -120,6 +131,10 @@ impl BehaviorNode for FindEnemy {
 pub(super) struct HasPath;
 
 impl<'a> BehaviorNode for HasPath {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec!["has_path".into()]
+    }
+
     fn tick(
         &mut self,
         _arg: BehaviorCallback,
@@ -176,9 +191,13 @@ impl BehaviorNode for FollowPath {
 
 pub(super) struct MoveCommand(pub String);
 
-pub(super) struct Move;
+pub(super) struct MoveNode;
 
-impl BehaviorNode for Move {
+impl BehaviorNode for MoveNode {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec!["direction".into()]
+    }
+
     fn tick(
         &mut self,
         arg: BehaviorCallback,
@@ -209,6 +228,10 @@ impl BehaviorNode for ShootNode {
 struct TimeoutNode(Option<usize>);
 
 impl BehaviorNode for TimeoutNode {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec!["time".into()]
+    }
+
     fn tick(
         &mut self,
         _arg: BehaviorCallback,
@@ -238,6 +261,10 @@ impl BehaviorNode for TimeoutNode {
 struct RandomizeNode;
 
 impl BehaviorNode for RandomizeNode {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec!["min".into(), "max".into(), "value".into()]
+    }
+
     fn tick(
         &mut self,
         _arg: BehaviorCallback,
@@ -266,6 +293,10 @@ pub(super) struct AvoidanceCommand(pub [f64; 2]);
 pub(super) struct AvoidanceNode;
 
 impl BehaviorNode for AvoidanceNode {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec!["goal".into()]
+    }
+
     fn tick(
         &mut self,
         arg: BehaviorCallback,
@@ -316,6 +347,10 @@ pub(super) struct GetPathNextNodeCommand;
 pub(super) struct PathNextNode;
 
 impl BehaviorNode for PathNextNode {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec!["output".into()]
+    }
+
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
         if let Some(value) =
             arg(&GetPathNextNodeCommand).and_then(|val| val.downcast_ref::<[f64; 2]>().copied())
@@ -333,6 +368,10 @@ pub(super) struct GetStateCommand;
 pub(super) struct PredictForwardNode;
 
 impl BehaviorNode for PredictForwardNode {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec!["distance".into(), "output".into()]
+    }
+
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
         if let Some(distance) = ctx.get::<f64>("distance").copied().or_else(|| {
             ctx.get::<String>("distance")
@@ -356,8 +395,12 @@ pub(super) struct IsTargetVisibleCommand(pub usize);
 pub(crate) struct IsTargetVisibleNode;
 
 impl BehaviorNode for IsTargetVisibleNode {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec![*TARGET]
+    }
+
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
-        if let Some(target) = ctx.get::<Option<usize>>("target").copied().flatten() {
+        if let Some(target) = ctx.get::<Option<usize>>(*TARGET).copied().flatten() {
             let res = arg(&IsTargetVisibleCommand(target))
                 .and_then(|res| res.downcast_ref::<bool>().copied())
                 .unwrap_or(false);
@@ -377,8 +420,12 @@ pub(super) struct FaceToTargetCommand(pub usize);
 pub(super) struct FaceToTargetNode;
 
 impl BehaviorNode for FaceToTargetNode {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec![*TARGET]
+    }
+
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
-        if let Some(target) = ctx.get::<Option<usize>>("target").copied().flatten() {
+        if let Some(target) = ctx.get::<Option<usize>>(*TARGET).copied().flatten() {
             let val = arg(&FaceToTargetCommand(target))
                 .and_then(|val| val.downcast_ref::<bool>().copied())
                 .unwrap_or(false);
