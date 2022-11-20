@@ -2,7 +2,10 @@ use std::cell::RefCell;
 
 use rand::{distributions::Uniform, prelude::Distribution};
 
-use super::{interpolation::interpolate_steer, Agent};
+use super::{
+    interpolation::{interpolate, interpolate_steer},
+    Agent,
+};
 use crate::{entity::Entity, game::Game};
 
 #[derive(Clone, Copy, Debug)]
@@ -212,20 +215,25 @@ impl Agent {
                 let distance: f64 = DIST_RADIUS * 2. + rand::random::<f64>() * DIST_RADIUS * 3.;
                 let next = Agent::step_move(x, y, heading, steer, 1., nextDirection * distance);
                 // println!("stepMove: {:?} -> {:?}", nodes[start], next);
-                let hit = interpolate_steer(
-                    &nodes[start].state,
-                    steer,
-                    nextDirection * distance,
-                    DIST_RADIUS,
-                    |state| {
-                        let pos = [state.x, state.y];
-                        if Agent::collision_check(Some(this.id), pos, env.entities) {
-                            println!("Entity collided!");
-                            return false;
-                        }
-                        !env.game.check_hit(pos)
-                    },
-                );
+                const USE_STEER: bool = false;
+                let collision_checker = |pos: [f64; 2]| {
+                    if Agent::collision_check(Some(this.id), pos, env.entities) {
+                        println!("Entity collided!");
+                        return false;
+                    }
+                    !env.game.check_hit(pos)
+                };
+                let hit = if USE_STEER {
+                    interpolate_steer(
+                        &nodes[start].state,
+                        steer,
+                        nextDirection * distance,
+                        DIST_RADIUS,
+                        &collision_checker,
+                    )
+                } else {
+                    interpolate(nodes[start].state, next, DIST_RADIUS, &collision_checker)
+                };
                 if hit {
                     // println!("Search hit something!, {nextDirection} * {distance}");
                     continue;

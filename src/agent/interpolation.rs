@@ -6,17 +6,35 @@ fn lerp(a: &[f64; 2], b: &[f64; 2], f: f64) -> [f64; 2] {
     [a[0] * (1. - f) + b[0] * f, a[1] * (1. - f) + a[1] * f]
 }
 
+pub(crate) trait AsPoint {
+    fn as_point(&self) -> [f64; 2];
+}
+
+impl AsPoint for [f64; 2] {
+    fn as_point(&self) -> [f64; 2] {
+        *self
+    }
+}
+
+impl AsPoint for State {
+    fn as_point(&self) -> [f64; 2] {
+        [self.x, self.y]
+    }
+}
+
 /// Collision checking with linear interpolation. A closure to check the collision must be provided.
-pub(crate) fn interpolate(
-    start: [f64; 2],
-    target: [f64; 2],
+pub(crate) fn interpolate<P: AsPoint>(
+    start: P,
+    target: P,
     interval: f64,
     mut f: impl FnMut([f64; 2]) -> bool,
 ) -> bool {
+    let start = start.as_point();
+    let target = target.as_point();
     let distance = Vector2::from(start).distance(Vector2::from(target));
     let interpolates = (distance.abs() / interval).floor() as usize;
     for i in 0..interpolates {
-        let point = lerp(&start, &target, i as f64 * interval);
+        let point = lerp(&start.as_point(), &target, i as f64 * interval);
         if f(point) {
             return true;
         }
@@ -30,7 +48,7 @@ pub(crate) fn interpolate_steer(
     steer: f64,
     distance: f64,
     interval: f64,
-    f: impl Fn(State) -> bool,
+    f: impl Fn([f64; 2]) -> bool,
 ) -> bool {
     let interpolates = (distance.abs() / interval).floor() as usize;
     for i in 0..interpolates {
@@ -43,7 +61,7 @@ pub(crate) fn interpolate_steer(
             1.,
             sign * i as f64 * interval,
         );
-        if f(next) {
+        if f([next.x, next.y]) {
             return true;
         }
     }
