@@ -1,0 +1,45 @@
+tree main = Sequence {
+    Fallback {
+        HasTarget (target <- target)
+        FindEnemy
+    }
+    Fallback {
+        Sequence {
+            IsTargetVisible (target <- target)
+            FaceToTarget (target <- target)
+            Shoot
+        }
+        FollowPathAndAvoid
+    }
+}
+
+tree FollowPathAndAvoid = Sequence {
+    Fallback {
+        HasPath (has_path <- has_path)
+        FindPath
+    }
+    Sequence {
+        HasPath (has_path <- has_path)
+        Fallback {
+            FollowPath
+            Sequence {
+                ReactiveSequence {
+                    Move (direction <- "backward")
+                    Randomize (max <- "20", value -> timeoutValue)
+                    Timeout (time <- timeoutValue)
+                }
+                Sequence {
+                    PathNextNode (output -> pathNext)
+                    Randomize (min <- "20", max <- "100", value -> timeoutValue)
+                    ReactiveFallback {
+                        Avoidance (goal <- pathNext)
+                        ForceSuccess {
+                            Timeout (time <- timeoutValue)
+                        }
+                    }
+                }
+            }
+        }
+        Shoot
+    }
+}

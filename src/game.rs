@@ -117,7 +117,7 @@ impl Game {
             entities: Rc::new(RefCell::new(vec![])),
             bullets: Rc::new(vec![]),
             paused: false,
-            interval: 200.,
+            interval: 32.,
             rng: Rc::new(Xor128::new(9318245)),
             id_gen,
             temp_ents: Rc::new(RefCell::new(vec![])),

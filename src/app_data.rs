@@ -48,61 +48,7 @@ impl AppData {
         let seed = 123513;
         let scale = WINDOW_HEIGHT / game.ys as f64;
 
-        let source_buffer = Rc::new(
-            // r#"tree main = Sequence {
-            //     PredictForward (output -> pos, distance <- "10")
-            //     Avoidance (goal <- pos)
-            //     FollowPath
-            // }"#
-            // .to_string(),
-            r#"tree main = Sequence {
-    Fallback {
-        HasTarget (target <- target)
-        FindEnemy
-    }
-    Fallback {
-        Sequence {
-            IsTargetVisible (target <- target)
-            FaceToTarget (target <- target)
-            Shoot
-        }
-        FollowPathAndAvoid
-    }
-}
-
-tree FollowPathAndAvoid = Sequence {
-    Fallback {
-        HasPath (has_path <- has_path)
-        FindPath
-    }
-    Sequence {
-        HasPath (has_path <- has_path)
-        Fallback {
-            FollowPath
-            Sequence {
-                ReactiveSequence {
-                    Move (direction <- "backward")
-                    Randomize (max <- "20", value -> timeoutValue)
-                    Timeout (time <- timeoutValue)
-                }
-                Sequence {
-                    PathNextNode (output -> pathNext)
-                    Randomize (min <- "20", max <- "100", value -> timeoutValue)
-                    ReactiveFallback {
-                        Avoidance (goal <- pathNext)
-                        ForceSuccess {
-                            Timeout (time <- timeoutValue)
-                        }
-                    }
-                }
-            }
-        }
-        Shoot
-    }
-}
-"#
-            .to_string(),
-        );
+        let source_buffer = Rc::new(include_str!("../behavior_tree.txt").to_string());
 
         game.source = source_buffer.clone();
 

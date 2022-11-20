@@ -147,25 +147,25 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
         Flex::column()
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .with_child(
-                Button::new("Apply").on_click(|_, app_data: &mut AppData, _| {
-                    // Check the syntax before applying
-                    match parse_file(app_data.source_buffer.as_ref()) {
-                        Ok(("", _)) => {
-                            app_data.game.source = app_data.source_buffer.clone();
-                            app_data.message = format!(
-                                "Behavior tree applied! {}",
-                                Rc::strong_count(&app_data.source_buffer)
-                            );
-                        }
-                        Ok((rest, _)) => {
-                            app_data.message =
-                                format!("Behavior tree source ended unexpectedly at {:?}", rest);
-                        }
-                        Err(e) => {
-                            app_data.message = format!("Behavior tree failed to parse: {}", e);
-                        }
-                    }
-                }),
+                Flex::row()
+                    .with_child(
+                        Button::new("Apply").on_click(|_, app_data: &mut AppData, _| {
+                            try_load_behavior_tree(app_data, app_data.source_buffer.clone());
+                        }),
+                    )
+                    .with_child(Button::new("Reload from file").on_click(
+                        |_, app_data: &mut AppData, _| match std::fs::read_to_string(
+                            "behavior_tree.txt",
+                        ) {
+                            Ok(s) => {
+                                let s = Rc::new(s);
+                                if try_load_behavior_tree(app_data, s.clone()) {
+                                    app_data.source_buffer = s;
+                                }
+                            }
+                            Err(e) => app_data.message = format!("Read file error! {e:?}"),
+                        },
+                    )),
             )
             // For some reason, scroll box doesn't seem to allow scrolling when the text box is longer than the window height.
             .with_child(
@@ -211,4 +211,26 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 .expand_height(),
             0.,
         )
+}
+
+fn try_load_behavior_tree(app_data: &mut AppData, src: Rc<String>) -> bool {
+    // Check the syntax before applying
+    match parse_file(&src) {
+        Ok(("", _)) => {
+            app_data.game.source = src.clone();
+            app_data.message = format!(
+                "Behavior tree applied! {}",
+                Rc::strong_count(&app_data.source_buffer)
+            );
+            true
+        }
+        Ok((rest, _)) => {
+            app_data.message = format!("Behavior tree source ended unexpectedly at {:?}", rest);
+            false
+        }
+        Err(e) => {
+            app_data.message = format!("Behavior tree failed to parse: {}", e);
+            false
+        }
+    }
 }
