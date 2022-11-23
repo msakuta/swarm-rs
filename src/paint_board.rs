@@ -233,8 +233,9 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
     const AGENT_COLORS: [Color; 2] = [Color::rgb8(0, 255, 127), Color::rgb8(255, 0, 63)];
 
     let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
+    let entities = data.game.entities.borrow();
 
-    for agent in data.game.entities.borrow().iter() {
+    for agent in entities.iter() {
         let agent = agent.borrow();
         let pos = to_point(agent.get_pos());
         let circle = Circle::new(*view_transform * pos, 5.);
@@ -287,21 +288,32 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
         }
 
         if data.path_visible {
-            let avoidance_drawn = if let Some((first, rest)) = agent
-                .get_avoidance_path()
-                .and_then(|path| path.split_first())
-            {
+            let avoidance_drawn = (|| {
+                let Some(path) = agent
+                    .get_avoidance_path() else {
+                        return None;
+                    };
+                if path.len() == 0 {
+                    return None;
+                }
                 let mut bez_path = BezPath::new();
-                bez_path.move_to(to_point(*first));
+                let (rest, last) = if let Some(goal) = agent.get_goal() {
+                    let goal = [goal.x, goal.y];
+                    bez_path.move_to(to_point(goal));
+                    (path, path.last().copied().or(Some(goal)))
+                } else if let Some((first, rest)) = path.split_first() {
+                    bez_path.move_to(to_point(*first));
+                    (rest, rest.last().copied().or_else(|| Some(*first)))
+                } else {
+                    return None;
+                };
                 for point in rest {
                     bez_path.line_to(to_point(*point));
                 }
                 bez_path.line_to(to_point(agent.get_pos()));
                 ctx.stroke(*view_transform * bez_path, brush, 1.);
-                rest.last().copied().or_else(|| Some(*first))
-            } else {
-                None
-            };
+                last
+            })();
             if let Some((first, rest)) = agent.get_path().and_then(|path| path.split_first()) {
                 let mut bez_path = BezPath::new();
                 if let Some(first) = avoidance_drawn {
