@@ -288,13 +288,13 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
         }
 
         if data.path_visible {
-            let avoidance_drawn = (|| {
+            let avoidance_drawn = 'breaky: {
                 let Some(path) = agent
                     .get_avoidance_path() else {
-                        return None;
+                        break 'breaky None;
                     };
                 if path.len() == 0 {
-                    return None;
+                    break 'breaky None;
                 }
                 let mut bez_path = BezPath::new();
                 let (rest, last) = if let Some(goal) = agent.get_goal() {
@@ -305,7 +305,7 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                     bez_path.move_to(to_point(*first));
                     (rest, rest.last().copied().or_else(|| Some(*first)))
                 } else {
-                    return None;
+                    break 'breaky None;
                 };
                 for point in rest {
                     bez_path.line_to(to_point(*point));
@@ -313,7 +313,7 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                 bez_path.line_to(to_point(agent.get_pos()));
                 ctx.stroke(*view_transform * bez_path, brush, 1.);
                 last
-            })();
+            };
             if let Some((first, rest)) = agent.get_path().and_then(|path| path.split_first()) {
                 let mut bez_path = BezPath::new();
                 if let Some(first) = avoidance_drawn {

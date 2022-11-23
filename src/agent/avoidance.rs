@@ -247,35 +247,35 @@ impl Agent {
                 let mut found_node = None;
                 let mut skip = false;
                 for i in 0..nodes.len() {
-                    if compare_state(&nodes[i].state, &node.state) {
-                        let mut existing_node = nodes[i].clone();
-                        if let Some(existing_from) = existing_node.from {
-                            if i != start
-                                && existing_from != start
-                                && nodes[start].to.iter().any(|j| *j == i)
-                            {
-                                if existing_node.cost > node.cost {
-                                    existing_node.cost = node.cost;
-                                    if let Some(&to_index) = existing_node
-                                        .from
-                                        .and_then(|from| nodes.get(from))
-                                        .and_then(|from| from.to.iter().find(|j| **j == i))
-                                    {
-                                        nodes[existing_from].to.remove(to_index);
-                                    } else {
-                                        return None;
-                                        // throw "Shouldn't happen";
-                                    }
-                                    existing_node.from = Some(start);
-                                    nodes[start].to.push(i);
-                                    existing_node.state = node.state;
-                                }
-                                found_node = Some(i);
-                                break;
-                            } else {
-                                skip = true;
-                            }
+                    if !compare_state(&nodes[i].state, &node.state) {
+                        continue;
+                    }
+                    let existing_node = &nodes[i];
+                    // let existing_from = existing_node.from;
+                    let existing_cost = existing_node.cost;
+                    let Some(existing_from) = existing_node.from else {
+                        continue;
+                    };
+                    if i != start
+                        && existing_from != start
+                        && !nodes[start].to.iter().any(|j| *j == i)
+                    {
+                        let Some((to_index, _)) = nodes.get(existing_from)
+                        .and_then(|from| from.to.iter().copied().enumerate().find(|(_, j)| *j == i)) else{
+                            continue
+                        };
+                        // let existing_node = &mut nodes[i];
+                        if existing_cost > node.cost {
+                            nodes[i].cost = node.cost;
+                            nodes[existing_from].to.remove(to_index);
+                            nodes[i].from = Some(start);
+                            nodes[start].to.push(i);
+                            nodes[i].state = node.state;
                         }
+                        found_node = Some(i);
+                        break;
+                    } else {
+                        skip = true;
                     }
                 }
                 if skip {
