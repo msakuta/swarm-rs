@@ -81,7 +81,8 @@ impl Game {
         let xs = 128;
         let ys = 128;
 
-        let (board, simplified_border, points) = Self::create_board((xs, ys), seed, simplify);
+        let (board, simplified_border, points) =
+            Self::create_perlin_board((xs, ys), seed, simplify);
 
         let triangulation = triangulate(&points);
 
@@ -117,7 +118,7 @@ impl Game {
             entities: Rc::new(RefCell::new(vec![])),
             bullets: Rc::new(vec![]),
             paused: false,
-            interval: 32.,
+            interval: 200.,
             rng: Rc::new(Xor128::new(9318245)),
             id_gen,
             temp_ents: Rc::new(RefCell::new(vec![])),
@@ -127,8 +128,8 @@ impl Game {
         }
     }
 
-    pub fn create_board(
-        (xs, ys): (usize, usize),
+    pub fn create_perlin_board(
+        shape: (usize, usize),
         seed: u32,
         simplify_epsilon: f64,
     ) -> (Vec<bool>, Vec<BezPath>, Vec<delaunator::Point>) {
@@ -136,14 +137,37 @@ impl Game {
         let mut xor128 = Xor128::new(seed);
         let terms = gen_terms(&mut xor128, bits);
 
+        Self::create_board_gen(shape, simplify_epsilon, |xi, yi| {
+            let dx = (xi as isize - shape.0 as isize / 2) as f64;
+            let dy = (yi as isize - shape.1 as isize / 2) as f64;
+            let noise_val = perlin_noise_pixel(xi as f64, yi as f64, bits, &terms, 0.5);
+            0. + (noise_val - 0.5 * (dx * dx + dy * dy).sqrt() / shape.0 as f64) > -0.125
+        })
+    }
+
+    pub fn create_rect_board(
+        shape: (usize, usize),
+        _seed: u32,
+        simplify_epsilon: f64,
+    ) -> (Vec<bool>, Vec<BezPath>, Vec<delaunator::Point>) {
+        let (xs, ys) = (shape.0 as isize, shape.1 as isize);
+        Self::create_board_gen(shape, simplify_epsilon, |xi, yi| {
+            let dx = xi as isize - xs / 2;
+            let dy = yi as isize - ys / 2;
+            dx.abs() < xs / 4 && dy.abs() < ys / 4
+        })
+    }
+
+    fn create_board_gen(
+        (xs, ys): (usize, usize),
+        simplify_epsilon: f64,
+        mut pixel_proc: impl FnMut(usize, usize) -> bool,
+    ) -> (Vec<bool>, Vec<BezPath>, Vec<delaunator::Point>) {
         let mut board = vec![false; xs * ys];
         for (i, cell) in board.iter_mut().enumerate() {
             let xi = i % xs;
             let yi = i / ys;
-            let dx = (xi as isize - xs as isize / 2) as f64;
-            let dy = (yi as isize - ys as isize / 2) as f64;
-            let noise_val = perlin_noise_pixel(xi as f64, yi as f64, bits, &terms, 0.5);
-            *cell = 0. + (noise_val - 0.5 * (dx * dx + dy * dy).sqrt() / xs as f64) > -0.125;
+            *cell = pixel_proc(xi, yi);
         }
 
         println!(
@@ -235,7 +259,7 @@ impl Game {
     pub(crate) fn new_board(&mut self, shape: (usize, usize), seed: u32, simplify: f64) {
         self.xs = shape.0;
         self.ys = shape.0;
-        let (board, simplified_border, points) = Self::create_board(shape, seed, simplify);
+        let (board, simplified_border, points) = Self::create_rect_board(shape, seed, simplify);
 
         let triangulation = triangulate(&points);
         let triangle_passable =
