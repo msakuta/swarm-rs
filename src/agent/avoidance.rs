@@ -203,7 +203,7 @@ impl Agent {
             //     nodes.len()
             // );
 
-            for _i in 0..env.expand_states {
+            'skip: for _i in 0..env.expand_states {
                 let State { x, y, heading } = nodes[start].state;
                 let steer = rand::random::<f64>() - 0.5;
                 let change_direction = env.switch_back && rand::random::<f64>() < 0.2;
@@ -244,57 +244,43 @@ impl Agent {
                     steer,
                     1.,
                 );
-                let mut found_node = None;
-                let mut skip = false;
                 for i in 0..nodes.len() {
                     if !compare_state(&nodes[i].state, &node.state) {
                         continue;
                     }
                     let existing_node = &nodes[i];
-                    // let existing_from = existing_node.from;
-                    let existing_cost = existing_node.cost;
                     let Some(existing_from) = existing_node.from else {
                         continue;
                     };
-                    if i != start
-                        && existing_from != start
-                        && !nodes[start].to.iter().any(|j| *j == i)
-                    {
-                        let Some((to_index, _)) = nodes.get(existing_from)
-                        .and_then(|from| from.to.iter().copied().enumerate().find(|(_, j)| *j == i)) else{
-                            continue
-                        };
-                        // let existing_node = &mut nodes[i];
-                        if existing_cost > node.cost {
-                            nodes[i].cost = node.cost;
-                            nodes[existing_from].to.remove(to_index);
-                            nodes[i].from = Some(start);
-                            nodes[start].to.push(i);
-                            nodes[i].state = node.state;
-                        }
-                        found_node = Some(i);
-                        break;
-                    } else {
-                        skip = true;
+                    let existing_cost = existing_node.cost;
+                    if i == start || existing_from == start {
+                        continue 'skip;
                     }
-                }
-                if skip {
-                    continue;
-                }
-                if found_node.is_none() {
-                    node.from = Some(start);
-                    let new_node_id = nodes.len();
-                    nodes[start].to.push(new_node_id);
-                    node.id = new_node_id;
-                    nodes.push(node);
-                    // callback(start, node);
-                    if let Some(path) =
-                        search(this, new_node_id, depth - 1, next_direction, env, nodes)
+                    let Some((to_index, _)) = nodes.get(existing_from)
+                        .and_then(|from| from.to.iter().copied().enumerate().find(|(_, j)| *j == i)) else
                     {
-                        return Some(path);
+                        continue
+                    };
+                    if existing_cost > node.cost {
+                        nodes[i].cost = node.cost;
+                        nodes[existing_from].to.remove(to_index);
+                        nodes[i].from = Some(start);
+                        nodes[start].to.push(i);
+                        nodes[i].state = node.state;
                     }
-                } else {
                     env.skipped_nodes += 1;
+                    continue 'skip;
+                }
+
+                node.from = Some(start);
+                let new_node_id = nodes.len();
+                nodes[start].to.push(new_node_id);
+                node.id = new_node_id;
+                nodes.push(node);
+                // callback(start, node);
+                if let Some(path) = search(this, new_node_id, depth - 1, next_direction, env, nodes)
+                {
+                    return Some(path);
                 }
             }
             None
