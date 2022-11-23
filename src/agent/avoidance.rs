@@ -516,6 +516,7 @@ mod render {
             _env: &Env,
             view_transform: &Affine,
             brush: &Color,
+            circle_visible: bool,
         ) {
             let mut bez_path = BezPath::new();
             for state in &self.search_tree {
@@ -525,10 +526,12 @@ mod render {
                     bez_path.move_to(Point::new(from_state.x, from_state.y));
                     bez_path.line_to(point);
                 }
-                let circle = Circle::new(*view_transform * point, 2.);
-                ctx.fill(circle, brush);
-                let circle = Circle::new(point, DIST_RADIUS);
-                ctx.stroke(*view_transform * circle, brush, 0.5);
+                if circle_visible {
+                    let circle = Circle::new(*view_transform * point, 2.);
+                    ctx.fill(circle, brush);
+                    let circle = Circle::new(point, DIST_RADIUS);
+                    ctx.stroke(*view_transform * circle, brush, 0.5);
+                }
             }
             ctx.stroke(*view_transform * bez_path, brush, 0.5);
         }

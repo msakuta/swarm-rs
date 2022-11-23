@@ -342,7 +342,13 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             }
 
             if let Some(search_state) = agent.get_search_state() {
-                search_state.render(ctx, env, view_transform, brush);
+                search_state.render(
+                    ctx,
+                    env,
+                    view_transform,
+                    brush,
+                    data.avoidance_circle_visible,
+                );
             }
         }
 

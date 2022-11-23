@@ -76,6 +76,11 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                         Checkbox::new("Avoidance")
                             .lens(AppData::avoidance_visible)
                             .padding(5.),
+                    )
+                    .with_child(
+                        Checkbox::new("Circle")
+                            .lens(AppData::avoidance_circle_visible)
+                            .padding(5.),
                     ),
             )
             .with_child(
