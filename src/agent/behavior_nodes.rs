@@ -39,6 +39,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("ClearAvoidance", boxify(|| ClearAvoidanceNode));
     registry.register("PathNextNode", boxify(|| PathNextNode));
     registry.register("PredictForward", boxify(|| PredictForwardNode));
+    registry.register("NewPosition", boxify(|| NewPositionNode));
     registry.register("IsTargetVisible", boxify(|| IsTargetVisibleNode));
     registry.register("FaceToTarget", boxify(|| FaceToTargetNode));
 
@@ -386,6 +387,30 @@ impl BehaviorNode for PredictForwardNode {
                 ctx.set("output", pos);
                 return BehaviorResult::Success;
             }
+        }
+        BehaviorResult::Fail
+    }
+}
+
+fn get_f64<K: Into<Symbol> + Copy>(ctx: &mut Context, key: K) -> Option<f64> {
+    ctx.get::<f64>(key).copied().or_else(|| {
+        ctx.get::<String>(key)
+            .and_then(|val| val.parse::<f64>().ok())
+    })
+}
+
+pub(super) struct NewPositionNode;
+
+impl BehaviorNode for NewPositionNode {
+    fn provided_ports(&self) -> Vec<Symbol> {
+        vec!["x".into(), "y".into(), "output".into()]
+    }
+
+    fn tick(&mut self, _arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
+        if let Some((x, y)) = get_f64(ctx, "x").zip(get_f64(ctx, "y")) {
+            let pos: [f64; 2] = [x, y];
+            ctx.set("output", pos);
+            return BehaviorResult::Success;
         }
         BehaviorResult::Fail
     }

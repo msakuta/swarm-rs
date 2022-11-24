@@ -49,7 +49,7 @@ impl AppData {
         let seed = 123513;
         let scale = WINDOW_HEIGHT / game.ys as f64;
 
-        let source_buffer = Rc::new(include_str!("../behavior_tree.txt").to_string());
+        let source_buffer = Rc::new(include_str!("../test_avoidance.txt").to_string());
 
         game.source = source_buffer.clone();
 

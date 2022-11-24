@@ -46,7 +46,7 @@ impl StateWithCost {
     }
 }
 
-pub const DIST_RADIUS: f64 = 0.5;
+pub const DIST_RADIUS: f64 = 0.5 * 5.;
 const DIST_THRESHOLD: f64 = DIST_RADIUS * DIST_RADIUS;
 
 /// Wrap the angle value in [0, 2pi)
@@ -69,7 +69,7 @@ fn compare_distance(s1: &State, s2: &State, threshold: f64) -> bool {
     delta_x * delta_x + delta_y * delta_y < threshold
 }
 
-const MAX_STEER: f64 = std::f64::consts::PI;
+const MAX_STEER: f64 = std::f64::consts::PI / 5.;
 
 #[derive(Debug)]
 pub struct SearchState {
@@ -256,8 +256,8 @@ impl Agent {
                     if i == start || existing_from == start {
                         continue 'skip;
                     }
-                    let Some((to_index, _)) = nodes.get(existing_from)
-                        .and_then(|from| from.to.iter().copied().enumerate().find(|(_, j)| *j == i)) else
+                    let Some((to_index, _)) = nodes[existing_from].to
+                        .iter().copied().enumerate().find(|(_, j)| *j == i) else
                     {
                         continue
                     };

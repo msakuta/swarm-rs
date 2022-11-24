@@ -53,12 +53,13 @@ pub(crate) struct Agent {
     pub avoidance_path: Vec<[f64; 2]>,
     pub path: Vec<[f64; 2]>,
     pub trace: VecDeque<[f64; 2]>,
+    static_: bool,
     behavior_tree: Option<BehaviorTree>,
     blackboard: Blackboard,
 }
 
-pub(crate) const AGENT_HALFWIDTH: f64 = 0.3;
-pub(crate) const AGENT_HALFLENGTH: f64 = 0.6;
+pub(crate) const AGENT_HALFWIDTH: f64 = 0.3 * 5.;
+pub(crate) const AGENT_HALFLENGTH: f64 = 0.6 * 5.;
 pub(crate) const AGENT_SPEED: f64 = 0.25;
 pub(crate) const AGENT_MAX_HEALTH: u32 = 3;
 const AGENT_VISIBLE_DISTANCE: f64 = 10.;
@@ -72,6 +73,7 @@ impl Agent {
         orient: f64,
         team: usize,
         behavior_source: &str,
+        static_: bool,
     ) -> Result<Self, LoadError> {
         let id = *id_gen;
         *id_gen += 1;
@@ -95,6 +97,7 @@ impl Agent {
             avoidance_path: vec![],
             path: vec![],
             trace: VecDeque::new(),
+            static_,
             behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
         })
@@ -248,6 +251,9 @@ impl Agent {
         entities: &[RefCell<Entity>],
         bullets: &mut Vec<Bullet>,
     ) {
+        if self.static_ {
+            return;
+        }
         if let Some(mut tree) = self.behavior_tree.take() {
             let mut ctx = Context::new(std::mem::take(&mut self.blackboard));
             ctx.set("target", self.target);
