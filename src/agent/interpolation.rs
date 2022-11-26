@@ -3,7 +3,7 @@ use cgmath::{MetricSpace, Vector2};
 use super::{Agent, State};
 
 fn lerp(a: &[f64; 2], b: &[f64; 2], f: f64) -> [f64; 2] {
-    [a[0] * (1. - f) + b[0] * f, a[1] * (1. - f) + a[1] * f]
+    [a[0] * (1. - f) + b[0] * f, a[1] * (1. - f) + b[1] * f]
 }
 
 pub(crate) trait AsPoint {
@@ -32,9 +32,9 @@ pub(crate) fn interpolate<P: AsPoint>(
     let start = start.as_point();
     let target = target.as_point();
     let distance = Vector2::from(start).distance(Vector2::from(target));
-    let interpolates = (distance.abs() / interval).floor() as usize;
-    for i in 0..interpolates {
-        let point = lerp(&start.as_point(), &target, i as f64 * interval);
+    let interpolates = (distance.abs() / interval).floor() as usize + 1;
+    for i in 0..=interpolates {
+        let point = lerp(&start.as_point(), &target, i as f64 / interpolates as f64);
         if f(point) {
             return true;
         }
@@ -66,4 +66,11 @@ pub(crate) fn interpolate_steer(
         }
     }
     return false;
+}
+
+#[test]
+fn test_lerp() {
+    let a = [1., 10.];
+    let b = [3., 30.];
+    assert_eq!(lerp(&a, &b, 0.5), [2., 20.]);
 }

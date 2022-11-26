@@ -292,8 +292,10 @@ impl Agent {
                     self.shoot_bullet(bullets, (Vector2::from(self.pos) + forward).into());
                 } else if let Some(goal) = f.downcast_ref::<AvoidanceCommand>() {
                     self.goal = Some(avoidance::State::new(goal.0[0], goal.0[1], self.orient));
-                    return Some(Box::new(self.search(1, game, entities, |_, _| (), false))
-                        as Box<dyn std::any::Any>);
+                    let (res, time) =
+                        measure_time(|| self.search(1, game, entities, |_, _| (), false));
+                    println!("Avoidance search: {time:.06}s");
+                    return Some(Box::new(res) as Box<dyn std::any::Any>);
                 } else if f.downcast_ref::<ClearAvoidanceCommand>().is_some() {
                     self.search_state = None;
                 } else if f.downcast_ref::<GetPathNextNodeCommand>().is_some() {

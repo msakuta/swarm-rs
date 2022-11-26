@@ -154,7 +154,23 @@ impl Game {
         Self::create_board_gen(shape, simplify_epsilon, |xi, yi| {
             let dx = xi as isize - xs / 2;
             let dy = yi as isize - ys / 2;
-            dx.abs() < xs / 4 && dy.abs() < ys / 4 // && (xs / 8 < dx.abs() || ys / 8 < dy.abs())
+            dx.abs() < xs / 4 && dy.abs() < ys / 4
+        })
+    }
+
+    pub fn create_crank_board(
+        shape: (usize, usize),
+        _seed: u32,
+        simplify_epsilon: f64,
+    ) -> (Vec<bool>, Vec<BezPath>, Vec<delaunator::Point>) {
+        let (xs, ys) = (shape.0 as isize, shape.1 as isize);
+        Self::create_board_gen(shape, simplify_epsilon, |xi, yi| {
+            let dx = xi as isize - xs / 2;
+            let dy = yi as isize - ys / 2;
+            dx.abs() < xs * 3 / 8
+                && dy.abs() < ys / 8
+                && !(-xs * 3 / 16 < dx && dx < -xs / 16 && -ys / 16 < dy)
+                && !(xs / 16 < dx && dx < xs * 3 / 16 && dy < ys / 16)
         })
     }
 
@@ -259,7 +275,7 @@ impl Game {
     pub(crate) fn new_board(&mut self, shape: (usize, usize), seed: u32, simplify: f64) {
         self.xs = shape.0;
         self.ys = shape.0;
-        let (board, simplified_border, points) = Self::create_rect_board(shape, seed, simplify);
+        let (board, simplified_border, points) = Self::create_crank_board(shape, seed, simplify);
 
         let triangulation = triangulate(&points);
         let triangle_passable =
@@ -459,7 +475,7 @@ impl Game {
 
         if entities.is_empty() {
             println!("Adding agents");
-            let pos = [self.xs as f64 * 3. / 8., self.ys as f64 / 2.];
+            let pos = [self.xs as f64 * 2. / 8., self.ys as f64 * 9. / 16.];
             if let Some(agent) = self.try_new_agent(pos, 0, &entities, false) {
                 entities.push(RefCell::new(agent));
             }

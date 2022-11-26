@@ -73,7 +73,7 @@ fn compare_distance(s1: &State, s2: &State, threshold: f64) -> bool {
     delta_x * delta_x + delta_y * delta_y < threshold
 }
 
-const MAX_STEER: f64 = std::f64::consts::PI / 5.;
+const MAX_STEER: f64 = std::f64::consts::PI / 3.;
 
 #[derive(Debug)]
 pub struct SearchState {
@@ -254,7 +254,9 @@ impl Agent {
                             }
                             hit
                         })
-                        || !env.game.check_hit(nodes[start].state.into())
+                        || interpolate(nodes[start].state, next, DIST_RADIUS * 0.5, |pos| {
+                            !env.game.check_hit(pos)
+                        })
                 } else if USE_STEER {
                     interpolate_steer(
                         &nodes[start].state,
@@ -357,7 +359,7 @@ impl Agent {
 
                     // println!("Using existing tree with {} nodes", nodes.len());
 
-                    const SEARCH_NODES: usize = 10;
+                    const SEARCH_NODES: usize = 20;
 
                     if 0 < nodes.len() && nodes.len() < 10000 {
                         // Descending the tree is not a good way to sample a random node in a tree, since
