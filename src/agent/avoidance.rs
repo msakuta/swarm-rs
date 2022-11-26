@@ -189,14 +189,10 @@ impl Agent {
         fn search(
             this: &Agent,
             start: usize,
-            depth: usize,
             direction: f64,
             env: &mut SearchEnv,
             nodes: &mut Vec<StateWithCost>,
         ) -> Option<Vec<usize>> {
-            if depth < 1 || 10000 < nodes.len() {
-                return None;
-            }
             if let Some(path) = check_goal(start, &this.goal, &nodes) {
                 return Some(path);
             }
@@ -315,10 +311,6 @@ impl Agent {
                 node.id = new_node_id;
                 nodes.push(node);
                 // callback(start, node);
-                if let Some(path) = search(this, new_node_id, depth - 1, next_direction, env, nodes)
-                {
-                    return Some(path);
-                }
             }
             None
         }
@@ -333,41 +325,19 @@ impl Agent {
         fn trace_tree(
             this: &Agent,
             root: usize,
-            depth: usize,
-            expand_depth: usize,
             env: &mut SearchEnv,
             nodes: &mut Vec<StateWithCost>,
         ) -> Option<Vec<usize>> {
-            if depth < 1 {
-                return None;
-            }
-            // if
-            /* !root || */
-            // check_goal(root, &this.goal, &nodes).is_some() {
-            //     println!("Reached goal! {:?} -> {:?}", nodes[root], this.goal);
-            //     return None;
-            // }
             let root_node = &nodes[root];
             if env.switch_back || -0.1 < root_node.speed {
-                if let Some(path) = search(this, root, expand_depth, 1., env, nodes) {
+                if let Some(path) = search(this, root, 1., env, nodes) {
                     return Some(path);
                 }
             }
             let root_node = &nodes[root];
             if env.switch_back || root_node.speed < 0.1 {
-                if let Some(path) = search(this, root, expand_depth, -1., env, nodes) {
+                if let Some(path) = search(this, root, -1., env, nodes) {
                     return Some(path);
-                }
-            }
-            let root_node_to = nodes[root].to.clone();
-            if 0 < root_node_to.len() {
-                for _ in 0..2 {
-                    let idx = Uniform::from(0..root_node_to.len()).sample(&mut rand::thread_rng());
-                    if let Some(path) =
-                        trace_tree(this, root_node_to[idx], depth - 1, expand_depth, env, nodes)
-                    {
-                        return Some(path);
-                    }
                 }
             }
             env.tree_size += 1;
@@ -395,7 +365,7 @@ impl Agent {
                         // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
                         for _i in 0..SEARCH_NODES {
                             let idx = Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
-                            if let Some(path) = trace_tree(self, idx, 1, 1, &mut env, nodes) {
+                            if let Some(path) = trace_tree(self, idx, &mut env, nodes) {
                                 self.avoidance_path = path
                                     .iter()
                                     .map(|i| {
@@ -434,7 +404,7 @@ impl Agent {
                     let root_id = nodes.len();
                     // println!("Pushing the first node: {:?}", root);
                     nodes.push(root.clone());
-                    if let Some(path) = search(self, root_id, depth, 1., &mut env, &mut nodes) {
+                    if let Some(path) = search(self, root_id, 1., &mut env, &mut nodes) {
                         self.avoidance_path = path
                             .iter()
                             .map(|i| {
