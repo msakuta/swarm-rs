@@ -5,12 +5,15 @@ use crate::{
     board_widget::BoardWidget,
 };
 use behavior_tree_lite::parse_file;
-use druid::widget::{
-    Button, Checkbox, CrossAxisAlignment, Either, Flex, Label, LensWrap, RadioGroup, Scroll,
-    Switch, TextBox, WidgetExt,
-};
 use druid::Color;
 use druid::{lens::Field, widget::prelude::*};
+use druid::{
+    piet::Text,
+    widget::{
+        Button, Checkbox, CrossAxisAlignment, Either, Flex, Label, LensWrap, RadioGroup, Scroll,
+        Switch, TextBox, WidgetExt,
+    },
+};
 
 const BG: Color = Color::rgb8(0, 0, 53 as u8);
 const BAR_WIDTH: f64 = 400.;
@@ -158,9 +161,10 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                             try_load_behavior_tree(app_data, app_data.source_buffer.clone());
                         }),
                     )
+                    .with_child(TextBox::new().lens(AppData::source_file))
                     .with_child(Button::new("Reload from file").on_click(
                         |_, app_data: &mut AppData, _| match std::fs::read_to_string(
-                            "behavior_tree.txt",
+                            &app_data.source_file,
                         ) {
                             Ok(s) => {
                                 let s = Rc::new(s);

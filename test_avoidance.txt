@@ -2,8 +2,25 @@ tree main = Sequence {
     PredictForward (output -> pos, distance <- "10")
     NewPosition (x <- "80", y <- "64", output -> pos)
     Avoidance (goal <- pos)
-    ReactiveSequence {
+    Fallback {
         FollowPath
-        Timeout (time <- "100")
+        Sequence {
+            ReactiveSequence {
+                Move (direction <- "backward")
+                Randomize (max <- "20", value -> timeoutValue)
+                Timeout (time <- timeoutValue)
+            }
+            Sequence {
+                PathNextNode (output -> pathNext)
+                Randomize (min <- "20", max <- "100", value -> timeoutValue)
+                ReactiveFallback {
+                    Avoidance (goal <- pathNext)
+                    ForceFailure {
+                        Timeout (time <- timeoutValue)
+                    }
+                    ClearAvoidance
+                }
+            }
+        }
     }
 }

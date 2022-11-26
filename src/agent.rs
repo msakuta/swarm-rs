@@ -174,6 +174,7 @@ impl Agent {
         }
     }
 
+    /// Check collision with other entities, but not walls
     pub(crate) fn collision_check(
         ignore: Option<usize>,
         newpos: [f64; 2],
@@ -187,6 +188,7 @@ impl Agent {
                 let dist2 = Vector2::from(entity.get_pos()).distance2(Vector2::from(newpos));
                 if dist2 < (AGENT_HALFLENGTH * 2.).powf(2.) {
                     // Collision with another entity
+                    println!("Collision with another entity");
                     return true;
                 }
             }

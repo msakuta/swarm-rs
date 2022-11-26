@@ -39,6 +39,7 @@ pub(crate) struct AppData {
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
     pub(crate) source_visible: bool,
+    pub(crate) source_file: String,
     /// This buffer is not yet applied to the game.
     pub(crate) source_buffer: Rc<String>,
 }
@@ -48,6 +49,8 @@ impl AppData {
         let mut game = Game::new();
         let seed = 123513;
         let scale = WINDOW_HEIGHT / game.ys as f64;
+
+        const SOURCE_FILE: &'static str = "test_avoidance.txt";
 
         let source_buffer = Rc::new(include_str!("../test_avoidance.txt").to_string());
 
@@ -77,6 +80,7 @@ impl AppData {
             entity_label_visible: true,
             entity_trace_visible: false,
             source_visible: false,
+            source_file: SOURCE_FILE.to_string(),
             source_buffer,
         }
     }

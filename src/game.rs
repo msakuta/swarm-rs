@@ -154,7 +154,7 @@ impl Game {
         Self::create_board_gen(shape, simplify_epsilon, |xi, yi| {
             let dx = xi as isize - xs / 2;
             let dy = yi as isize - ys / 2;
-            dx.abs() < xs / 4 && dy.abs() < ys / 4
+            dx.abs() < xs / 4 && dy.abs() < ys / 4 // && (xs / 8 < dx.abs() || ys / 8 < dy.abs())
         })
     }
 
@@ -506,7 +506,9 @@ impl Game {
     // }
 }
 
-fn separating_axis(
+/// Separating axis theorem is relatively fast algorithm to detect collision between convex polygons,
+/// but it can only predict linear motions.
+pub(crate) fn separating_axis(
     org: &Vector2<f64>,
     dir: &Vector2<f64>,
     polygon: impl Iterator<Item = Vector2<f64>>,

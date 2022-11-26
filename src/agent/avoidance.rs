@@ -1,12 +1,16 @@
 use std::cell::RefCell;
 
+use cgmath::Vector2;
 use rand::{distributions::Uniform, prelude::Distribution};
 
 use super::{
     interpolation::{interpolate, interpolate_steer},
     Agent,
 };
-use crate::{entity::Entity, game::Game};
+use crate::{
+    entity::{CollisionShape, Entity},
+    game::Game,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct State {
@@ -203,6 +207,18 @@ impl Agent {
             //     nodes.len()
             // );
 
+            impl From<State> for [f64; 2] {
+                fn from(s: State) -> Self {
+                    [s.x, s.y]
+                }
+            }
+
+            impl From<State> for Vector2<f64> {
+                fn from(s: State) -> Self {
+                    Self::new(s.x, s.y)
+                }
+            }
+
             'skip: for _i in 0..env.expand_states {
                 let State { x, y, heading } = nodes[start].state;
                 let steer = rand::random::<f64>() - 0.5;
@@ -215,6 +231,7 @@ impl Agent {
                 let distance: f64 = DIST_RADIUS * 2. + rand::random::<f64>() * DIST_RADIUS * 3.;
                 let next = Agent::step_move(x, y, heading, steer, 1., next_direction * distance);
                 // println!("stepMove: {:?} -> {:?}", nodes[start], next);
+                const USE_SEPAX: bool = true;
                 const USE_STEER: bool = false;
                 let collision_checker = |pos: [f64; 2]| {
                     if Agent::collision_check(Some(this.id), pos, env.entities) {
@@ -222,7 +239,27 @@ impl Agent {
                     }
                     !env.game.check_hit(pos)
                 };
-                let hit = if USE_STEER {
+                let hit = if USE_SEPAX {
+                    env.entities
+                        .iter()
+                        .filter_map(|entity| entity.try_borrow().ok())
+                        .map(|entity| entity.get_shape())
+                        .any(|shape| {
+                            let CollisionShape::BBox(bbox) = shape;
+                            let pos = nodes[start].state.into();
+                            let diff = Vector2::from(next) - pos;
+                            let hit = crate::game::separating_axis(
+                                &pos,
+                                &diff,
+                                bbox.into_iter().map(Vector2::from),
+                            );
+                            if hit {
+                                println!("Entity hit");
+                            }
+                            hit
+                        })
+                        || !env.game.check_hit(nodes[start].state.into())
+                } else if USE_STEER {
                     interpolate_steer(
                         &nodes[start].state,
                         steer,

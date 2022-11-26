@@ -1,7 +1,7 @@
 use super::State;
 use behavior_tree_lite::{
     error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context,
-    Lazy, Registry, Symbol,
+    Lazy, PortSpec, Registry, Symbol,
 };
 use cgmath::{Matrix2, Rad, Vector2};
 use rand::{distributions::Uniform, prelude::Distribution};
@@ -71,8 +71,8 @@ impl BehaviorNode for SetBool {
 pub(super) struct PrintNode;
 
 impl BehaviorNode for PrintNode {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec!["input".into()]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("input")]
     }
 
     fn tick(
@@ -92,10 +92,11 @@ impl BehaviorNode for PrintNode {
 pub(super) struct HasTarget;
 
 static TARGET: Lazy<Symbol> = Lazy::new(|| "target".into());
+static TARGET_SPEC: Lazy<PortSpec> = Lazy::new(|| PortSpec::new_in(*TARGET));
 
 impl BehaviorNode for HasTarget {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec![*TARGET]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![*TARGET_SPEC]
     }
 
     fn tick(
@@ -132,8 +133,8 @@ impl BehaviorNode for FindEnemy {
 pub(super) struct HasPath;
 
 impl<'a> BehaviorNode for HasPath {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec!["has_path".into()]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("has_path")]
     }
 
     fn tick(
@@ -195,8 +196,8 @@ pub(super) struct MoveCommand(pub String);
 pub(super) struct MoveNode;
 
 impl BehaviorNode for MoveNode {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec!["direction".into()]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("direction")]
     }
 
     fn tick(
@@ -229,8 +230,8 @@ impl BehaviorNode for ShootNode {
 struct TimeoutNode(Option<usize>);
 
 impl BehaviorNode for TimeoutNode {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec!["time".into()]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("time")]
     }
 
     fn tick(
@@ -247,11 +248,7 @@ impl BehaviorNode for TimeoutNode {
                 *remaining -= 1;
                 return BehaviorResult::Running;
             }
-        } else if let Some(input) = ctx
-            .get::<String>("time")
-            .and_then(|s| s.parse::<usize>().ok())
-            .or_else(|| ctx.get::<usize>("time").copied())
-        {
+        } else if let Some(input) = ctx.get_parse::<usize>("time") {
             // println!("Timer set! {}", input);
             self.0 = Some(input);
         }
@@ -262,8 +259,12 @@ impl BehaviorNode for TimeoutNode {
 struct RandomizeNode;
 
 impl BehaviorNode for RandomizeNode {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec!["min".into(), "max".into(), "value".into()]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![
+            PortSpec::new_in("min"),
+            PortSpec::new_in("max"),
+            PortSpec::new_out("value"),
+        ]
     }
 
     fn tick(
@@ -271,14 +272,8 @@ impl BehaviorNode for RandomizeNode {
         _arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        if let Some(max) = ctx
-            .get::<String>("max")
-            .and_then(|s| s.parse::<usize>().ok())
-        {
-            let min = ctx
-                .get::<String>("min")
-                .and_then(|s| s.parse::<usize>().ok())
-                .unwrap_or(0);
+        if let Some(max) = ctx.get_parse::<usize>("max") {
+            let min = ctx.get_parse::<usize>("min").unwrap_or(0);
             let between = Uniform::from(min..max);
             let value = between.sample(&mut rand::thread_rng());
             // println!("Randomizing! {}/{}", value, max);
@@ -294,8 +289,8 @@ pub(super) struct AvoidanceCommand(pub [f64; 2]);
 pub(super) struct AvoidanceNode;
 
 impl BehaviorNode for AvoidanceNode {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec!["goal".into()]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("goal")]
     }
 
     fn tick(
@@ -348,8 +343,8 @@ pub(super) struct GetPathNextNodeCommand;
 pub(super) struct PathNextNode;
 
 impl BehaviorNode for PathNextNode {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec!["output".into()]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_out("output")]
     }
 
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
@@ -369,15 +364,12 @@ pub(super) struct GetStateCommand;
 pub(super) struct PredictForwardNode;
 
 impl BehaviorNode for PredictForwardNode {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec!["distance".into(), "output".into()]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("distance"), PortSpec::new_out("output")]
     }
 
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
-        if let Some(distance) = ctx.get::<f64>("distance").copied().or_else(|| {
-            ctx.get::<String>("distance")
-                .and_then(|val| val.parse::<f64>().ok())
-        }) {
+        if let Some(distance) = ctx.get_parse::<f64>("distance") {
             if let Some(state) =
                 arg(&GetStateCommand).and_then(|val| val.downcast_ref::<State>().cloned())
             {
@@ -392,22 +384,19 @@ impl BehaviorNode for PredictForwardNode {
     }
 }
 
-fn get_f64<K: Into<Symbol> + Copy>(ctx: &mut Context, key: K) -> Option<f64> {
-    ctx.get::<f64>(key).copied().or_else(|| {
-        ctx.get::<String>(key)
-            .and_then(|val| val.parse::<f64>().ok())
-    })
-}
-
 pub(super) struct NewPositionNode;
 
 impl BehaviorNode for NewPositionNode {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec!["x".into(), "y".into(), "output".into()]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![
+            PortSpec::new_in("x"),
+            PortSpec::new_in("y"),
+            PortSpec::new_out("output"),
+        ]
     }
 
     fn tick(&mut self, _arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
-        if let Some((x, y)) = get_f64(ctx, "x").zip(get_f64(ctx, "y")) {
+        if let Some((x, y)) = ctx.get_parse::<f64>("x").zip(ctx.get_parse::<f64>("y")) {
             let pos: [f64; 2] = [x, y];
             ctx.set("output", pos);
             return BehaviorResult::Success;
@@ -420,8 +409,8 @@ pub(super) struct IsTargetVisibleCommand(pub usize);
 pub(crate) struct IsTargetVisibleNode;
 
 impl BehaviorNode for IsTargetVisibleNode {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec![*TARGET]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![*TARGET_SPEC]
     }
 
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
@@ -445,8 +434,8 @@ pub(super) struct FaceToTargetCommand(pub usize);
 pub(super) struct FaceToTargetNode;
 
 impl BehaviorNode for FaceToTargetNode {
-    fn provided_ports(&self) -> Vec<Symbol> {
-        vec![*TARGET]
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![*TARGET_SPEC]
     }
 
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
