@@ -33,6 +33,12 @@ impl AgentState {
             orient: self.heading,
         })
     }
+
+    pub(crate) fn with_orient(&self, orient: f64) -> Self {
+        let mut copy = *self;
+        copy.heading = orient;
+        copy
+    }
 }
 
 #[derive(Clone, Debug)]

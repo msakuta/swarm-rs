@@ -1,4 +1,4 @@
-use super::{AgentState, FollowPathResult};
+use super::{motion::OrientToResult, AgentState, FollowPathResult};
 use behavior_tree_lite::{
     error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context,
     Lazy, PortSpec, Registry, Symbol,
@@ -446,11 +446,12 @@ impl BehaviorNode for FaceToTargetNode {
 
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
         if let Some(target) = ctx.get::<Option<usize>>(*TARGET).copied().flatten() {
-            let val = arg(&FaceToTargetCommand(target))
-                .and_then(|val| val.downcast_ref::<bool>().copied())
-                .unwrap_or(false);
+            let Some(val) = arg(&FaceToTargetCommand(target))
+                .and_then(|val| val.downcast_ref::<OrientToResult>().copied()) else {
+                    return BehaviorResult::Fail;
+                };
 
-            if val {
+            if val.into() {
                 BehaviorResult::Success
             } else {
                 BehaviorResult::Running

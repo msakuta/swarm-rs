@@ -2,6 +2,7 @@ mod avoidance;
 mod behavior_nodes;
 mod find_path;
 mod interpolation;
+mod motion;
 
 pub(crate) use self::avoidance::{AgentState, SearchState};
 use self::{
@@ -23,6 +24,7 @@ use crate::{
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
 use behavior_tree_lite::{error::LoadError, Blackboard, Lazy};
+use geo::Orient;
 
 use std::{
     cell::RefCell,
@@ -127,78 +129,6 @@ impl Agent {
 
     pub(crate) fn get_health_rate(&self) -> f64 {
         self.health as f64 / AGENT_MAX_HEALTH as f64
-    }
-
-    fn orient_to(&mut self, target: [f64; 2]) -> bool {
-        use std::f64::consts::PI;
-        const TWOPI: f64 = PI * 2.;
-        const ANGLE_SPEED: f64 = PI / 50.;
-        let delta = Vector2::from(target) - Vector2::from(self.pos);
-        let target_angle = delta.y.atan2(delta.x);
-        let delta_angle = target_angle - self.orient;
-        let wrap_angle = ((delta_angle + PI) - ((delta_angle + PI) / TWOPI).floor() * TWOPI) - PI;
-        if wrap_angle.abs() < ANGLE_SPEED {
-            self.orient = target_angle;
-            true
-        } else if wrap_angle < 0. {
-            self.orient = (self.orient - ANGLE_SPEED) % TWOPI;
-            wrap_angle.abs() < PI / 4.
-        } else {
-            self.orient = (self.orient + ANGLE_SPEED) % TWOPI;
-            wrap_angle.abs() < PI / 4.
-        }
-    }
-
-    pub(crate) fn drive(
-        &mut self,
-        drive: f64,
-        game: &mut Game,
-        others: &[RefCell<Entity>],
-    ) -> bool {
-        let forward = Vector2::new(self.orient.cos(), self.orient.sin());
-        let target_pos =
-            Vector2::from(self.pos) + drive.min(AGENT_SPEED).max(-AGENT_SPEED) * forward;
-        let target_state = AgentState {
-            x: target_pos.x,
-            y: target_pos.y,
-            heading: self.orient,
-        };
-
-        if Self::collision_check(Some(self.id), target_state, others) {
-            return false;
-        }
-
-        if check_shape_in_mesh(
-            &game.mesh,
-            &target_state.collision_shape(),
-            &mut *game.triangle_profiler.borrow_mut(),
-        ) {
-            // if game.mesh.triangle_passable[next_triangle] {
-            if 100 < self.trace.len() {
-                self.trace.pop_front();
-            }
-            self.trace.push_back(self.pos);
-            self.pos = target_pos.into();
-            return true;
-            // }
-        }
-        false
-    }
-
-    pub(crate) fn move_to<'a>(
-        &'a mut self,
-        game: &mut Game,
-        target_pos: [f64; 2],
-        others: &[RefCell<Entity>],
-    ) -> bool {
-        if self.orient_to(target_pos) {
-            let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
-            let distance = delta.magnitude();
-
-            self.drive(distance, game, others)
-        } else {
-            true
-        }
     }
 
     /// Check collision with other entities, but not walls
@@ -376,7 +306,7 @@ impl Agent {
                 } else if let Some(com) = f.downcast_ref::<FaceToTargetCommand>() {
                     if let Some(target) = entities.get(com.0).and_then(|e| e.try_borrow().ok()) {
                         let target_pos = target.get_pos();
-                        let res = self.orient_to(target_pos);
+                        let res = self.orient_to(target_pos, entities);
                         return Some(Box::new(res));
                     }
                 }
