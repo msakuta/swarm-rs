@@ -156,16 +156,21 @@ impl Agent {
     ) -> bool {
         let forward = Vector2::new(self.orient.cos(), self.orient.sin());
         let target_pos =
-            (Vector2::from(self.pos) + drive.min(AGENT_SPEED).max(-AGENT_SPEED) * forward).into();
+            Vector2::from(self.pos) + drive.min(AGENT_SPEED).max(-AGENT_SPEED) * forward;
+        let target_state = State {
+            x: target_pos.x,
+            y: target_pos.y,
+            heading: self.orient,
+        };
 
-        if Self::collision_check(Some(self.id), target_pos, others) {
+        if Self::collision_check(Some(self.id), target_state, others) {
             return false;
         }
 
         if let Some(next_triangle) = find_triangle_at(
             &game.triangulation,
             &game.points,
-            target_pos,
+            target_pos.into(),
             &mut *game.triangle_profiler.borrow_mut(),
         ) {
             if game.triangle_passable[next_triangle] {
@@ -173,7 +178,7 @@ impl Agent {
                     self.trace.pop_front();
                 }
                 self.trace.push_back(self.pos);
-                self.pos = target_pos;
+                self.pos = target_pos.into();
             }
         }
         true
@@ -198,9 +203,10 @@ impl Agent {
     /// Check collision with other entities, but not walls
     pub(crate) fn collision_check(
         ignore: Option<usize>,
-        newpos: [f64; 2],
+        newpos: State,
         others: &[RefCell<Entity>],
     ) -> bool {
+        let shape = newpos.collision_shape();
         for entity in others.iter() {
             if let Ok(entity) = entity.try_borrow() {
                 if Some(entity.get_id()) == ignore {
@@ -208,9 +214,11 @@ impl Agent {
                 }
                 let dist2 = Vector2::from(entity.get_pos()).distance2(Vector2::from(newpos));
                 if dist2 < (AGENT_HALFLENGTH * 2.).powf(2.) {
-                    // Collision with another entity
-                    println!("Collision with another entity");
-                    return true;
+                    let entity_shape = entity.get_shape();
+                    if shape.intersects(&entity_shape) {
+                        println!("Collision with another entity");
+                        return true;
+                    }
                 }
             }
         }

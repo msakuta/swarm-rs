@@ -4,7 +4,7 @@ use druid::{piet::kurbo::BezPath, Data, Point};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    agent::{Agent, Bullet},
+    agent::{Agent, Bullet, State},
     app_data::is_passable_at,
     entity::{Entity, GameEvent},
     marching_squares::{trace_lines, BoolField},
@@ -118,7 +118,7 @@ impl Game {
             entities: Rc::new(RefCell::new(vec![])),
             bullets: Rc::new(vec![]),
             paused: false,
-            interval: 200.,
+            interval: 32.,
             rng: Rc::new(Xor128::new(9318245)),
             id_gen,
             temp_ents: Rc::new(RefCell::new(vec![])),
@@ -318,27 +318,27 @@ impl Game {
         let triangle_labels = &self.triangle_labels;
         let largest_label = self.largest_label;
         for _ in 0..10 {
-            let pos_candidate = [
-                pos[0], // + rng.next() * 10. - 5.,
-                pos[1], // + rng.next() * 10. - 5.,
-            ];
+            let state_candidate = State {
+                x: pos[0], // + rng.next() * 10. - 5.,
+                y: pos[1], // + rng.next() * 10. - 5.,
+                heading: rng.next() * std::f64::consts::PI * 2.,
+            };
 
-            if Agent::collision_check(None, pos_candidate, entities) {
+            if Agent::collision_check(None, state_candidate, entities) {
                 continue;
             }
 
-            let orient_candidate = rng.next() * std::f64::consts::PI * 2.;
             if let Some(tri) = find_triangle_at(
                 &triangulation,
                 &points,
-                pos_candidate,
+                state_candidate.into(),
                 &mut *self.triangle_profiler.borrow_mut(),
             ) {
                 if Some(triangle_labels[tri]) == largest_label {
                     let agent = Agent::new(
                         id_gen,
-                        pos_candidate,
-                        orient_candidate,
+                        state_candidate.into(),
+                        state_candidate.heading,
                         team,
                         &self.source,
                         static_,

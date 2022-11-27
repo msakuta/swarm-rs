@@ -215,7 +215,7 @@ pub(crate) fn paint_board(
     contours
 }
 
-fn to_point(pos: [f64; 2]) -> Point {
+pub(crate) fn to_point(pos: [f64; 2]) -> Point {
     Point {
         x: pos[0],
         y: pos[1],

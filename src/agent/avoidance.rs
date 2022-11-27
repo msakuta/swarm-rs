@@ -5,9 +5,13 @@ use rand::{distributions::Uniform, prelude::Distribution};
 
 use super::{
     interpolation::{interpolate, interpolate_steer},
-    Agent,
+    Agent, AGENT_HALFLENGTH, AGENT_HALFWIDTH,
 };
-use crate::{collision::bsearch_collision, entity::Entity, game::Game};
+use crate::{
+    collision::{bsearch_collision, CollisionShape, Obb},
+    entity::Entity,
+    game::Game,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct State {
@@ -19,6 +23,15 @@ pub(crate) struct State {
 impl State {
     pub fn new(x: f64, y: f64, heading: f64) -> Self {
         Self { x, y, heading }
+    }
+
+    pub(crate) fn collision_shape(&self) -> CollisionShape {
+        CollisionShape::BBox(Obb {
+            center: Vector2::new(self.x, self.y),
+            xs: AGENT_HALFLENGTH,
+            ys: AGENT_HALFWIDTH,
+            orient: self.heading,
+        })
     }
 }
 
@@ -214,7 +227,7 @@ impl Agent {
                 }
             }
 
-            let this_shape = this.get_shape();
+            let this_shape = this.get_shape().with_position(nodes[start].state.into());
             let mut this_bounding_circle = this.bounding_circle();
             this_bounding_circle.center = nodes[start].state.into();
 
@@ -233,7 +246,8 @@ impl Agent {
                 const USE_SEPAX: bool = true;
                 const USE_STEER: bool = false;
                 let collision_checker = |pos: [f64; 2]| {
-                    if Agent::collision_check(Some(this.id), pos, env.entities) {
+                    let state = State::new(pos[0], pos[1], steer);
+                    if Agent::collision_check(Some(this.id), state, env.entities) {
                         return false;
                     }
                     !env.game.check_hit(pos)
@@ -262,9 +276,6 @@ impl Agent {
                                 &bounding_circle,
                                 &Vector2::zero(),
                             );
-                            if hit {
-                                println!("Entity hit {level}");
-                            }
                             (acc.0 || hit, acc.1.max(level))
                         });
 
@@ -396,12 +407,11 @@ impl Agent {
                         for _i in 0..SEARCH_NODES {
                             let idx = Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
                             if let Some(path) = trace_tree(self, idx, &mut env, nodes) {
-                                self.avoidance_path = path
-                                    .iter()
-                                    .map(|i| {
+                                self.avoidance_path = std::iter::once(goal.into())
+                                    .chain(path.iter().map(|i| {
                                         let node = nodes[*i].state;
                                         [node.x, node.y]
-                                    })
+                                    }))
                                     .collect();
                                 // println!("Materialized found path: {:?}", self.path);
                                 search_state.found_path = Some(path);
@@ -541,6 +551,8 @@ impl Agent {
 }
 
 mod render {
+    use crate::{agent::interpolation::lerp, paint_board::to_point};
+
     use super::{SearchState, DIST_RADIUS};
     use druid::{
         kurbo::Circle, piet::kurbo::BezPath, Affine, Color, Env, PaintCtx, Point, RenderContext,
@@ -567,6 +579,19 @@ mod render {
                         let from_state = self.search_tree[from].state;
                         bez_path.move_to(Point::new(from_state.x, from_state.y));
                         bez_path.line_to(point);
+                        if circle_visible && 0 < level {
+                            let interpolates = 1 << level;
+                            for i in 1..interpolates {
+                                let pos = lerp(
+                                    &state.state.into(),
+                                    &from_state.into(),
+                                    i as f64 / interpolates as f64,
+                                );
+                                let circle =
+                                    Circle::new(*view_transform * to_point(pos), 2. + level_width);
+                                ctx.fill(circle, brush);
+                            }
+                        }
                     }
                     if circle_visible {
                         let circle = Circle::new(*view_transform * point, 2. + level_width);

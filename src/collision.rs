@@ -188,6 +188,15 @@ impl CollisionShape {
         }
     }
 
+    pub(crate) fn with_position(&self, position: Vector2<f64>) -> Self {
+        match *self {
+            Self::BBox(mut obb) => {
+                obb.center = position;
+                Self::BBox(obb)
+            }
+        }
+    }
+
     /// Return a copy with specified orientation
     pub(crate) fn oriented(&self, orient: f64) -> Self {
         match *self {
@@ -227,11 +236,6 @@ impl CollisionShape {
             println!("WARNING: OBB does not have vertices");
             return false
         };
-
-        println!(
-            "intersecs_inner [{obb:?} <> {other:?}] {} {} {} {}",
-            x_min, x_max, y_min, y_max
-        );
 
         if obb.xs < x_min || x_max < -obb.xs || obb.ys < y_min || y_max < -obb.ys {
             return false;
