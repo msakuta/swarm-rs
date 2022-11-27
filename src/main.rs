@@ -12,6 +12,7 @@ mod agent;
 mod collision;
 mod entity;
 mod game;
+mod mesh;
 mod spawner;
 mod temp_ents;
 mod triangle_utils;

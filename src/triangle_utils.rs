@@ -1,7 +1,7 @@
 use ::delaunator::{Point, Triangulation};
 use std::collections::HashSet;
 
-use crate::{game::Profiler, measure_time};
+use crate::{collision::CollisionShape, game::Profiler, measure_time, mesh::Mesh};
 
 pub(crate) fn center_of_triangle(v1: Point, v2: Point, v3: Point) -> Point {
     Point {
@@ -43,13 +43,13 @@ fn to_point(p: [f64; 2]) -> Point {
 
 /// Returns triangle id (multiply with 3 to get index into `triangulation.triangles`)
 pub(crate) fn find_triangle_at(
-    triangulation: &Triangulation,
-    points: &[Point],
+    mesh: &Mesh,
     point: [f64; 2],
     profiler: &mut Profiler,
 ) -> Option<usize> {
+    let points = &mesh.points;
     let (ret, time) = measure_time(move || {
-        let triangles = &triangulation.triangles;
+        let triangles = &mesh.triangulation.triangles;
         let point = to_point(point);
         for (i, triangle) in triangles.chunks(3).enumerate() {
             let [v1, v2, v3] = [
@@ -107,4 +107,8 @@ pub(crate) fn label_triangles(
         );
     }
     ret
+}
+
+fn from_point(p: &Point) -> [f64; 2] {
+    [p.x, p.y]
 }

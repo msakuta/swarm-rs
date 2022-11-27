@@ -25,4 +25,4 @@ getrandom = { version = "0.2.8", features = ["js"] }
 # path = "../rusty-behavior-tree-lite"
 git = "https://github.com/msakuta/rusty-behavior-tree-lite"
 # tag = "v0.1.2"
-commit = "56e6e33df51aa4705aaa25c3075b36cfbe6538e6"
+commit = "28244dc0ca6e05766e4b16d2040ab2c63767aa8a"

@@ -31,7 +31,7 @@ pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     *data.render_stats.borrow_mut() = format!(
         "Drawn {} contours, {} triangles",
         contours,
-        data.game.triangulation.triangles.len()
+        data.game.mesh.triangulation.triangles.len()
     );
 }
 
@@ -140,7 +140,12 @@ pub(crate) fn paint_board(
     if data.triangulation_visible {
         let mut rng = Xor128::new(616516);
 
-        let max_label = *data.game.triangle_labels.iter().max().unwrap_or(&0) as usize + 1;
+        let points = &data.game.mesh.points;
+        let triangles = &data.game.mesh.triangulation.triangles;
+        let triangle_labels = &data.game.mesh.triangle_labels;
+        let triangle_passable = &data.game.mesh.triangle_passable;
+
+        let max_label = *triangle_labels.iter().max().unwrap_or(&0) as usize + 1;
         let label_colors = (0..max_label)
             .map(|_| {
                 Color::rgb8(
@@ -151,36 +156,33 @@ pub(crate) fn paint_board(
             })
             .collect::<Vec<_>>();
 
-        let triangles = &data.game.triangulation.triangles;
         for (i, triangle) in triangles.chunks(3).enumerate() {
             use ::delaunator::EMPTY;
-            let label = data.game.triangle_labels[i];
+            let label = triangle_labels[i];
             if triangles[i * 3] == EMPTY
                 || triangles[i * 3 + 1] == EMPTY
                 || triangles[i * 3 + 2] == EMPTY
             {
                 continue;
             }
-            let color = if data.game.triangle_passable[i] && label >= 0 {
+            let color = if triangle_passable[i] && label >= 0 {
                 label_colors[label as usize].clone()
             } else {
                 Color::RED
             };
 
-            if data.game.triangle_passable[i] && label >= 0 || data.unpassable_visible {
+            if triangle_passable[i] && label >= 0 || data.unpassable_visible {
                 let vertices: [usize; 4] = [triangle[0], triangle[1], triangle[2], triangle[0]];
                 for (start, end) in vertices.iter().zip(vertices.iter().skip(1)) {
                     let line = Line::new(
-                        delaunator_to_druid_point(&data.game.points[*start]),
-                        delaunator_to_druid_point(&data.game.points[*end]),
+                        delaunator_to_druid_point(&points[*start]),
+                        delaunator_to_druid_point(&points[*end]),
                     );
                     ctx.stroke(scale_transform * line, &color, 1.0);
                 }
             }
 
-            if data.triangle_label_visible
-                && (data.game.triangle_passable[i] || data.unpassable_visible)
-            {
+            if data.triangle_label_visible && (triangle_passable[i] || data.unpassable_visible) {
                 let mut layout = TextLayout::<String>::from_text(format!("{}", i));
                 layout.set_font(FontDescriptor::new(FontFamily::SANS_SERIF).with_size(16.0));
                 layout.set_text_color(color);
@@ -189,8 +191,8 @@ pub(crate) fn paint_board(
                     ctx,
                     scale_transform
                         * delaunator_to_druid_point(&center_of_triangle_obj(
-                            &data.game.triangulation,
-                            &data.game.points,
+                            &data.game.mesh.triangulation,
+                            &points,
                             i,
                         )),
                 );
@@ -201,7 +203,7 @@ pub(crate) fn paint_board(
     if data.simplified_visible {
         let mut rng = Xor128::new(32132);
 
-        for bez_path in data.game.simplified_border.as_ref() {
+        for bez_path in &data.game.mesh.simplified_border {
             let stroke_color = Color::rgb8(
                 (rng.nexti() % 0x80 + 0x7f) as u8,
                 (rng.nexti() % 0x80 + 0x7f) as u8,

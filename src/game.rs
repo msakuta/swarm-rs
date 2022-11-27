@@ -1,18 +1,17 @@
 use cgmath::{InnerSpace, Vector2};
-use delaunator::{triangulate, Triangulation};
-use druid::{piet::kurbo::BezPath, Data, Point};
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+
+use druid::Data;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     agent::{Agent, AgentState, Bullet},
-    app_data::is_passable_at,
     entity::{Entity, GameEvent},
-    marching_squares::{trace_lines, BoolField},
     measure_time,
+    mesh::{create_mesh, Mesh, MeshResult},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
     spawner::Spawner,
     temp_ents::TempEnt,
-    triangle_utils::{center_of_triangle_obj, find_triangle_at, label_triangles},
+    triangle_utils::find_triangle_at,
 };
 
 pub(crate) type Board = Vec<bool>;
@@ -55,12 +54,7 @@ pub(crate) struct Game {
     pub(crate) ys: usize,
     pub(crate) simplify: f64,
     pub(crate) board: Rc<Board>,
-    pub(crate) simplified_border: Rc<Vec<BezPath>>,
-    pub(crate) triangulation: Rc<Triangulation>,
-    pub(crate) triangle_passable: Rc<Vec<bool>>,
-    pub(crate) triangle_labels: Rc<Vec<i32>>,
-    pub(crate) points: Rc<Vec<delaunator::Point>>,
-    pub(crate) largest_label: Option<i32>,
+    pub(crate) mesh: Rc<Mesh>,
     pub(crate) entities: Rc<RefCell<Vec<RefCell<Entity>>>>,
     pub(crate) bullets: Rc<Vec<Bullet>>,
     pub(crate) paused: bool,
@@ -81,26 +75,7 @@ impl Game {
         let xs = 128;
         let ys = 128;
 
-        let (board, simplified_border, points) =
-            Self::create_perlin_board((xs, ys), seed, simplify);
-
-        let triangulation = triangulate(&points);
-
-        let triangle_passable =
-            Self::calc_passable_triangles(&board, (xs, ys), &points, &triangulation);
-
-        let triangle_labels = label_triangles(&triangulation, &triangle_passable);
-
-        let mut label_stats = HashMap::new();
-        for label in &triangle_labels {
-            if *label != -1 {
-                *label_stats.entry(*label).or_insert(0) += 1;
-            }
-        }
-        let largest_label = label_stats
-            .iter()
-            .max_by_key(|(_, count)| **count)
-            .map(|(key, _)| *key);
+        let MeshResult { board, mesh } = Self::create_perlin_board((xs, ys), seed, simplify);
 
         let id_gen = 0;
 
@@ -109,12 +84,7 @@ impl Game {
             ys,
             simplify,
             board: Rc::new(board),
-            simplified_border: Rc::new(simplified_border),
-            triangulation: Rc::new(triangulation),
-            triangle_passable: Rc::new(triangle_passable),
-            triangle_labels: Rc::new(triangle_labels),
-            largest_label,
-            points: Rc::new(points),
+            mesh: Rc::new(mesh),
             entities: Rc::new(RefCell::new(vec![])),
             bullets: Rc::new(vec![]),
             paused: false,
@@ -132,12 +102,12 @@ impl Game {
         shape: (usize, usize),
         seed: u32,
         simplify_epsilon: f64,
-    ) -> (Vec<bool>, Vec<BezPath>, Vec<delaunator::Point>) {
+    ) -> MeshResult {
         let bits = 6;
         let mut xor128 = Xor128::new(seed);
         let terms = gen_terms(&mut xor128, bits);
 
-        Self::create_board_gen(shape, simplify_epsilon, |xi, yi| {
+        create_mesh(shape, simplify_epsilon, |xi, yi| {
             let dx = (xi as isize - shape.0 as isize / 2) as f64;
             let dy = (yi as isize - shape.1 as isize / 2) as f64;
             let noise_val = perlin_noise_pixel(xi as f64, yi as f64, bits, &terms, 0.5);
@@ -149,9 +119,9 @@ impl Game {
         shape: (usize, usize),
         _seed: u32,
         simplify_epsilon: f64,
-    ) -> (Vec<bool>, Vec<BezPath>, Vec<delaunator::Point>) {
+    ) -> MeshResult {
         let (xs, ys) = (shape.0 as isize, shape.1 as isize);
-        Self::create_board_gen(shape, simplify_epsilon, |xi, yi| {
+        create_mesh(shape, simplify_epsilon, |xi, yi| {
             let dx = xi as isize - xs / 2;
             let dy = yi as isize - ys / 2;
             dx.abs() < xs / 4 && dy.abs() < ys / 4
@@ -162,9 +132,9 @@ impl Game {
         shape: (usize, usize),
         _seed: u32,
         simplify_epsilon: f64,
-    ) -> (Vec<bool>, Vec<BezPath>, Vec<delaunator::Point>) {
+    ) -> MeshResult {
         let (xs, ys) = (shape.0 as isize, shape.1 as isize);
-        Self::create_board_gen(shape, simplify_epsilon, |xi, yi| {
+        create_mesh(shape, simplify_epsilon, |xi, yi| {
             let dx = xi as isize - xs / 2;
             let dy = yi as isize - ys / 2;
             dx.abs() < xs * 3 / 8
@@ -174,132 +144,13 @@ impl Game {
         })
     }
 
-    fn create_board_gen(
-        (xs, ys): (usize, usize),
-        simplify_epsilon: f64,
-        mut pixel_proc: impl FnMut(usize, usize) -> bool,
-    ) -> (Vec<bool>, Vec<BezPath>, Vec<delaunator::Point>) {
-        let mut board = vec![false; xs * ys];
-        for (i, cell) in board.iter_mut().enumerate() {
-            let xi = i % xs;
-            let yi = i / ys;
-            *cell = pixel_proc(xi, yi);
-        }
-
-        println!(
-            "true: {}, false: {}",
-            board.iter().filter(|c| **c).count(),
-            board.iter().filter(|c| !**c).count()
-        );
-
-        let shape = (xs as isize, ys as isize);
-
-        let field = BoolField::new(&board, shape);
-
-        let mut simplified_border = vec![];
-        let mut points = vec![];
-
-        let to_point = |p: [f64; 2]| Point::new(p[0] as f64, p[1] as f64);
-
-        let lines = trace_lines(&field);
-        let mut simplified_vertices = 0;
-        for line in &lines {
-            let simplified = if simplify_epsilon == 0. {
-                line.iter().map(|p| [p[0] as f64, p[1] as f64]).collect()
-            } else {
-                // println!("rdp closed: {} start/end: {:?}/{:?}", line.first() == line.last(), line.first(), line.last());
-
-                // if the ring is closed, remove the last element to open it, because rdp needs different start and end points
-                let mut slice = &line[..];
-                while 1 < slice.len() && slice.first() == slice.last() {
-                    slice = &slice[..slice.len() - 1];
-                }
-
-                crate::rdp::rdp(
-                    &slice
-                        .iter()
-                        .map(|p| [p[0] as f64, p[1] as f64])
-                        .collect::<Vec<_>>(),
-                    simplify_epsilon,
-                )
-            };
-
-            // If the polygon does not make up a triangle, skip it
-            if simplified.len() <= 2 {
-                continue;
-            }
-
-            if let Some((first, rest)) = simplified.split_first() {
-                let mut bez_path = BezPath::new();
-                bez_path.move_to(to_point(*first));
-                for point in rest {
-                    bez_path.line_to(to_point(*point));
-                    points.push(delaunator::Point {
-                        x: point[0],
-                        y: point[1],
-                    });
-                }
-                bez_path.close_path();
-                simplified_border.push(bez_path);
-                simplified_vertices += simplified.len();
-            }
-        }
-        println!(
-            "trace_lines: {}, vertices: {}, simplified_border: {} vertices: {}",
-            lines.len(),
-            lines.iter().map(|line| line.len()).sum::<usize>(),
-            simplified_border.len(),
-            simplified_vertices
-        );
-
-        (board, simplified_border, points)
-    }
-
-    pub(crate) fn calc_passable_triangles(
-        board: &[bool],
-        shape: (usize, usize),
-        points: &[delaunator::Point],
-        triangulation: &Triangulation,
-    ) -> Vec<bool> {
-        triangulation
-            .triangles
-            .chunks(3)
-            .enumerate()
-            .map(|(t, _)| {
-                let pos = center_of_triangle_obj(&triangulation, points, t);
-                is_passable_at(&board, shape, [pos.x, pos.y])
-            })
-            .collect()
-    }
-
     pub(crate) fn new_board(&mut self, shape: (usize, usize), seed: u32, simplify: f64) {
         self.xs = shape.0;
         self.ys = shape.0;
-        let (board, simplified_border, points) = Self::create_crank_board(shape, seed, simplify);
-
-        let triangulation = triangulate(&points);
-        let triangle_passable =
-            Self::calc_passable_triangles(&board, shape, &points, &triangulation);
-
-        let triangle_labels = label_triangles(&triangulation, &triangle_passable);
-
-        let mut label_stats = HashMap::new();
-        for label in &triangle_labels {
-            if *label != -1 {
-                *label_stats.entry(*label).or_insert(0) += 1;
-            }
-        }
-        self.largest_label = label_stats
-            .iter()
-            .max_by_key(|(_, count)| **count)
-            .map(|(key, _)| *key);
+        let MeshResult { board, mesh } = Self::create_crank_board(shape, seed, simplify);
 
         self.board = Rc::new(board);
-        self.simplified_border = Rc::new(simplified_border);
-        self.triangulation = Rc::new(triangulation);
-        self.points = Rc::new(points);
-        self.triangle_passable = Rc::new(triangle_passable);
-        self.triangle_labels = Rc::new(triangle_labels);
+        self.mesh = Rc::new(mesh);
         self.entities = Rc::new(RefCell::new(vec![]));
         self.bullets = Rc::new(vec![]);
     }
@@ -313,10 +164,8 @@ impl Game {
     ) -> Option<Entity> {
         let rng = Rc::make_mut(&mut self.rng);
         let id_gen = &mut self.id_gen;
-        let triangulation = &self.triangulation;
-        let points = &self.points;
-        let triangle_labels = &self.triangle_labels;
-        let largest_label = self.largest_label;
+        let triangle_labels = &self.mesh.triangle_labels;
+        let largest_label = self.mesh.largest_label;
         for _ in 0..10 {
             let state_candidate = AgentState {
                 x: pos[0], // + rng.next() * 10. - 5.,
@@ -329,8 +178,7 @@ impl Game {
             }
 
             if let Some(tri) = find_triangle_at(
-                &triangulation,
-                &points,
+                &self.mesh,
                 state_candidate.into(),
                 &mut *self.triangle_profiler.borrow_mut(),
             ) {
@@ -357,16 +205,11 @@ impl Game {
 
     /// Check collision with the environment
     pub(crate) fn check_hit(&self, pos: [f64; 2]) -> bool {
-        let triangulation = &self.triangulation;
-        let points = &self.points;
-        let triangle_labels = &self.triangle_labels;
-        let largest_label = self.largest_label;
-        if let Some(tri) = find_triangle_at(
-            &triangulation,
-            &points,
-            pos,
-            &mut *self.triangle_profiler.borrow_mut(),
-        ) {
+        let triangle_labels = &self.mesh.triangle_labels;
+        let largest_label = self.mesh.largest_label;
+        if let Some(tri) =
+            find_triangle_at(&self.mesh, pos, &mut *self.triangle_profiler.borrow_mut())
+        {
             if Some(triangle_labels[tri]) == largest_label {
                 return true;
             }
@@ -379,12 +222,11 @@ impl Game {
             let rng = Rc::make_mut(&mut self.rng);
             let pos_candidate = [rng.next() * self.xs as f64, rng.next() * self.ys as f64];
             if let Some(tri) = find_triangle_at(
-                &self.triangulation,
-                &self.points,
+                &self.mesh,
                 pos_candidate,
                 &mut *self.triangle_profiler.borrow_mut(),
             ) {
-                if Some(self.triangle_labels[tri]) == self.largest_label {
+                if Some(self.mesh.triangle_labels[tri]) == self.mesh.largest_label {
                     if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
                         return Some(Entity::Spawner(Spawner::new(
                             &mut self.id_gen,

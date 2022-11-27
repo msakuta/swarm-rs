@@ -134,7 +134,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                         profiler.get_average(),
                         profiler.get_count(),
                         std::mem::size_of::<AppData>(),
-                        Rc::strong_count(&data.game.triangulation)
+                        Rc::strong_count(&data.game.mesh)
                     )
                 }),
                 1.,

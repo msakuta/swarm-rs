@@ -23,6 +23,7 @@ impl AsPoint for AgentState {
 }
 
 /// Collision checking with linear interpolation. A closure to check the collision must be provided.
+/// The closure will be called multiple times to interpolate the range.
 pub(crate) fn interpolate<P: AsPoint>(
     start: P,
     target: P,

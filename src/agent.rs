@@ -17,6 +17,7 @@ use crate::{
     entity::Entity,
     game::{Game, Profiler},
     measure_time,
+    mesh::Mesh,
     triangle_utils::find_triangle_at,
 };
 use ::behavior_tree_lite::Context;
@@ -168,12 +169,11 @@ impl Agent {
         }
 
         if let Some(next_triangle) = find_triangle_at(
-            &game.triangulation,
-            &game.points,
+            &game.mesh,
             target_pos.into(),
             &mut *game.triangle_profiler.borrow_mut(),
         ) {
-            if game.triangle_passable[next_triangle] {
+            if game.mesh.triangle_passable[next_triangle] {
                 if 100 < self.trace.len() {
                     self.trace.pop_front();
                 }
@@ -355,14 +355,12 @@ impl Agent {
                     if let Some(target) = entities.get(com.0).and_then(|e| e.try_borrow().ok()) {
                         let target_pos = target.get_pos();
                         let target_triangle = find_triangle_at(
-                            &game.triangulation,
-                            &game.points,
+                            &game.mesh,
                             target_pos,
                             &mut *game.triangle_profiler.borrow_mut(),
                         );
                         let self_triangle = find_triangle_at(
-                            &game.triangulation,
-                            &game.points,
+                            &game.mesh,
                             self.pos,
                             &mut *game.triangle_profiler.borrow_mut(),
                         );
@@ -371,8 +369,7 @@ impl Agent {
                         }
                         return Some(Box::new(self.is_position_visible(
                             target_pos,
-                            &game.triangulation,
-                            &game.points,
+                            &game.mesh,
                             &mut *game.triangle_profiler.borrow_mut(),
                         )));
                     }
@@ -468,13 +465,7 @@ impl Agent {
         }
     }
 
-    fn is_position_visible(
-        &self,
-        target: [f64; 2],
-        triangulation: &Triangulation,
-        points: &[Point],
-        profiler: &mut Profiler,
-    ) -> bool {
+    fn is_position_visible(&self, target: [f64; 2], mesh: &Mesh, profiler: &mut Profiler) -> bool {
         const INTERPOLATE_INTERVAL: f64 = AGENT_HALFLENGTH;
 
         let self_pos = self.pos;
@@ -484,7 +475,7 @@ impl Agent {
             return false;
         }
         interpolation::interpolate(self_pos, target, INTERPOLATE_INTERVAL, |point| {
-            find_triangle_at(triangulation, points, point, profiler).is_some()
+            find_triangle_at(mesh, point, profiler).is_some()
         })
     }
 }
