@@ -21,11 +21,15 @@ use crate::{
 };
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
-use behavior_tree_lite::{error::LoadError, Blackboard};
+use behavior_tree_lite::{error::LoadError, Blackboard, Lazy};
 use delaunator::{Point, Triangulation};
 use std::{
     cell::RefCell,
     collections::{HashSet, VecDeque},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -308,10 +312,23 @@ impl Agent {
                     let forward = Vector2::new(self.orient.cos(), self.orient.sin());
                     self.shoot_bullet(bullets, (Vector2::from(self.pos) + forward).into());
                 } else if let Some(goal) = f.downcast_ref::<AvoidanceCommand>() {
+                    static TIME_WINDOW: Lazy<Mutex<VecDeque<f64>>> =
+                        Lazy::new(|| Mutex::new(VecDeque::new()));
+                    static AVG_COUNT: AtomicUsize = AtomicUsize::new(0);
                     self.goal = Some(avoidance::State::new(goal.0[0], goal.0[1], self.orient));
                     let (res, time) =
                         measure_time(|| self.search(game, entities, |_, _| (), false));
-                    println!("Avoidance search: {time:.06}s");
+                    if let Ok(mut time_window) = TIME_WINDOW.lock() {
+                        time_window.push_back(time);
+                        while 10 < time_window.len() {
+                            time_window.pop_front();
+                        }
+                        let count = AVG_COUNT.fetch_add(1, Ordering::Relaxed);
+                        if count % 10 == 0 && !time_window.is_empty() {
+                            let avg = time_window.iter().sum::<f64>() / time_window.len() as f64;
+                            println!("Avoidance search ({count}): {avg:.06}s");
+                        }
+                    }
                     return Some(Box::new(res) as Box<dyn std::any::Any>);
                 } else if f.downcast_ref::<ClearAvoidanceCommand>().is_some() {
                     self.search_state = None;
