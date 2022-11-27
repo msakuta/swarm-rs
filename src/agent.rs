@@ -13,7 +13,8 @@ use self::{
     },
 };
 use crate::{
-    entity::{BoundingCircle, CollisionShape, Entity, Obb},
+    collision::{BoundingCircle, CollisionShape, Obb},
+    entity::Entity,
     game::{Game, Profiler},
     measure_time,
     triangle_utils::find_triangle_at,

@@ -1,6 +1,12 @@
 use cgmath::Vector2;
 
-use crate::{agent::Agent, agent::Bullet, game::Game, spawner::Spawner};
+use crate::{
+    agent::Agent,
+    agent::Bullet,
+    collision::{BoundingCircle, CollisionShape, Obb},
+    game::Game,
+    spawner::Spawner,
+};
 use std::{cell::RefCell, collections::VecDeque};
 
 #[derive(Debug)]
@@ -11,53 +17,6 @@ pub(crate) enum Entity {
 
 pub(crate) enum GameEvent {
     SpawnAgent { pos: [f64; 2], team: usize },
-}
-
-/// Oriented bounding box
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Obb {
-    pub center: Vector2<f64>,
-    pub xs: f64,
-    pub ys: f64,
-    pub orient: f64,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum CollisionShape {
-    // Circle(f64),
-    BBox(Obb),
-}
-
-impl CollisionShape {
-    pub(crate) fn to_vertices(&self) -> Option<[[f64; 2]; 4]> {
-        let Self::BBox(Obb {
-            center,
-            xs,
-            ys,
-            orient,
-        }) = *self;
-        let mut bbox = [[-xs, -ys], [-xs, ys], [xs, ys], [xs, -ys]];
-        let rot = cgmath::Matrix2::from_angle(cgmath::Rad(orient));
-        for vertex in &mut bbox {
-            *vertex = (center + rot * Vector2::from(*vertex)).into();
-        }
-        Some(bbox)
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct BoundingCircle {
-    pub center: Vector2<f64>,
-    pub radius: f64,
-}
-
-impl BoundingCircle {
-    pub(crate) fn new(center: impl Into<Vector2<f64>>, radius: f64) -> Self {
-        Self {
-            center: center.into(),
-            radius,
-        }
-    }
 }
 
 const SPAWNER_RADIUS: f64 = 0.5;

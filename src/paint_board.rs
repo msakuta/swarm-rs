@@ -247,6 +247,13 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             ctx.stroke(big_circle, brush, 3.);
         }
 
+        let bcirc = agent.bounding_circle();
+        let shape = Circle::new(
+            *view_transform * to_point(bcirc.center.into()),
+            bcirc.radius * data.scale,
+        );
+        ctx.stroke(shape, brush, 1.);
+
         if let Some(orient) = agent.get_orient() {
             let length = 10.;
             let view_pos = *view_transform * pos;

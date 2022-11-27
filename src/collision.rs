@@ -1,11 +1,62 @@
-//! Collision detection algorithms
+//! Collision detection algorithms and data structures.
+//!
+//! The primary data structure for collision detection are
+//!
+//! * Obb (Oriented bounding box)
+//! * CollisionShape
+//! * BoundingSphere
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use behavior_tree_lite::Lazy;
 use cgmath::{InnerSpace, Matrix2, Rad, Vector2};
 
-use crate::entity::{BoundingCircle, CollisionShape, Obb};
+/// Oriented bounding box
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Obb {
+    pub center: Vector2<f64>,
+    pub xs: f64,
+    pub ys: f64,
+    pub orient: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum CollisionShape {
+    // Circle(f64),
+    BBox(Obb),
+}
+
+impl CollisionShape {
+    pub(crate) fn to_vertices(&self) -> Option<[[f64; 2]; 4]> {
+        let Self::BBox(Obb {
+            center,
+            xs,
+            ys,
+            orient,
+        }) = *self;
+        let mut bbox = [[-xs, -ys], [-xs, ys], [xs, ys], [xs, -ys]];
+        let rot = cgmath::Matrix2::from_angle(cgmath::Rad(orient));
+        for vertex in &mut bbox {
+            *vertex = (center + rot * Vector2::from(*vertex)).into();
+        }
+        Some(bbox)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BoundingCircle {
+    pub center: Vector2<f64>,
+    pub radius: f64,
+}
+
+impl BoundingCircle {
+    pub(crate) fn new(center: impl Into<Vector2<f64>>, radius: f64) -> Self {
+        Self {
+            center: center.into(),
+            radius,
+        }
+    }
+}
 
 static TOTAL_CALLS: AtomicUsize = AtomicUsize::new(0);
 const MAX_RECURSES: usize = 3;
