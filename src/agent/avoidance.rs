@@ -585,8 +585,9 @@ mod render {
             ctx: &mut PaintCtx,
             _env: &Env,
             view_transform: &Affine,
-            brush: &Color,
+            _brush: &Color,
             circle_visible: bool,
+            shape_visible: bool,
         ) {
             // let rgba = brush.as_rgba8();
             // let brush = Color::rgba8(rgba.0 / 2, rgba.1 / 2, rgba.2 / 2, rgba.3);
@@ -615,6 +616,8 @@ mod render {
                                     Circle::new(*view_transform * to_point(pos), 2. + level_width);
                                 ctx.fill(circle, &brush);
                             }
+                        }
+                        if shape_visible && 0 < level {
                             if let Some(vertices) = state.state.collision_shape().to_vertices() {
                                 if let Some((first, rest)) = vertices.split_first() {
                                     let mut path = BezPath::new();
