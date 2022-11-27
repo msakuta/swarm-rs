@@ -64,8 +64,8 @@ pub(crate) struct Agent {
     blackboard: Blackboard,
 }
 
-pub(crate) const AGENT_HALFWIDTH: f64 = 0.3 * 5.;
-pub(crate) const AGENT_HALFLENGTH: f64 = 0.6 * 5.;
+pub(crate) const AGENT_HALFWIDTH: f64 = 0.3 * 4.;
+pub(crate) const AGENT_HALFLENGTH: f64 = 0.6 * 4.;
 pub(crate) const AGENT_SPEED: f64 = 0.25;
 pub(crate) const AGENT_MAX_HEALTH: u32 = 3;
 const AGENT_VISIBLE_DISTANCE: f64 = 10.;

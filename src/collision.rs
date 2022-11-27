@@ -41,6 +41,14 @@ impl CollisionShape {
         }
         Some(bbox)
     }
+
+    pub(crate) fn to_bounding_circle(&self) -> BoundingCircle {
+        let Self::BBox(obb) = self;
+        BoundingCircle {
+            center: obb.center,
+            radius: (obb.xs.powf(2.) + obb.ys.powf(2.)).sqrt(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -68,6 +76,7 @@ static RECURSE_COUNTS: Lazy<Vec<AtomicUsize>> = Lazy::new(|| {
     ret
 });
 static TOTAL_INTERSECTION_CHECKS: AtomicUsize = AtomicUsize::new(0);
+static TERMINAL_INTERSECTION_CHECKS: AtomicUsize = AtomicUsize::new(0);
 
 /// Binary search collision between 2 shapes in linear motion. Good for detecting
 /// collisions between small, fast moving objects, but not so much for large objects like terrain walls.
@@ -76,10 +85,8 @@ static TOTAL_INTERSECTION_CHECKS: AtomicUsize = AtomicUsize::new(0);
 /// and how many recursions it did to check in the second element.
 pub(crate) fn bsearch_collision(
     obj1: &CollisionShape,
-    obj1_bounding_circle: &BoundingCircle,
     obj1_velo: &Vector2<f64>,
     obj2: &CollisionShape,
-    obj2_bounding_circle: &BoundingCircle,
     obj2_velo: &Vector2<f64>,
 ) -> (bool, usize) {
     // Assume obj2's stationary coordinate frame
@@ -88,7 +95,7 @@ pub(crate) fn bsearch_collision(
     let fetched = TOTAL_CALLS.fetch_add(1, Ordering::Relaxed);
     if fetched % 100 == 0 {
         println!(
-            "bsearch_collision: Total calls: {fetched} recurses: {:?} checks: {TOTAL_INTERSECTION_CHECKS:?}",
+            "bsearch_collision: Total calls: {fetched} recurses: {:?} checks: {TOTAL_INTERSECTION_CHECKS:?} {TERMINAL_INTERSECTION_CHECKS:?}",
             *RECURSE_COUNTS,
         );
     }
@@ -98,27 +105,32 @@ pub(crate) fn bsearch_collision(
     //     obj1_bounding_circle.center, obj2_bounding_circle.center
     // );
 
-    collision_internal(
-        obj1,
-        obj1_bounding_circle,
-        rel_velo,
-        obj2,
-        obj2_bounding_circle,
-        0,
-    )
+    let (hit, level) = collision_internal(obj1, rel_velo, obj2, 0);
+    if hit {
+        (hit, level)
+    } else if level == MAX_RECURSES {
+        TERMINAL_INTERSECTION_CHECKS.fetch_add(1, Ordering::Relaxed);
+        let obj1_copy = obj1
+            .translated(rel_velo)
+            .oriented(rel_velo[1].atan2(rel_velo[0]));
+        (obj1_copy.intersects(obj2), level)
+    } else {
+        (hit, level)
+    }
 }
 
 fn collision_internal(
     obj1: &CollisionShape,
-    obj1_bounding_circle: &BoundingCircle,
     velo: Vector2<f64>,
     obj2: &CollisionShape,
-    obj2_bounding_circle: &BoundingCircle,
     level: usize,
 ) -> (bool, usize) {
+    let obj1_circle = obj1.to_bounding_circle();
+    let obj2_circle = obj2.to_bounding_circle();
+
     // Potential collision radius
-    let potential_radius = velo.magnitude() + obj1_bounding_circle.radius;
-    let potential_center = velo / 2. + obj1_bounding_circle.center;
+    let potential_radius = velo.magnitude() / 2. + obj1_circle.radius + obj2_circle.radius;
+    let potential_center = velo / 2. + obj1_circle.center;
 
     // println!("collision recursing {level}");
     RECURSE_COUNTS
@@ -127,7 +139,7 @@ fn collision_internal(
 
     // If the distance between the centers of the 2 objects is larger than the sum of the radii of bounding circles,
     // there will be no chance of collision.
-    let dist2_centers = (potential_center - obj2_bounding_circle.center).magnitude2();
+    let dist2_centers = (potential_center - obj2_circle.center).magnitude2();
     if potential_radius.powf(2.) < dist2_centers {
         return (false, level);
     }
@@ -136,27 +148,14 @@ fn collision_internal(
 
     if level < MAX_RECURSES {
         // First half recusion
-        let (hit, hitlevel) = collision_internal(
-            obj1,
-            obj1_bounding_circle,
-            velo / 2.,
-            obj2,
-            obj2_bounding_circle,
-            level + 1,
-        );
+        let (hit, hitlevel) = collision_internal(obj1, velo / 2., obj2, level + 1);
         if hit {
             return (hit, hitlevel);
         }
         max_level = max_level.max(hitlevel);
 
-        let (hit, hitlevel) = collision_internal(
-            &obj1.translated(velo / 2.),
-            &obj1_bounding_circle.translated(velo / 2.),
-            velo / 2.,
-            obj2,
-            obj2_bounding_circle,
-            level + 1,
-        );
+        let (hit, hitlevel) =
+            collision_internal(&obj1.translated(velo / 2.), velo / 2., obj2, level + 1);
         if hit {
             return (hit, hitlevel);
         }
