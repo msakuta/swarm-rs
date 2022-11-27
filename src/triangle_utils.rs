@@ -1,4 +1,5 @@
 use ::delaunator::{Point, Triangulation};
+use geo::Contains;
 use std::collections::HashSet;
 
 use crate::{collision::CollisionShape, game::Profiler, measure_time, mesh::Mesh};
@@ -109,6 +110,40 @@ pub(crate) fn label_triangles(
     ret
 }
 
-fn from_point(p: &Point) -> [f64; 2] {
-    [p.x, p.y]
+pub(crate) fn check_shape_in_mesh(
+    mesh: &Mesh,
+    shape: &CollisionShape,
+    profiler: &mut Profiler,
+) -> bool {
+    let (ret, time) = measure_time(move || {
+        let Some(vertices) = shape.to_vertices() else {
+            return false;
+        };
+        let outer = geo::geometry::LineString::new(
+            vertices
+                .into_iter()
+                .map(geo::geometry::Coord::from)
+                .collect(),
+        );
+        let polygon = geo::geometry::Polygon::new(outer, vec![]);
+        log::set_max_level(log::LevelFilter::Off);
+
+        mesh.polygons.contains(&polygon)
+        // for vertex in vertices {
+        //     let point = to_point(vertex);
+        //     for (i, triangle) in triangles.chunks(3).enumerate() {
+        //         let [v1, v2, v3] = [
+        //             points[triangle[0]].clone(),
+        //             points[triangle[1]].clone(),
+        //             points[triangle[2]].clone(),
+        //         ];
+        //         if point_in_triangle(point.clone(), v1, v2, v3) {
+        //             return Some(i);
+        //         }
+        //     }
+        // }
+        // None
+    });
+    profiler.add(time);
+    ret
 }

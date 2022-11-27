@@ -14,6 +14,7 @@ use crate::{
 #[derive(Debug)]
 pub(crate) struct Mesh {
     pub simplified_border: Vec<BezPath>,
+    pub polygons: geo::geometry::MultiPolygon,
     pub points: Vec<delaunator::Point>,
     pub triangulation: Triangulation,
     pub triangle_passable: Vec<bool>,
@@ -49,7 +50,7 @@ pub(crate) fn create_mesh(
     let field = BoolField::new(&board, shape);
 
     let mut simplified_border = vec![];
-    // let mut polygons = vec![];
+    let mut polygons = vec![];
     let mut points = vec![];
 
     let to_point = |p: [f64; 2]| Point::new(p[0] as f64, p[1] as f64);
@@ -97,12 +98,12 @@ pub(crate) fn create_mesh(
             simplified_vertices += simplified.len();
         }
 
-        // let line_string: geo::geometry::LineString = simplified
-        //     .iter()
-        //     .copied()
-        //     .map(geo::geometry::Point::from)
-        //     .collect();
-        // polygons.push(geo::geometry::Polygon::new(line_string, vec![]));
+        let line_string: geo::geometry::LineString = simplified
+            .iter()
+            .copied()
+            .map(geo::geometry::Point::from)
+            .collect();
+        polygons.push(geo::geometry::Polygon::new(line_string, vec![]));
     }
     println!(
         "trace_lines: {}, vertices: {}, simplified_border: {} vertices: {}",
@@ -133,6 +134,7 @@ pub(crate) fn create_mesh(
         board,
         mesh: Mesh {
             simplified_border,
+            polygons: polygons.into_iter().collect(),
             points,
             triangulation,
             triangle_passable,

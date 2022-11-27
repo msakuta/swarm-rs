@@ -25,6 +25,8 @@ const WINDOW_WIDTH: f64 = 1200.;
 const WINDOW_HEIGHT: f64 = 800.;
 
 pub fn main() {
+    log::set_max_level(log::LevelFilter::Off);
+
     let window = WindowDesc::new(make_widget)
         .window_size(Size {
             width: WINDOW_WIDTH,

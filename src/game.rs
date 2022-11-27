@@ -5,13 +5,14 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     agent::{Agent, AgentState, Bullet},
+    collision::CollisionShape,
     entity::{Entity, GameEvent},
     measure_time,
     mesh::{create_mesh, Mesh, MeshResult},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
     spawner::Spawner,
     temp_ents::TempEnt,
-    triangle_utils::find_triangle_at,
+    triangle_utils::{check_shape_in_mesh, find_triangle_at},
 };
 
 pub(crate) type Board = Vec<bool>;
@@ -204,17 +205,21 @@ impl Game {
     }
 
     /// Check collision with the environment
-    pub(crate) fn check_hit(&self, pos: [f64; 2]) -> bool {
+    pub(crate) fn check_hit(&self, state: &CollisionShape) -> bool {
         let triangle_labels = &self.mesh.triangle_labels;
         let largest_label = self.mesh.largest_label;
-        if let Some(tri) =
-            find_triangle_at(&self.mesh, pos, &mut *self.triangle_profiler.borrow_mut())
-        {
-            if Some(triangle_labels[tri]) == largest_label {
-                return true;
-            }
-        }
-        false
+        // if let Some(tri) =
+        //     find_triangle_at(&self.mesh, pos, &mut *self.triangle_profiler.borrow_mut())
+        // {
+        //     if Some(triangle_labels[tri]) == largest_label {
+        //         return true;
+        //     }
+        // }
+        check_shape_in_mesh(
+            &self.mesh,
+            &state,
+            &mut *self.triangle_profiler.borrow_mut(),
+        )
     }
 
     fn try_new_spawner(&mut self, team: usize) -> Option<Entity> {

@@ -63,7 +63,7 @@ impl StateWithCost {
     }
 }
 
-pub const DIST_RADIUS: f64 = 0.5 * 5.;
+pub const DIST_RADIUS: f64 = 0.5 * 3.;
 const DIST_THRESHOLD: f64 = DIST_RADIUS * DIST_RADIUS;
 
 /// Wrap the angle value in [0, 2pi)
@@ -126,7 +126,7 @@ impl Agent {
     }
 
     /// RRT* search
-    pub(super) fn search(
+    pub(super) fn avoidance_search(
         &mut self,
         game: &Game,
         entities: &[RefCell<Entity>],
@@ -250,7 +250,12 @@ impl Agent {
                     if Agent::collision_check(Some(this.id), state, env.entities) {
                         return false;
                     }
-                    !env.game.check_hit(pos)
+                    !env.game.check_hit(
+                        &nodes[start]
+                            .state
+                            .collision_shape()
+                            .with_position(pos.into()),
+                    )
                 };
                 let (hit, level) = if USE_SEPAX {
                     let (hit, level) = env
@@ -284,7 +289,12 @@ impl Agent {
                     } else {
                         (
                             interpolate(nodes[start].state, next, DIST_RADIUS * 0.5, |pos| {
-                                !env.game.check_hit(pos)
+                                !env.game.check_hit(
+                                    &nodes[start]
+                                        .state
+                                        .collision_shape()
+                                        .with_position(pos.into()),
+                                )
                             }),
                             level,
                         )

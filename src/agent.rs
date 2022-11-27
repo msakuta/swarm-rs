@@ -18,12 +18,12 @@ use crate::{
     game::{Game, Profiler},
     measure_time,
     mesh::Mesh,
-    triangle_utils::find_triangle_at,
+    triangle_utils::{check_shape_in_mesh, find_triangle_at},
 };
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
 use behavior_tree_lite::{error::LoadError, Blackboard, Lazy};
-use delaunator::{Point, Triangulation};
+
 use std::{
     cell::RefCell,
     collections::{HashSet, VecDeque},
@@ -168,19 +168,19 @@ impl Agent {
             return false;
         }
 
-        if let Some(next_triangle) = find_triangle_at(
+        if check_shape_in_mesh(
             &game.mesh,
-            target_pos.into(),
+            &target_state.collision_shape(),
             &mut *game.triangle_profiler.borrow_mut(),
         ) {
-            if game.mesh.triangle_passable[next_triangle] {
-                if 100 < self.trace.len() {
-                    self.trace.pop_front();
-                }
-                self.trace.push_back(self.pos);
-                self.pos = target_pos.into();
-                return true;
+            // if game.mesh.triangle_passable[next_triangle] {
+            if 100 < self.trace.len() {
+                self.trace.pop_front();
             }
+            self.trace.push_back(self.pos);
+            self.pos = target_pos.into();
+            return true;
+            // }
         }
         false
     }
@@ -330,7 +330,7 @@ impl Agent {
                         self.orient,
                     ));
                     let (res, time) =
-                        measure_time(|| self.search(game, entities, |_, _| (), false));
+                        measure_time(|| self.avoidance_search(game, entities, |_, _| (), false));
                     if let Ok(mut time_window) = TIME_WINDOW.lock() {
                         time_window.push_back(time);
                         while 10 < time_window.len() {
