@@ -13,7 +13,7 @@ use self::{
     },
 };
 use crate::{
-    entity::Entity,
+    entity::{BoundingCircle, CollisionShape, Entity, Obb},
     game::{Game, Profiler},
     measure_time,
     triangle_utils::find_triangle_at,
@@ -101,6 +101,22 @@ impl Agent {
             behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
         })
+    }
+
+    pub(crate) fn get_shape(&self) -> CollisionShape {
+        CollisionShape::BBox(Obb {
+            center: self.pos.into(),
+            xs: AGENT_HALFLENGTH,
+            ys: AGENT_HALFWIDTH,
+            orient: self.orient,
+        })
+    }
+
+    pub(crate) fn bounding_circle(&self) -> BoundingCircle {
+        BoundingCircle::new(
+            self.pos,
+            (AGENT_HALFLENGTH.powf(2.) + AGENT_HALFWIDTH.powf(2.)).sqrt(),
+        )
     }
 
     pub(crate) fn get_health_rate(&self) -> f64 {
@@ -293,7 +309,7 @@ impl Agent {
                 } else if let Some(goal) = f.downcast_ref::<AvoidanceCommand>() {
                     self.goal = Some(avoidance::State::new(goal.0[0], goal.0[1], self.orient));
                     let (res, time) =
-                        measure_time(|| self.search(1, game, entities, |_, _| (), false));
+                        measure_time(|| self.search(game, entities, |_, _| (), false));
                     println!("Avoidance search: {time:.06}s");
                     return Some(Box::new(res) as Box<dyn std::any::Any>);
                 } else if f.downcast_ref::<ClearAvoidanceCommand>().is_some() {

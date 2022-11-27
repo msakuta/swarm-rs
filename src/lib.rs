@@ -9,6 +9,7 @@ mod widget;
 #[macro_use]
 mod macros;
 mod agent;
+mod collision;
 mod entity;
 mod game;
 mod spawner;

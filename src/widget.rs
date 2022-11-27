@@ -5,15 +5,12 @@ use crate::{
     board_widget::BoardWidget,
 };
 use behavior_tree_lite::parse_file;
+use druid::widget::{
+    Button, Checkbox, CrossAxisAlignment, Either, Flex, Label, LensWrap, RadioGroup, Scroll,
+    Switch, TextBox, WidgetExt,
+};
 use druid::Color;
 use druid::{lens::Field, widget::prelude::*};
-use druid::{
-    piet::Text,
-    widget::{
-        Button, Checkbox, CrossAxisAlignment, Either, Flex, Label, LensWrap, RadioGroup, Scroll,
-        Switch, TextBox, WidgetExt,
-    },
-};
 
 const BG: Color = Color::rgb8(0, 0, 53 as u8);
 const BAR_WIDTH: f64 = 400.;

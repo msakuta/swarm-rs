@@ -6,7 +6,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{
     agent::{Agent, Bullet},
     app_data::is_passable_at,
-    entity::{CollisionShape, Entity, GameEvent},
+    entity::{Entity, GameEvent},
     marching_squares::{trace_lines, BoolField},
     measure_time,
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
@@ -437,21 +437,19 @@ impl Game {
                             if agent.get_team() == bullet.team {
                                 continue;
                             }
-                            match agent.get_shape() {
-                                CollisionShape::BBox(agent_vertices) => {
-                                    if separating_axis(
-                                        &Vector2::from(bullet.pos),
-                                        &Vector2::from(bullet.velo),
-                                        agent_vertices.into_iter().map(Vector2::from),
-                                    ) {
-                                        temp_ents.push(TempEnt::new(bullet.pos));
-                                        if agent.damage() {
-                                            agent.set_active(false);
-                                        }
-                                        println!("Agent {} is being killed", agent.get_id());
-                                        return None;
+                            if let Some(agent_vertices) = agent.get_shape().to_vertices() {
+                                if separating_axis(
+                                    &Vector2::from(bullet.pos),
+                                    &Vector2::from(bullet.velo),
+                                    agent_vertices.into_iter().map(Vector2::from),
+                                ) {
+                                    temp_ents.push(TempEnt::new(bullet.pos));
+                                    if agent.damage() {
+                                        agent.set_active(false);
                                     }
-                                } // _ => todo!(),
+                                    println!("Agent {} is being killed", agent.get_id());
+                                    return None;
+                                }
                             }
                         }
                         let mut ret = bullet.clone();

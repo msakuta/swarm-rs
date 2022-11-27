@@ -1,16 +1,13 @@
 use std::cell::RefCell;
 
-use cgmath::Vector2;
+use cgmath::{Vector2, Zero};
 use rand::{distributions::Uniform, prelude::Distribution};
 
 use super::{
     interpolation::{interpolate, interpolate_steer},
     Agent,
 };
-use crate::{
-    entity::{CollisionShape, Entity},
-    game::Game,
-};
+use crate::{collision::bsearch_collision, entity::Entity, game::Game};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct State {
@@ -32,6 +29,8 @@ pub(crate) struct StateWithCost {
     speed: f64,
     id: usize,
     _steer: f64,
+    /// The maximum recursion level to determine collision. Used for debugging
+    max_level: usize,
     from: Option<usize>,
     to: Vec<usize>,
 }
@@ -44,6 +43,7 @@ impl StateWithCost {
             _steer: steer,
             speed,
             id: 0,
+            max_level: 0,
             from: None,
             to: vec![],
         }
@@ -115,7 +115,6 @@ impl Agent {
     /// RRT* search
     pub(super) fn search(
         &mut self,
-        depth: usize,
         game: &Game,
         entities: &[RefCell<Entity>],
         callback: impl Fn(&StateWithCost, &StateWithCost),
@@ -215,6 +214,10 @@ impl Agent {
                 }
             }
 
+            let this_shape = this.get_shape();
+            let mut this_bounding_circle = this.bounding_circle();
+            this_bounding_circle.center = nodes[start].state.into();
+
             'skip: for _i in 0..env.expand_states {
                 let State { x, y, heading } = nodes[start].state;
                 let steer = rand::random::<f64>() - 0.5;
@@ -235,38 +238,62 @@ impl Agent {
                     }
                     !env.game.check_hit(pos)
                 };
-                let hit = if USE_SEPAX {
-                    env.entities
+                let (hit, level) = if USE_SEPAX {
+                    let (hit, level) = env
+                        .entities
                         .iter()
                         .filter_map(|entity| entity.try_borrow().ok())
-                        .map(|entity| entity.get_shape())
-                        .any(|shape| {
-                            let CollisionShape::BBox(bbox) = shape;
-                            let pos = nodes[start].state.into();
+                        .fold((false, 0usize), |acc, entity| {
+                            let shape = entity.get_shape();
+                            let bounding_circle = entity.bounding_circle();
+                            // let CollisionShape::BBox(bbox) = shape;
+                            let pos = Vector2::from(nodes[start].state);
                             let diff = Vector2::from(next) - pos;
-                            let hit = crate::game::separating_axis(
-                                &pos,
+                            // let hit = crate::game::separating_axis(
+                            //     &pos,
+                            //     &diff,
+                            //     bbox.into_iter().map(Vector2::from),
+                            // );
+                            let (hit, level) = bsearch_collision(
+                                &this_shape,
+                                &this_bounding_circle,
                                 &diff,
-                                bbox.into_iter().map(Vector2::from),
+                                &shape,
+                                &bounding_circle,
+                                &Vector2::zero(),
                             );
                             if hit {
-                                println!("Entity hit");
+                                println!("Entity hit {level}");
                             }
-                            hit
-                        })
-                        || interpolate(nodes[start].state, next, DIST_RADIUS * 0.5, |pos| {
-                            !env.game.check_hit(pos)
-                        })
+                            (acc.0 || hit, acc.1.max(level))
+                        });
+
+                    if hit {
+                        (hit, level)
+                    } else {
+                        (
+                            interpolate(nodes[start].state, next, DIST_RADIUS * 0.5, |pos| {
+                                !env.game.check_hit(pos)
+                            }),
+                            level,
+                        )
+                    }
                 } else if USE_STEER {
-                    interpolate_steer(
-                        &nodes[start].state,
-                        steer,
-                        next_direction * distance,
-                        DIST_RADIUS,
-                        &collision_checker,
+                    (
+                        interpolate_steer(
+                            &nodes[start].state,
+                            steer,
+                            next_direction * distance,
+                            DIST_RADIUS,
+                            &collision_checker,
+                        ),
+                        0,
                     )
                 } else {
-                    interpolate(nodes[start].state, next, DIST_RADIUS, &collision_checker)
+                    (
+                        interpolate(nodes[start].state, next, DIST_RADIUS, &collision_checker),
+                        0,
+                    )
                 };
                 if hit {
                     // println!("Search hit something!, {nextDirection} * {distance}");
@@ -311,6 +338,7 @@ impl Agent {
                 let new_node_id = nodes.len();
                 nodes[start].to.push(new_node_id);
                 node.id = new_node_id;
+                node.max_level = level;
                 nodes.push(node);
                 // callback(start, node);
             }
@@ -527,22 +555,28 @@ mod render {
             brush: &Color,
             circle_visible: bool,
         ) {
-            let mut bez_path = BezPath::new();
-            for state in &self.search_tree {
-                let point = Point::new(state.state.x, state.state.y);
-                if let Some(from) = state.from {
-                    let from_state = self.search_tree[from].state;
-                    bez_path.move_to(Point::new(from_state.x, from_state.y));
-                    bez_path.line_to(point);
+            for level in 0..=3 {
+                let level_width = level as f64 * 0.5;
+                let mut bez_path = BezPath::new();
+                for state in &self.search_tree {
+                    if state.max_level != level {
+                        continue;
+                    }
+                    let point = Point::new(state.state.x, state.state.y);
+                    if let Some(from) = state.from {
+                        let from_state = self.search_tree[from].state;
+                        bez_path.move_to(Point::new(from_state.x, from_state.y));
+                        bez_path.line_to(point);
+                    }
+                    if circle_visible {
+                        let circle = Circle::new(*view_transform * point, 2. + level_width);
+                        ctx.fill(circle, brush);
+                        let circle = Circle::new(point, DIST_RADIUS);
+                        ctx.stroke(*view_transform * circle, brush, 0.5);
+                    }
                 }
-                if circle_visible {
-                    let circle = Circle::new(*view_transform * point, 2.);
-                    ctx.fill(circle, brush);
-                    let circle = Circle::new(point, DIST_RADIUS);
-                    ctx.stroke(*view_transform * circle, brush, 0.5);
-                }
+                ctx.stroke(*view_transform * bez_path, brush, 0.5 + level_width);
             }
-            ctx.stroke(*view_transform * bez_path, brush, 0.5);
         }
     }
 }
