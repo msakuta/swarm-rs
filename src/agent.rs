@@ -179,9 +179,10 @@ impl Agent {
                 }
                 self.trace.push_back(self.pos);
                 self.pos = target_pos.into();
+                return true;
             }
         }
-        true
+        false
     }
 
     pub(crate) fn move_to<'a>(
@@ -415,26 +416,51 @@ impl Agent {
         // }
         self.cooldown = (self.cooldown - 1.).max(0.);
     }
+}
 
-    fn follow_path(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) -> bool {
+#[derive(Clone, Copy)]
+pub(crate) enum FollowPathResult {
+    Following,
+    Blocked,
+    Arrived,
+}
+
+impl From<bool> for FollowPathResult {
+    fn from(b: bool) -> Self {
+        if b {
+            FollowPathResult::Following
+        } else {
+            FollowPathResult::Blocked
+        }
+    }
+}
+
+impl From<FollowPathResult> for bool {
+    fn from(b: FollowPathResult) -> bool {
+        matches!(b, FollowPathResult::Following)
+    }
+}
+
+impl Agent {
+    fn follow_path(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) -> FollowPathResult {
         if let Some(target) = self.avoidance_path.last() {
             if DIST_RADIUS < Vector2::from(*target).distance(Vector2::from(self.pos)) {
                 let target_pos = *target;
-                self.move_to(game, target_pos, entities)
+                self.move_to(game, target_pos, entities).into()
             } else {
                 self.avoidance_path.pop();
-                true
+                FollowPathResult::Following
             }
         } else if let Some(target) = self.path.last() {
             if 5. < Vector2::from(*target).distance(Vector2::from(self.pos)) {
                 let target_pos = *target;
-                self.move_to(game, target_pos, entities)
+                self.move_to(game, target_pos, entities).into()
             } else {
                 self.path.pop();
-                true
+                FollowPathResult::Following
             }
         } else {
-            false
+            FollowPathResult::Arrived
         }
     }
 

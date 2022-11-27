@@ -1,4 +1,4 @@
-use super::State;
+use super::{FollowPathResult, State};
 use behavior_tree_lite::{
     error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context,
     Lazy, PortSpec, Registry, Symbol,
@@ -171,18 +171,24 @@ pub(super) struct FollowPathCommand;
 pub(super) struct FollowPath;
 
 impl BehaviorNode for FollowPath {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_out("arrived")]
+    }
     fn tick(
         &mut self,
         arg: BehaviorCallback,
-        _ctx: &mut behavior_tree_lite::Context,
+        ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         let res = arg(&FollowPathCommand);
-        if res
+        let res = res
             .as_ref()
-            .and_then(|res| res.downcast_ref::<bool>())
+            .and_then(|res| res.downcast_ref::<FollowPathResult>())
             .map(|b| *b)
-            .unwrap_or(false)
-        {
+            .unwrap_or(FollowPathResult::Blocked);
+
+        ctx.set("arrived", matches!(res, FollowPathResult::Arrived));
+
+        if res.into() {
             BehaviorResult::Success
         } else {
             // println!("Can't follow path!");

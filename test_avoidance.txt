@@ -4,22 +4,25 @@ tree main = Sequence {
     Avoidance (goal <- pos)
     Repeat (n <- "100") {
         Fallback {
-            FollowPath
-            Sequence {
-                ReactiveSequence {
-                    Move (direction <- "backward")
-                    Randomize (min <- "10", max <- "20", value -> timeoutValue)
-                    Timeout (time <- timeoutValue)
-                }
+            FollowPath (arrived -> arrived)
+            Fallback {
+                IsTrue (input <- arrived)
                 Sequence {
-                    PathNextNode (output -> pathNext)
-                    Randomize (min <- "20", max <- "100", value -> timeoutValue)
-                    ReactiveFallback {
-                        Avoidance (goal <- pathNext)
-                        ForceFailure {
-                            Timeout (time <- timeoutValue)
+                    ReactiveSequence {
+                        Move (direction <- "backward")
+                        Randomize (min <- "10", max <- "20", value -> timeoutValue)
+                        Timeout (time <- timeoutValue)
+                    }
+                    Sequence {
+                        PathNextNode (output -> pathNext)
+                        Randomize (min <- "20", max <- "100", value -> timeoutValue)
+                        ReactiveFallback {
+                            Avoidance (goal <- pathNext)
+                            ForceFailure {
+                                Timeout (time <- timeoutValue)
+                            }
+                            ClearAvoidance
                         }
-                        ClearAvoidance
                     }
                 }
             }

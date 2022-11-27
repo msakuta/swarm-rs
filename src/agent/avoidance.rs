@@ -398,7 +398,7 @@ impl Agent {
 
                     // println!("Using existing tree with {} nodes", nodes.len());
 
-                    const SEARCH_NODES: usize = 20;
+                    const SEARCH_NODES: usize = 100;
 
                     if 0 < nodes.len() && nodes.len() < 10000 {
                         // Descending the tree is not a good way to sample a random node in a tree, since
