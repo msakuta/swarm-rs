@@ -125,7 +125,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_goal(&self) -> Option<crate::agent::State> {
+    pub(crate) fn get_goal(&self) -> Option<crate::agent::AgentState> {
         match self {
             Entity::Agent(agent) => agent.goal,
             _ => None,

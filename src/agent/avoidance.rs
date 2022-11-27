@@ -14,13 +14,13 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct State {
+pub(crate) struct AgentState {
     pub x: f64,
     pub y: f64,
     pub heading: f64,
 }
 
-impl State {
+impl AgentState {
     pub fn new(x: f64, y: f64, heading: f64) -> Self {
         Self { x, y, heading }
     }
@@ -37,7 +37,7 @@ impl State {
 
 #[derive(Clone, Debug)]
 pub(crate) struct StateWithCost {
-    state: State,
+    state: AgentState,
     cost: f64,
     speed: f64,
     id: usize,
@@ -49,7 +49,7 @@ pub(crate) struct StateWithCost {
 }
 
 impl StateWithCost {
-    pub(crate) fn new(state: State, cost: f64, steer: f64, speed: f64) -> Self {
+    pub(crate) fn new(state: AgentState, cost: f64, steer: f64, speed: f64) -> Self {
         Self {
             state,
             cost,
@@ -74,13 +74,13 @@ fn wrap_angle(x: f64) -> f64 {
     x - (x + PI).div_euclid(TWOPI)
 }
 
-fn compare_state(s1: &State, s2: &State) -> bool {
+fn compare_state(s1: &AgentState, s2: &AgentState) -> bool {
     let delta_angle = wrap_angle(s1.heading - s2.heading);
     // println!("compareState deltaAngle: {}", deltaAngle);
     compare_distance(s1, s2, DIST_THRESHOLD) && delta_angle.abs() < std::f64::consts::PI / 4.
 }
 
-fn compare_distance(s1: &State, s2: &State, threshold: f64) -> bool {
+fn compare_distance(s1: &AgentState, s2: &AgentState, threshold: f64) -> bool {
     let delta_x = s1.x - s2.x;
     let delta_y = s1.y - s2.y;
     delta_x * delta_x + delta_y * delta_y < threshold
@@ -92,8 +92,8 @@ const MAX_STEER: f64 = std::f64::consts::PI / 3.;
 pub struct SearchState {
     search_tree: Vec<StateWithCost>,
     tree_size: usize,
-    start: State,
-    goal: State,
+    start: AgentState,
+    goal: AgentState,
     found_path: Option<Vec<usize>>,
 }
 
@@ -105,20 +105,20 @@ impl Agent {
         steer: f64,
         speed: f64,
         delta_time: f64,
-    ) -> State {
+    ) -> AgentState {
         let [x, y] = [speed * delta_time, 0.];
         let heading = heading + steer.min(1.).max(-1.) * x * 0.2 * MAX_STEER;
         let dx = heading.cos() * x - heading.sin() * y + px;
         let dy = heading.sin() * x + heading.cos() * y + py;
-        State {
+        AgentState {
             x: dx,
             y: dy,
             heading,
         }
     }
 
-    pub(super) fn to_state(&self) -> State {
-        State {
+    pub(super) fn to_state(&self) -> AgentState {
+        AgentState {
             x: self.pos[0],
             y: self.pos[1],
             heading: self.orient,
@@ -161,7 +161,7 @@ impl Agent {
         /// Check if the goal is close enough to the added node, and if it was, return a built path
         fn check_goal(
             start: usize,
-            goal: &Option<State>,
+            goal: &Option<AgentState>,
             nodes: &[StateWithCost],
         ) -> Option<Vec<usize>> {
             if let Some(goal) = goal.as_ref() {
@@ -215,14 +215,14 @@ impl Agent {
             //     nodes.len()
             // );
 
-            impl From<State> for [f64; 2] {
-                fn from(s: State) -> Self {
+            impl From<AgentState> for [f64; 2] {
+                fn from(s: AgentState) -> Self {
                     [s.x, s.y]
                 }
             }
 
-            impl From<State> for Vector2<f64> {
-                fn from(s: State) -> Self {
+            impl From<AgentState> for Vector2<f64> {
+                fn from(s: AgentState) -> Self {
                     Self::new(s.x, s.y)
                 }
             }
@@ -232,7 +232,7 @@ impl Agent {
             this_bounding_circle.center = nodes[start].state.into();
 
             'skip: for _i in 0..env.expand_states {
-                let State { x, y, heading } = nodes[start].state;
+                let AgentState { x, y, heading } = nodes[start].state;
                 let steer = rand::random::<f64>() - 0.5;
                 let change_direction = env.switch_back && rand::random::<f64>() < 0.2;
                 let next_direction = if change_direction {
@@ -246,7 +246,7 @@ impl Agent {
                 const USE_SEPAX: bool = true;
                 const USE_STEER: bool = false;
                 let collision_checker = |pos: [f64; 2]| {
-                    let state = State::new(pos[0], pos[1], steer);
+                    let state = AgentState::new(pos[0], pos[1], steer);
                     if Agent::collision_check(Some(this.id), state, env.entities) {
                         return false;
                     }

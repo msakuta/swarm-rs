@@ -1,6 +1,6 @@
 use cgmath::{MetricSpace, Vector2};
 
-use super::{Agent, State};
+use super::{Agent, AgentState};
 
 pub(crate) fn lerp(a: &[f64; 2], b: &[f64; 2], f: f64) -> [f64; 2] {
     [a[0] * (1. - f) + b[0] * f, a[1] * (1. - f) + b[1] * f]
@@ -16,7 +16,7 @@ impl AsPoint for [f64; 2] {
     }
 }
 
-impl AsPoint for State {
+impl AsPoint for AgentState {
     fn as_point(&self) -> [f64; 2] {
         [self.x, self.y]
     }
@@ -44,7 +44,7 @@ pub(crate) fn interpolate<P: AsPoint>(
 
 /// Collision checking with steering model. It can interpolate curvature.
 pub(crate) fn interpolate_steer(
-    start: &State,
+    start: &AgentState,
     steer: f64,
     distance: f64,
     interval: f64,

@@ -3,7 +3,7 @@ mod behavior_nodes;
 mod find_path;
 mod interpolation;
 
-pub(crate) use self::avoidance::{SearchState, State};
+pub(crate) use self::avoidance::{AgentState, SearchState};
 use self::{
     avoidance::DIST_RADIUS,
     behavior_nodes::{
@@ -52,7 +52,7 @@ pub(crate) struct Agent {
     pub team: usize,
     cooldown: f64,
     pub health: u32,
-    pub goal: Option<State>,
+    pub goal: Option<AgentState>,
     pub search_state: Option<SearchState>,
     /// Avoidance path is more local.
     pub avoidance_path: Vec<[f64; 2]>,
@@ -157,7 +157,7 @@ impl Agent {
         let forward = Vector2::new(self.orient.cos(), self.orient.sin());
         let target_pos =
             Vector2::from(self.pos) + drive.min(AGENT_SPEED).max(-AGENT_SPEED) * forward;
-        let target_state = State {
+        let target_state = AgentState {
             x: target_pos.x,
             y: target_pos.y,
             heading: self.orient,
@@ -204,7 +204,7 @@ impl Agent {
     /// Check collision with other entities, but not walls
     pub(crate) fn collision_check(
         ignore: Option<usize>,
-        newpos: State,
+        newpos: AgentState,
         others: &[RefCell<Entity>],
     ) -> bool {
         let shape = newpos.collision_shape();
@@ -324,7 +324,11 @@ impl Agent {
                     static TIME_WINDOW: Lazy<Mutex<VecDeque<f64>>> =
                         Lazy::new(|| Mutex::new(VecDeque::new()));
                     static AVG_COUNT: AtomicUsize = AtomicUsize::new(0);
-                    self.goal = Some(avoidance::State::new(goal.0[0], goal.0[1], self.orient));
+                    self.goal = Some(avoidance::AgentState::new(
+                        goal.0[0],
+                        goal.0[1],
+                        self.orient,
+                    ));
                     let (res, time) =
                         measure_time(|| self.search(game, entities, |_, _| (), false));
                     if let Ok(mut time_window) = TIME_WINDOW.lock() {

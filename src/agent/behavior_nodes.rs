@@ -1,4 +1,4 @@
-use super::{FollowPathResult, State};
+use super::{AgentState, FollowPathResult};
 use behavior_tree_lite::{
     error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context,
     Lazy, PortSpec, Registry, Symbol,
@@ -377,7 +377,7 @@ impl BehaviorNode for PredictForwardNode {
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
         if let Some(distance) = ctx.get_parse::<f64>("distance") {
             if let Some(state) =
-                arg(&GetStateCommand).and_then(|val| val.downcast_ref::<State>().cloned())
+                arg(&GetStateCommand).and_then(|val| val.downcast_ref::<AgentState>().cloned())
             {
                 let pos = Matrix2::from_angle(Rad(state.heading)) * Vector2::new(distance, 0.)
                     + Vector2::new(state.x, state.y);

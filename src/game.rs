@@ -4,7 +4,7 @@ use druid::{piet::kurbo::BezPath, Data, Point};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    agent::{Agent, Bullet, State},
+    agent::{Agent, AgentState, Bullet},
     app_data::is_passable_at,
     entity::{Entity, GameEvent},
     marching_squares::{trace_lines, BoolField},
@@ -318,7 +318,7 @@ impl Game {
         let triangle_labels = &self.triangle_labels;
         let largest_label = self.largest_label;
         for _ in 0..10 {
-            let state_candidate = State {
+            let state_candidate = AgentState {
                 x: pos[0], // + rng.next() * 10. - 5.,
                 y: pos[1], // + rng.next() * 10. - 5.,
                 heading: rng.next() * std::f64::consts::PI * 2.,
