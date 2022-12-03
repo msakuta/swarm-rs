@@ -12,11 +12,6 @@ fn delaunator_to_vector(p: delaunator::Point) -> Vector2<f64> {
     Vector2::new(p.x, p.y)
 }
 
-#[test]
-fn inftest() {
-    assert!(std::f64::INFINITY == std::f64::INFINITY);
-}
-
 impl Agent {
     pub fn find_path<'a, 'b>(
         &'a mut self,

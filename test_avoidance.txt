@@ -1,27 +1,40 @@
 tree main = Sequence {
-    PredictForward (output -> pos, distance <- "10")
     NewPosition (x <- "96", y <- "64", output -> pos)
-    Avoidance (goal <- pos)
-    Repeat (n <- "100") {
+    TestAvoidance (pos <- pos)
+    NewPosition (x <- "24", y <- "64", output -> pos)
+    TestAvoidance (pos <- pos)
+}
+
+tree TestAvoidance(in pos) = Sequence {
+    Avoidance (goal <- pos, back <- "true")
+    SetBool (value <- "false", output -> arrived)
+    Retry (n <- "10") {
         Fallback {
-            FollowPath (arrived -> arrived)
-            Fallback {
-                IsTrue (input <- arrived)
-                Sequence {
-                    ReactiveSequence {
-                        Move (direction <- "backward")
-                        Randomize (min <- "10", max <- "20", value -> timeoutValue)
-                        Timeout (time <- timeoutValue)
-                    }
-                    Sequence {
-                        PathNextNode (output -> pathNext)
-                        Randomize (min <- "20", max <- "100", value -> timeoutValue)
-                        ReactiveFallback {
-                            Avoidance (goal <- pathNext)
-                            ForceFailure {
-                                Timeout (time <- timeoutValue)
+            IsTrue (input <- arrived)
+            ForceFailure {
+                Repeat (n <- "100") {
+                    Fallback {
+                        FollowPath (arrived -> arrived)
+                        Fallback {
+                            IsTrue (input <- arrived)
+                            Sequence {
+                                ReactiveSequence {
+                                    Move (direction <- "backward")
+                                    Randomize (min <- "10", max <- "20", value -> timeoutValue)
+                                    Timeout (time <- timeoutValue)
+                                }
+                                Sequence {
+                                    PathNextNode (output -> pathNext)
+                                    Randomize (min <- "20", max <- "100", value -> timeoutValue)
+                                    ReactiveFallback {
+                                        Avoidance (goal <- pathNext)
+                                        ForceFailure {
+                                            Timeout (time <- timeoutValue)
+                                        }
+                                        ClearAvoidance
+                                    }
+                                }
                             }
-                            ClearAvoidance
                         }
                     }
                 }

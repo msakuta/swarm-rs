@@ -43,24 +43,26 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("IsTargetVisible", boxify(|| IsTargetVisibleNode));
     registry.register("FaceToTarget", boxify(|| FaceToTargetNode));
 
-    Ok(BehaviorTree(load(
-        &parse_file(source).unwrap().1,
-        &registry,
-        true,
-    )?))
+    let (i, tree_source) = parse_file(source).unwrap();
+    println!("parse_file rest: {i:?}");
+    Ok(BehaviorTree(load(&tree_source, &registry, true)?))
 }
 
 pub(super) struct SetBool;
 
 impl BehaviorNode for SetBool {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("value"), PortSpec::new_out("output")]
+    }
+
     fn tick(
         &mut self,
         _arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        let result = ctx.get::<Option<usize>>("direction");
-        // println!("HasTarge node {result:?}");
-        if result.map(|a| a.is_some()).unwrap_or(false) {
+        let result = ctx.get_parse::<bool>("value");
+        if let Some(value) = result {
+            ctx.set("output", value);
             BehaviorResult::Success
         } else {
             BehaviorResult::Fail
@@ -290,13 +292,16 @@ impl BehaviorNode for RandomizeNode {
     }
 }
 
-pub(super) struct AvoidanceCommand(pub [f64; 2]);
+pub(super) struct AvoidanceCommand {
+    pub goal: [f64; 2],
+    pub back: bool,
+}
 
 pub(super) struct AvoidanceNode;
 
 impl BehaviorNode for AvoidanceNode {
     fn provided_ports(&self) -> Vec<PortSpec> {
-        vec![PortSpec::new_in("goal")]
+        vec![PortSpec::new_in("goal"), PortSpec::new_in("back")]
     }
 
     fn tick(
@@ -305,7 +310,8 @@ impl BehaviorNode for AvoidanceNode {
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         if let Some(goal) = ctx.get::<[f64; 2]>("goal") {
-            let res = arg(&AvoidanceCommand(*goal))
+            let back = ctx.get_parse::<bool>("back").unwrap_or(false);
+            let res = arg(&AvoidanceCommand { goal: *goal, back })
                 .and_then(|res| res.downcast_ref::<bool>().copied())
                 .unwrap_or(false);
             if res {
@@ -315,6 +321,27 @@ impl BehaviorNode for AvoidanceNode {
             }
         } else {
             println!("Avoidance could not get goal!");
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct IsArrivedGoalCommand;
+
+pub(super) struct IsArrivedGoalNode;
+
+impl BehaviorNode for IsArrivedGoalNode {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let res = arg(&IsArrivedGoalCommand)
+            .and_then(|res| res.downcast_ref::<bool>().copied())
+            .unwrap_or(false);
+        if res {
+            BehaviorResult::Success
+        } else {
             BehaviorResult::Fail
         }
     }
