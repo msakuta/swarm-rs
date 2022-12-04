@@ -14,7 +14,7 @@ use self::{
     },
 };
 use crate::{
-    collision::{BoundingCircle, CollisionShape, Obb},
+    collision::{CollisionShape, Obb},
     entity::Entity,
     game::{Game, Profiler},
     measure_time,

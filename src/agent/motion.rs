@@ -120,7 +120,10 @@ impl Agent {
         backward: bool,
         others: &[RefCell<Entity>],
     ) -> bool {
-        if self.orient_to(target_pos, backward, others).into() {
+        if matches!(
+            self.orient_to(target_pos, backward, others),
+            OrientToResult::Arrived | OrientToResult::Blocked
+        ) {
             let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
             let distance = delta.magnitude();
 

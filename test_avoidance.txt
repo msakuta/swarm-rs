@@ -7,16 +7,14 @@ tree main = Sequence {
 
 tree TestAvoidance(in pos) = Sequence {
     Avoidance (goal <- pos, back <- "true")
-    SetBool (value <- "false", output -> arrived)
+    var arrived = false
     Retry (n <- "10") {
-        Fallback {
-            IsTrue (input <- arrived)
+        if (!arrived) {
             ForceFailure {
                 Repeat (n <- "100") {
                     Fallback {
                         FollowPath (arrived -> arrived)
-                        Fallback {
-                            IsTrue (input <- arrived)
+                        if (!arrived) {
                             Sequence {
                                 ReactiveSequence {
                                     Move (direction <- "backward")
