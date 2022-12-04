@@ -58,7 +58,7 @@ pub(crate) struct BoundingCircle {
 }
 
 impl BoundingCircle {
-    pub(crate) fn new(center: impl Into<Vector2<f64>>, radius: f64) -> Self {
+    pub(crate) fn _new(center: impl Into<Vector2<f64>>, radius: f64) -> Self {
         Self {
             center: center.into(),
             radius,
@@ -169,7 +169,7 @@ fn collision_internal(
 }
 
 impl BoundingCircle {
-    fn translated(&self, offset: Vector2<f64>) -> Self {
+    fn _translated(&self, offset: Vector2<f64>) -> Self {
         let mut copy = *self;
         copy.center += offset;
         copy

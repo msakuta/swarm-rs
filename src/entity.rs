@@ -58,13 +58,6 @@ impl Entity {
         }
     }
 
-    pub(crate) fn bounding_circle(&self) -> BoundingCircle {
-        match self {
-            Self::Agent(agent) => agent.bounding_circle(),
-            Self::Spawner(spawner) => BoundingCircle::new(spawner.pos, SPAWNER_RADIUS),
-        }
-    }
-
     pub(crate) fn get_active(&self) -> bool {
         match self {
             Entity::Agent(agent) => agent.active,

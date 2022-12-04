@@ -24,7 +24,6 @@ use crate::{
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
 use behavior_tree_lite::{error::LoadError, Blackboard, Lazy};
-use geo::Orient;
 
 use std::{
     cell::RefCell,
@@ -120,13 +119,6 @@ impl Agent {
             ys: AGENT_HALFWIDTH,
             orient: self.orient,
         })
-    }
-
-    pub(crate) fn bounding_circle(&self) -> BoundingCircle {
-        BoundingCircle::new(
-            self.pos,
-            (AGENT_HALFLENGTH.powf(2.) + AGENT_HALFWIDTH.powf(2.)).sqrt(),
-        )
     }
 
     pub(crate) fn get_health_rate(&self) -> f64 {

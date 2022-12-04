@@ -206,8 +206,8 @@ impl Game {
 
     /// Check collision with the environment
     pub(crate) fn check_hit(&self, state: &CollisionShape) -> bool {
-        let triangle_labels = &self.mesh.triangle_labels;
-        let largest_label = self.mesh.largest_label;
+        // let triangle_labels = &self.mesh.triangle_labels;
+        // let largest_label = self.mesh.largest_label;
         // if let Some(tri) =
         //     find_triangle_at(&self.mesh, pos, &mut *self.triangle_profiler.borrow_mut())
         // {

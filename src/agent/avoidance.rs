@@ -128,7 +128,6 @@ const MAX_STEER: f64 = std::f64::consts::PI / 3.;
 #[derive(Debug)]
 pub struct SearchState {
     search_tree: Vec<StateWithCost>,
-    tree_size: usize,
     start: AgentState,
     goal: AgentState,
     found_path: Option<Vec<usize>>,
@@ -472,7 +471,6 @@ impl Agent {
                     }
 
                     // let treeSize = env.tree_size;
-                    search_state.tree_size = 0;
                     search_state.goal = goal;
                     self.search_state = Some(search_state);
                     true
@@ -508,11 +506,9 @@ impl Agent {
                     }
                 }
                 if !nodes.is_empty() {
-                    let tree_size = nodes.len();
                     let search_state = SearchState {
                         search_tree: nodes,
                         start: self.to_state(),
-                        tree_size,
                         goal: goal,
                         found_path: None,
                     };
