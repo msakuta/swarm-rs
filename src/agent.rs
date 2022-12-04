@@ -4,7 +4,7 @@ mod find_path;
 mod interpolation;
 mod motion;
 
-pub(crate) use self::avoidance::{AgentState, SearchState};
+pub(crate) use self::avoidance::{AgentState, PathNode, SearchState};
 use self::{
     avoidance::DIST_RADIUS,
     behavior_nodes::{
@@ -19,7 +19,7 @@ use crate::{
     game::{Game, Profiler},
     measure_time,
     mesh::Mesh,
-    triangle_utils::{check_shape_in_mesh, find_triangle_at},
+    triangle_utils::find_triangle_at,
 };
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
@@ -52,13 +52,14 @@ pub(crate) struct Agent {
     pub id: usize,
     pub pos: [f64; 2],
     pub orient: f64,
+    pub speed: f64,
     pub team: usize,
     cooldown: f64,
     pub health: u32,
     pub goal: Option<AgentState>,
     pub search_state: Option<SearchState>,
     /// Avoidance path is more local.
-    pub avoidance_path: Vec<[f64; 2]>,
+    pub avoidance_path: Vec<PathNode>,
     pub path: Vec<[f64; 2]>,
     pub trace: VecDeque<[f64; 2]>,
     static_: bool,
@@ -97,6 +98,7 @@ impl Agent {
             id,
             pos,
             orient,
+            speed: 0.,
             team,
             cooldown: 5.,
             health: AGENT_MAX_HEALTH,
@@ -221,7 +223,7 @@ impl Agent {
             self.orient,
         ));
         let (res, time) =
-            measure_time(|| self.avoidance_search(game, entities, |_, _| (), cmd.back));
+            measure_time(|| self.avoidance_search(game, entities, |_, _| (), cmd.back, false));
         if let Ok(mut time_window) = TIME_WINDOW.lock() {
             time_window.push_back(time);
             while 10 < time_window.len() {
@@ -314,7 +316,7 @@ impl Agent {
                 } else if let Some(com) = f.downcast_ref::<FaceToTargetCommand>() {
                     if let Some(target) = entities.get(com.0).and_then(|e| e.try_borrow().ok()) {
                         let target_pos = target.get_pos();
-                        let res = self.orient_to(target_pos, entities);
+                        let res = self.orient_to(target_pos, false, entities);
                         return Some(Box::new(res));
                     }
                 }
@@ -385,7 +387,8 @@ impl Agent {
         if let Some(target) = self.avoidance_path.last() {
             if DIST_RADIUS < Vector2::from(*target).distance(Vector2::from(self.pos)) {
                 let target_pos = *target;
-                self.move_to(game, target_pos, entities).into()
+                self.move_to(game, target_pos.into(), target_pos.backward, entities)
+                    .into()
             } else {
                 self.avoidance_path.pop();
                 FollowPathResult::Following
@@ -393,7 +396,7 @@ impl Agent {
         } else if let Some(target) = self.path.last() {
             if 5. < Vector2::from(*target).distance(Vector2::from(self.pos)) {
                 let target_pos = *target;
-                self.move_to(game, target_pos, entities).into()
+                self.move_to(game, target_pos, false, entities).into()
             } else {
                 self.path.pop();
                 FollowPathResult::Following
@@ -416,4 +419,12 @@ impl Agent {
             find_triangle_at(mesh, point, profiler).is_some()
         })
     }
+}
+
+/// Wrap the angle value in [-pi, pi)
+fn wrap_angle(x: f64) -> f64 {
+    use std::f64::consts::PI;
+    const TWOPI: f64 = PI * 2.;
+    // ((x + PI) - ((x + PI) / TWOPI).floor() * TWOPI) - PI
+    x - (x + PI).div_euclid(TWOPI) * TWOPI
 }

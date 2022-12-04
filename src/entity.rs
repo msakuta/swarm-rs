@@ -2,7 +2,7 @@ use cgmath::Vector2;
 
 use crate::{
     agent::Agent,
-    agent::Bullet,
+    agent::{Bullet, PathNode},
     collision::{BoundingCircle, CollisionShape, Obb},
     game::Game,
     spawner::Spawner,
@@ -93,7 +93,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_avoidance_path(&self) -> Option<&[[f64; 2]]> {
+    pub(crate) fn get_avoidance_path(&self) -> Option<&[PathNode]> {
         match self {
             Entity::Agent(agent) => Some(&agent.avoidance_path),
             _ => None,

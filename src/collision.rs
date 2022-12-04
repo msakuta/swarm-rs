@@ -93,7 +93,7 @@ pub(crate) fn bsearch_collision(
     let rel_velo = obj1_velo - obj2_velo;
 
     let fetched = TOTAL_CALLS.fetch_add(1, Ordering::Relaxed);
-    if fetched % 100 == 0 {
+    if fetched % 1000 == 0 {
         println!(
             "bsearch_collision: Total calls: {fetched} recurses: {:?} checks: {TOTAL_INTERSECTION_CHECKS:?} {TERMINAL_INTERSECTION_CHECKS:?}",
             *RECURSE_COUNTS,

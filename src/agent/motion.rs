@@ -4,7 +4,7 @@ use cgmath::{InnerSpace, Vector2};
 
 use crate::{entity::Entity, game::Game, triangle_utils::check_shape_in_mesh};
 
-use super::{Agent, AgentState, AGENT_SPEED};
+use super::{wrap_angle, Agent, AgentState, AGENT_SPEED};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum OrientToResult {
@@ -23,6 +23,7 @@ impl Agent {
     pub(super) fn orient_to(
         &mut self,
         target: [f64; 2],
+        backward: bool,
         entities: &[RefCell<Entity>],
     ) -> OrientToResult {
         use std::f64::consts::PI;
@@ -30,21 +31,26 @@ impl Agent {
         const ANGLE_SPEED: f64 = PI / 50.;
         let delta = Vector2::from(target) - Vector2::from(self.pos);
         let target_angle = delta.y.atan2(delta.x);
+        let target_angle = if backward {
+            wrap_angle(target_angle + PI)
+        } else {
+            target_angle
+        };
         let delta_angle = target_angle - self.orient;
-        let wrap_angle = ((delta_angle + PI) - ((delta_angle + PI) / TWOPI).floor() * TWOPI) - PI;
-        let (state, arrived) = if wrap_angle.abs() < ANGLE_SPEED {
+        let wrapped_angle = wrap_angle(delta_angle);
+        let (state, arrived) = if wrapped_angle.abs() < ANGLE_SPEED {
             (self.to_state().with_orient(target_angle), true)
-        } else if wrap_angle < 0. {
+        } else if wrapped_angle < 0. {
             let orient = (self.orient - ANGLE_SPEED) % TWOPI;
             (
                 self.to_state().with_orient(orient),
-                wrap_angle.abs() < PI / 4.,
+                wrapped_angle.abs() < PI / 4.,
             )
         } else {
             let orient = (self.orient + ANGLE_SPEED) % TWOPI;
             (
                 self.to_state().with_orient(orient),
-                wrap_angle.abs() < PI / 4.,
+                wrapped_angle.abs() < PI / 4.,
             )
         };
 
@@ -85,6 +91,7 @@ impl Agent {
         };
 
         if Self::collision_check(Some(self.id), target_state, others) {
+            self.speed = 0.;
             return false;
         }
 
@@ -99,23 +106,25 @@ impl Agent {
             }
             self.trace.push_back(self.pos);
             self.pos = target_pos.into();
+            self.speed = drive;
             return true;
             // }
         }
         false
     }
 
-    pub(crate) fn move_to<'a>(
-        &'a mut self,
+    pub(crate) fn move_to(
+        &mut self,
         game: &mut Game,
         target_pos: [f64; 2],
+        backward: bool,
         others: &[RefCell<Entity>],
     ) -> bool {
-        if self.orient_to(target_pos, others).into() {
+        if self.orient_to(target_pos, backward, others).into() {
             let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
             let distance = delta.magnitude();
 
-            self.drive(distance, game, others)
+            self.drive(if backward { -distance } else { distance }, game, others)
         } else {
             true
         }

@@ -59,7 +59,6 @@ pub(crate) fn interpolate_steer(
             start.y,
             start.heading,
             steer,
-            1.,
             sign * i as f64 * interval,
         );
         if f([next.x, next.y]) {

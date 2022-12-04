@@ -5,7 +5,7 @@ use rand::{distributions::Uniform, prelude::Distribution};
 
 use super::{
     interpolation::{interpolate, interpolate_steer},
-    Agent, AGENT_HALFLENGTH, AGENT_HALFWIDTH,
+    wrap_angle, Agent, AGENT_HALFLENGTH, AGENT_HALFWIDTH,
 };
 use crate::{
     collision::{bsearch_collision, CollisionShape, Obb},
@@ -41,6 +41,45 @@ impl AgentState {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PathNode {
+    pub x: f64,
+    pub y: f64,
+    pub backward: bool,
+}
+
+impl From<[f64; 2]> for PathNode {
+    fn from(a: [f64; 2]) -> Self {
+        Self {
+            x: a[0],
+            y: a[1],
+            backward: false,
+        }
+    }
+}
+
+impl From<PathNode> for [f64; 2] {
+    fn from(a: PathNode) -> Self {
+        [a.x, a.y]
+    }
+}
+
+impl From<&StateWithCost> for PathNode {
+    fn from(node: &StateWithCost) -> Self {
+        PathNode {
+            x: node.state.x,
+            y: node.state.y,
+            backward: node.speed < 0.,
+        }
+    }
+}
+
+impl From<PathNode> for Vector2<f64> {
+    fn from(node: PathNode) -> Self {
+        Self::new(node.x, node.y)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct StateWithCost {
     state: AgentState,
@@ -72,14 +111,6 @@ impl StateWithCost {
 pub const DIST_RADIUS: f64 = 0.5 * 3.;
 const DIST_THRESHOLD: f64 = DIST_RADIUS * DIST_RADIUS;
 
-/// Wrap the angle value in [0, 2pi)
-fn wrap_angle(x: f64) -> f64 {
-    use std::f64::consts::PI;
-    const TWOPI: f64 = PI * 2.;
-    // ((x + PI) - ((x + PI) / TWOPI).floor() * TWOPI) - PI
-    x - (x + PI).div_euclid(TWOPI)
-}
-
 fn compare_state(s1: &AgentState, s2: &AgentState) -> bool {
     let delta_angle = wrap_angle(s1.heading - s2.heading);
     // println!("compareState deltaAngle: {}", deltaAngle);
@@ -104,15 +135,8 @@ pub struct SearchState {
 }
 
 impl Agent {
-    pub(super) fn step_move(
-        px: f64,
-        py: f64,
-        heading: f64,
-        steer: f64,
-        speed: f64,
-        delta_time: f64,
-    ) -> AgentState {
-        let [x, y] = [speed * delta_time, 0.];
+    pub(super) fn step_move(px: f64, py: f64, heading: f64, steer: f64, motion: f64) -> AgentState {
+        let [x, y] = [motion, 0.];
         let heading = heading + steer.min(1.).max(-1.) * x * 0.2 * MAX_STEER;
         let dx = heading.cos() * x - heading.sin() * y + px;
         let dy = heading.sin() * x + heading.cos() * y + py;
@@ -137,6 +161,7 @@ impl Agent {
         game: &Game,
         entities: &[RefCell<Entity>],
         callback: impl Fn(&StateWithCost, &StateWithCost),
+        backward: bool,
         switch_back: bool,
     ) -> bool {
         // println!(
@@ -161,9 +186,6 @@ impl Agent {
             return true;
         }
 
-        let mut nodes: Vec<StateWithCost> = vec![];
-        // let mut edges: Vec<[StateWithCost; 2]> = vec![];
-
         /// Check if the goal is close enough to the added node, and if it was, return a built path
         fn check_goal(
             start: usize,
@@ -174,13 +196,18 @@ impl Agent {
                 if !compare_distance(&nodes[start].state, &goal, (DIST_RADIUS * 2.).powf(2.)) {
                     return None;
                 }
-                println!("Found path! {goal:?}");
                 let mut node = start;
                 let mut path = vec![];
                 while let Some(next_node) = nodes[node].from {
                     path.push(next_node);
                     node = next_node;
                 }
+                println!(
+                    "Found path to {goal:?}: {:?}",
+                    path.iter()
+                        .map(|node| nodes[*node].speed)
+                        .collect::<Vec<_>>()
+                );
                 return Some(path);
             }
             None
@@ -233,8 +260,8 @@ impl Agent {
                 }
             }
 
-            let this_shape = this.get_shape().with_position(nodes[start].state.into());
             let start_state = nodes[start].state;
+            let this_shape = start_state.collision_shape();
 
             let collision_check = |next: AgentState,
                                    next_direction: f64,
@@ -307,14 +334,15 @@ impl Agent {
                     direction
                 };
                 let distance: f64 = DIST_RADIUS * 2. + rand::random::<f64>() * DIST_RADIUS * 3.;
-                let next = Agent::step_move(x, y, heading, steer, 1., next_direction * distance);
+                let next = Agent::step_move(x, y, heading, steer, next_direction * distance);
 
                 // Changing direction costs
                 let calculate_cost = |distance| {
-                    nodes[start].cost + distance + if change_direction { 1000. } else { 0. }
+                    nodes[start].cost + distance + if change_direction { 10000. } else { 0. }
                 };
 
-                let mut node = StateWithCost::new(next, calculate_cost(distance), steer, 1.);
+                let mut node =
+                    StateWithCost::new(next, calculate_cost(distance), steer, next_direction);
 
                 // First, check if there is already a "samey" node exists
                 for i in 0..nodes.len() {
@@ -342,6 +370,11 @@ impl Agent {
                     if existing_cost > shortcut_cost {
                         let direction = Vector2::from(next) - Vector2::new(x, y);
                         let heading = direction.y.atan2(direction.x);
+                        let heading = if next_direction < 0. {
+                            wrap_angle(heading + std::f64::consts::PI)
+                        } else {
+                            heading
+                        };
                         let (hit, _level) = collision_check(
                             nodes[i].state,
                             next_direction,
@@ -383,35 +416,6 @@ impl Agent {
             None
         }
 
-        // fn enumTree(root: &StateWithCost, nodes: &mut Vec<StateWithCost>) {
-        //     nodes.push(root.clone());
-        //     for node in &root.to {
-        //         enumTree(&nodes[*node], nodes);
-        //     }
-        // }
-
-        fn trace_tree(
-            this: &Agent,
-            root: usize,
-            env: &mut SearchEnv,
-            nodes: &mut Vec<StateWithCost>,
-        ) -> Option<Vec<usize>> {
-            let root_node = &nodes[root];
-            if env.switch_back || -0.1 < root_node.speed {
-                if let Some(path) = search(this, root, 1., env, nodes) {
-                    return Some(path);
-                }
-            }
-            let root_node = &nodes[root];
-            if env.switch_back || root_node.speed < 0.1 {
-                if let Some(path) = search(this, root, -1., env, nodes) {
-                    return Some(path);
-                }
-            }
-            env.tree_size += 1;
-            None
-        }
-
         let searched_path =
             if let Some((mut search_state, goal)) = self.search_state.take().zip(self.goal) {
                 if compare_distance(&self.to_state(), &search_state.start, DIST_THRESHOLD * 100.)
@@ -432,14 +436,33 @@ impl Agent {
                         // the chances are much higher on shallow nodes. We want to give chances uniformly
                         // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
                         for _i in 0..SEARCH_NODES {
-                            let idx = Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
-                            if let Some(path) = trace_tree(self, idx, &mut env, nodes) {
-                                self.avoidance_path = std::iter::once(goal.into())
-                                    .chain(path.iter().map(|i| {
-                                        let node = nodes[*i].state;
-                                        [node.x, node.y]
-                                    }))
-                                    .collect();
+                            let path = 'trace_tree: {
+                                let root =
+                                    Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
+                                let root_node = &nodes[root];
+                                if env.switch_back || 0. < root_node.speed {
+                                    if let Some(path) = search(self, root, 1., &mut env, nodes) {
+                                        break 'trace_tree Some(path);
+                                    }
+                                }
+                                let root_node = &nodes[root];
+                                if env.switch_back || root_node.speed < 0. {
+                                    if let Some(path) = search(self, root, -1., &mut env, nodes) {
+                                        break 'trace_tree Some(path);
+                                    }
+                                }
+                                env.tree_size += 1;
+                                None
+                            };
+
+                            if let Some(path) = path {
+                                self.avoidance_path = std::iter::once(PathNode {
+                                    x: goal.x,
+                                    y: goal.y,
+                                    backward: false,
+                                })
+                                .chain(path.iter().map(|i| (&nodes[*i]).into()))
+                                .collect();
                                 // println!("Materialized found path: {:?}", self.path);
                                 search_state.found_path = Some(path);
                                 self.search_state = None; //Some(search_state);
@@ -463,45 +486,31 @@ impl Agent {
         if !searched_path {
             if let Some(goal) = self.goal {
                 // println!("Rebuilding tree with {} nodes should be 0", nodes.len());
-                let mut roots = vec![];
-                if switch_back || true
-                /* || -0.1 < self.velocity.magnitude()*/
-                {
+                let mut nodes: Vec<StateWithCost> = vec![];
+                if backward || -0.1 < self.speed {
                     let root = StateWithCost::new(self.to_state(), 0., 0., 1.);
                     let root_id = nodes.len();
-                    // println!("Pushing the first node: {:?}", root);
                     nodes.push(root.clone());
                     if let Some(path) = search(self, root_id, 1., &mut env, &mut nodes) {
-                        self.avoidance_path = path
-                            .iter()
-                            .map(|i| {
-                                let node = nodes[*i].state;
-                                [node.x, node.y]
-                            })
-                            .collect();
-                        // let tree_size = nodes.len();
+                        self.avoidance_path = path.iter().map(|i| (&nodes[*i]).into()).collect();
                         self.search_state = None;
-                        //  Some(SearchState {
-                        //     searchTree: nodes,
-                        //     start: root.state,
-                        //     treeSize: tree_size,
-                        //     goal,
-                        //     found_path: Some(path),
-                        // });
                         return true;
                     }
-                    roots.push(root);
                 }
-                // if(switchBack || this.speed < 0.1){
-                //     let root = StateWithCost(State{x: this.x, y: this.y, heading: this.angle}, 0, 0, -1);
-                //     nodes.push(root);
-                //     search(root, depth, -1, 1);
-                //     roots.push(root);
-                // }
-                if !roots.is_empty() {
-                    let tree_size = roots.len();
+                if backward || self.speed < 0.1 {
+                    let root = StateWithCost::new(self.to_state(), 0., 0., -1.);
+                    let root_id = nodes.len();
+                    nodes.push(root.clone());
+                    if let Some(path) = search(self, root_id, -1., &mut env, &mut nodes) {
+                        self.avoidance_path = path.iter().map(|i| (&nodes[*i]).into()).collect();
+                        self.search_state = None;
+                        return true;
+                    }
+                }
+                if !nodes.is_empty() {
+                    let tree_size = nodes.len();
                     let search_state = SearchState {
-                        search_tree: roots,
+                        search_tree: nodes,
                         start: self.to_state(),
                         tree_size,
                         goal: goal,
@@ -517,21 +526,6 @@ impl Agent {
                     // }
                     // println!("Search state: {search_state:?}");
                     self.search_state = Some(search_state);
-                }
-            }
-
-            nodes
-                .iter_mut()
-                .enumerate()
-                .for_each(|(index, node)| node.id = index);
-            let mut connections: Vec<(usize, usize)> = vec![];
-            for node in nodes.iter() {
-                if let Some(from) = node.from {
-                    callback(&nodes[from], node);
-                    if !(node.id < nodes.len()) {
-                        panic!("No node id for to: {}", node.id);
-                    }
-                    connections.push((from, node.id));
                 }
             }
 
@@ -552,25 +546,6 @@ impl Agent {
             //         new_node.id = nodes.len();
             //         nodes.push(new_node);
             //     }
-            // }
-
-            // let nodeBuffer = new Float32Array(nodes.length * 5);
-            // nodes.forEach((node, i) => {
-            //     nodeBuffer[i * 5] = node.x;
-            //     nodeBuffer[i * 5 + 1] = node.y;
-            //     nodeBuffer[i * 5 + 2] = node.heading;
-            //     nodeBuffer[i * 5 + 3] = node.cost;
-            //     nodeBuffer[i * 5 + 4] = node.speed;
-            // });
-
-            // validate
-            for con in connections {
-                if !(con.0 < nodes.len()) || !(con.1 < nodes.len()) {
-                    panic!("No node id for from: {:?}", con);
-                }
-            }
-            // for node in &self.path {
-            //     if(!(node.id in nodes)) throw `Path node not in nodes ${node.id}`;
             // }
         }
         false
@@ -597,54 +572,64 @@ mod render {
         ) {
             // let rgba = brush.as_rgba8();
             // let brush = Color::rgba8(rgba.0 / 2, rgba.1 / 2, rgba.2 / 2, rgba.3);
-            let brush = Color::WHITE;
-            for level in 0..=3 {
-                let level_width = level as f64 * 0.5;
-                let mut bez_path = BezPath::new();
-                for state in &self.search_tree {
-                    if state.max_level != level {
-                        continue;
-                    }
-                    let point = Point::new(state.state.x, state.state.y);
-                    if let Some(from) = state.from {
-                        let from_state = self.search_tree[from].state;
-                        bez_path.move_to(Point::new(from_state.x, from_state.y));
-                        bez_path.line_to(point);
-                        if circle_visible && 0 < level {
-                            let interpolates = 1 << level;
-                            for i in 1..interpolates {
-                                let pos = lerp(
-                                    &state.state.into(),
-                                    &from_state.into(),
-                                    i as f64 / interpolates as f64,
-                                );
-                                let circle =
-                                    Circle::new(*view_transform * to_point(pos), 2. + level_width);
-                                ctx.fill(circle, &brush);
-                            }
+            for (direction, brush) in [Color::WHITE, Color::rgb8(255, 127, 127)]
+                .iter()
+                .enumerate()
+            {
+                for level in 0..=3 {
+                    let level_width = level as f64 * 0.5;
+                    let mut bez_path = BezPath::new();
+                    for state in &self.search_tree {
+                        if state.max_level != level {
+                            continue;
                         }
-                        if shape_visible && 0 < level {
-                            if let Some(vertices) = state.state.collision_shape().to_vertices() {
-                                if let Some((first, rest)) = vertices.split_first() {
-                                    let mut path = BezPath::new();
-                                    path.move_to(to_point(*first));
-                                    for v in rest {
-                                        path.line_to(to_point(*v));
+                        if 0. < (direction as f64 * 2. - 1.) * state.speed {
+                            continue;
+                        }
+                        let point = Point::new(state.state.x, state.state.y);
+                        if let Some(from) = state.from {
+                            let from_state = self.search_tree[from].state;
+                            bez_path.move_to(Point::new(from_state.x, from_state.y));
+                            bez_path.line_to(point);
+                            if circle_visible && 0 < level {
+                                let interpolates = 1 << level;
+                                for i in 1..interpolates {
+                                    let pos = lerp(
+                                        &state.state.into(),
+                                        &from_state.into(),
+                                        i as f64 / interpolates as f64,
+                                    );
+                                    let circle = Circle::new(
+                                        *view_transform * to_point(pos),
+                                        2. + level_width,
+                                    );
+                                    ctx.fill(circle, brush);
+                                }
+                            }
+                            if shape_visible && 0 < level {
+                                if let Some(vertices) = state.state.collision_shape().to_vertices()
+                                {
+                                    if let Some((first, rest)) = vertices.split_first() {
+                                        let mut path = BezPath::new();
+                                        path.move_to(to_point(*first));
+                                        for v in rest {
+                                            path.line_to(to_point(*v));
+                                        }
+                                        path.close_path();
+                                        ctx.stroke(*view_transform * path, brush, 0.5);
                                     }
-                                    path.close_path();
-                                    ctx.stroke(*view_transform * path, &brush, 0.5);
                                 }
                             }
                         }
+                        if circle_visible {
+                            let circle = Circle::new(*view_transform * point, 2. + level_width);
+                            ctx.fill(circle, brush);
+                            let circle = Circle::new(point, DIST_RADIUS);
+                            ctx.stroke(*view_transform * circle, brush, 0.5);
+                        }
                     }
-                    if circle_visible {
-                        let circle = Circle::new(*view_transform * point, 2. + level_width);
-                        ctx.fill(circle, &brush);
-                        let circle = Circle::new(point, DIST_RADIUS);
-                        ctx.stroke(*view_transform * circle, &brush, 0.5);
-                    }
+                    ctx.stroke(*view_transform * bez_path, brush, 0.5 + level_width);
                 }
-                ctx.stroke(*view_transform * bez_path, &brush, 0.5 + level_width);
             }
         }
     }
