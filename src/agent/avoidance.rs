@@ -458,7 +458,10 @@ impl Agent {
                                 self.avoidance_path = std::iter::once(PathNode {
                                     x: goal.x,
                                     y: goal.y,
-                                    backward: false,
+                                    backward: path
+                                        .first()
+                                        .map(|j| nodes[*j].speed < 0.)
+                                        .unwrap_or(false),
                                 })
                                 .chain(path.iter().map(|i| (&nodes[*i]).into()))
                                 .collect();
