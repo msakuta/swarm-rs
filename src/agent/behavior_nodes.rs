@@ -30,7 +30,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("FindEnemy", boxify(|| FindEnemy));
     registry.register("HasPath", boxify(|| HasPath));
     registry.register("FindPath", boxify(|| FindPath));
-    registry.register("Move", boxify(|| MoveNode));
+    registry.register("Drive", boxify(|| DriveNode));
     registry.register("FollowPath", boxify(|| FollowPath));
     registry.register("Shoot", boxify(|| ShootNode));
     registry.register("Timeout", boxify(|| TimeoutNode(None)));
@@ -199,11 +199,12 @@ impl BehaviorNode for FollowPath {
     }
 }
 
-pub(super) struct MoveCommand(pub String);
+#[derive(Clone, Copy)]
+pub(super) struct DriveCommand(pub f64);
 
-pub(super) struct MoveNode;
+pub(super) struct DriveNode;
 
-impl BehaviorNode for MoveNode {
+impl BehaviorNode for DriveNode {
     fn provided_ports(&self) -> Vec<PortSpec> {
         vec![PortSpec::new_in("direction")]
     }
@@ -214,7 +215,11 @@ impl BehaviorNode for MoveNode {
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         if let Some(direction) = ctx.get::<String>("direction") {
-            arg(&MoveCommand(direction.clone()));
+            arg(&match direction as _ {
+                "forward" => DriveCommand(1.),
+                "backward" => DriveCommand(-1.),
+                _ => return BehaviorResult::Fail,
+            });
         }
         BehaviorResult::Success
     }
