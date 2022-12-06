@@ -31,6 +31,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("HasPath", boxify(|| HasPath));
     registry.register("FindPath", boxify(|| FindPath));
     registry.register("Drive", boxify(|| DriveNode));
+    registry.register("MoveTo", boxify(|| MoveToNode));
     registry.register("FollowPath", boxify(|| FollowPath));
     registry.register("Shoot", boxify(|| ShootNode));
     registry.register("Timeout", boxify(|| TimeoutNode(None)));
@@ -222,6 +223,36 @@ impl BehaviorNode for DriveNode {
             });
         }
         BehaviorResult::Success
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct MoveToCommand(pub [f64; 2]);
+
+pub(super) struct MoveToNode;
+
+impl BehaviorNode for MoveToNode {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("pos")]
+    }
+
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if let Some(pos) = ctx.get::<[f64; 2]>("pos") {
+            if arg(&MoveToCommand(*pos))
+                .and_then(|res| res.downcast_ref::<bool>().copied())
+                .unwrap_or(false)
+            {
+                BehaviorResult::Success
+            } else {
+                BehaviorResult::Fail
+            }
+        } else {
+            BehaviorResult::Fail
+        }
     }
 }
 

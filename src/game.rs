@@ -163,6 +163,7 @@ impl Game {
         entities: &[RefCell<Entity>],
         static_: bool,
     ) -> Option<Entity> {
+        const STATIC_SOURCE_FILE: &str = include_str!("../test_obstacle.txt");
         let rng = Rc::make_mut(&mut self.rng);
         let id_gen = &mut self.id_gen;
         let triangle_labels = &self.mesh.triangle_labels;
@@ -189,8 +190,11 @@ impl Game {
                         state_candidate.into(),
                         state_candidate.heading,
                         team,
-                        &self.source,
-                        static_,
+                        if static_ {
+                            STATIC_SOURCE_FILE
+                        } else {
+                            &self.source
+                        },
                     );
                     match agent {
                         Ok(agent) => return Some(Entity::Agent(agent)),

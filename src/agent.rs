@@ -10,7 +10,8 @@ use self::{
     behavior_nodes::{
         build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, DriveCommand,
         FaceToTargetCommand, FindEnemyCommand, FindPathCommand, FollowPathCommand,
-        GetPathNextNodeCommand, GetStateCommand, IsTargetVisibleCommand, ShootCommand,
+        GetPathNextNodeCommand, GetStateCommand, IsTargetVisibleCommand, MoveToCommand,
+        ShootCommand,
     },
 };
 use crate::{
@@ -61,7 +62,7 @@ pub(crate) struct Agent {
     pub avoidance_path: Vec<PathNode>,
     pub path: Vec<[f64; 2]>,
     pub trace: VecDeque<[f64; 2]>,
-    static_: bool,
+    last_motion_result: bool,
     behavior_tree: Option<BehaviorTree>,
     blackboard: Blackboard,
 }
@@ -81,7 +82,6 @@ impl Agent {
         orient: f64,
         team: usize,
         behavior_source: &str,
-        static_: bool,
     ) -> Result<Self, LoadError> {
         let id = *id_gen;
         *id_gen += 1;
@@ -106,7 +106,7 @@ impl Agent {
             avoidance_path: vec![],
             path: vec![],
             trace: VecDeque::new(),
-            static_,
+            last_motion_result: false,
             behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
         })
@@ -236,18 +236,22 @@ impl Agent {
         entities: &[RefCell<Entity>],
         bullets: &mut Vec<Bullet>,
     ) {
-        if self.static_ {
-            return;
-        }
         if let Some(mut tree) = self.behavior_tree.take() {
+            enum Command {
+                Drive(DriveCommand),
+                MoveTo(MoveToCommand),
+            }
             let mut command = None;
             let mut ctx = Context::new(std::mem::take(&mut self.blackboard));
             ctx.set("target", self.target);
             ctx.set("has_path", !self.path.is_empty());
             let mut process = |f: &dyn std::any::Any| {
                 if let Some(com) = f.downcast_ref::<DriveCommand>() {
-                    command = Some(*com);
+                    command = Some(Command::Drive(*com));
                     return None; //self.drive_command(game, entities, com);
+                } else if let Some(com) = f.downcast_ref::<MoveToCommand>() {
+                    command = Some(Command::MoveTo(*com));
+                    return Some(Box::new(self.last_motion_result) as Box<dyn std::any::Any>);
                 } else if f.downcast_ref::<FindEnemyCommand>().is_some() {
                     // println!("FindEnemy process");
                     self.find_enemy(entities);
@@ -318,8 +322,15 @@ impl Agent {
             self.behavior_tree = Some(tree);
             self.blackboard = ctx.take_blackboard();
 
-            if let Some(com) = command {
-                self.drive(com.0, game, entities);
+            match command {
+                Some(Command::Drive(com)) => {
+                    self.last_motion_result = self.drive(com.0, game, entities);
+                }
+                Some(Command::MoveTo(com)) => {
+                    println!("Moving to: {com:?}");
+                    self.last_motion_result = self.move_to(game, com.0, false, entities);
+                }
+                _ => (),
             }
         }
         // if let Some(target) = self.target.and_then(|target| {
