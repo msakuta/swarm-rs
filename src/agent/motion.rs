@@ -16,6 +16,35 @@ pub(super) enum MotionResult {
     FollowPath(FollowPathResult),
 }
 
+macro_rules! impl_as_result {
+    { $name:ident, $variant:path } => {
+        pub(super) fn $name(this: &Option<Self>) -> Option<Box<dyn std::any::Any>> {
+            if let Some($variant(r)) = this {
+                Some(Box::new(*r) as Box<dyn std::any::Any>)
+            } else {
+                None
+            }
+        }
+    }
+}
+
+impl MotionResult {
+    impl_as_result!(as_drive, MotionResult::Drive);
+    impl_as_result!(as_move_to, MotionResult::MoveTo);
+
+    /// FollowPath command will return Following until it finds a path
+    pub(super) fn as_follow_path(this: &Option<Self>) -> Option<Box<dyn std::any::Any>> {
+        let Some(r) = this else {
+            return None;
+        };
+        if let MotionResult::FollowPath(r) = r {
+            Some(Box::new(*r) as Box<dyn std::any::Any>)
+        } else {
+            Some(Box::new(FollowPathResult::Following) as Box<dyn std::any::Any>)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(super) enum OrientToResult {
     Approaching,

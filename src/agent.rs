@@ -250,16 +250,10 @@ impl Agent {
             let mut process = |f: &dyn std::any::Any| {
                 if let Some(com) = f.downcast_ref::<DriveCommand>() {
                     command = Some(Command::Drive(*com));
-                    return None; //self.drive_command(game, entities, com);
+                    return MotionResult::as_drive(&self.last_motion_result);
                 } else if let Some(com) = f.downcast_ref::<MoveToCommand>() {
                     command = Some(Command::MoveTo(*com));
-                    return self.last_motion_result.as_ref().and_then(|r| {
-                        if let MotionResult::MoveTo(r) = r {
-                            Some(Box::new(*r) as Box<dyn std::any::Any>)
-                        } else {
-                            None
-                        }
-                    });
+                    return MotionResult::as_move_to(&self.last_motion_result);
                 } else if f.downcast_ref::<FindEnemyCommand>().is_some() {
                     // println!("FindEnemy process");
                     self.find_enemy(entities);
@@ -277,13 +271,7 @@ impl Agent {
                     }
                 } else if let Some(cmd) = f.downcast_ref::<FollowPathCommand>() {
                     command = Some(Command::FollowPath(*cmd));
-                    return self.last_motion_result.as_ref().and_then(|r| {
-                        if let MotionResult::FollowPath(r) = r {
-                            Some(Box::new(*r) as Box<dyn std::any::Any>)
-                        } else {
-                            Some(Box::new(FollowPathResult::Following) as Box<dyn std::any::Any>)
-                        }
-                    });
+                    return MotionResult::as_follow_path(&self.last_motion_result);
                 } else if f.downcast_ref::<ShootCommand>().is_some() {
                     let forward = Vector2::new(self.orient.cos(), self.orient.sin());
                     self.shoot_bullet(bullets, (Vector2::from(self.pos) + forward).into());
