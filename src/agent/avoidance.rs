@@ -91,6 +91,7 @@ pub(crate) struct StateWithCost {
     max_level: usize,
     from: Option<usize>,
     to: Vec<usize>,
+    pruned: bool,
 }
 
 impl StateWithCost {
@@ -104,6 +105,7 @@ impl StateWithCost {
             max_level: 0,
             from: None,
             to: vec![],
+            pruned: false,
         }
     }
 }
@@ -154,7 +156,38 @@ impl Agent {
         }
     }
 
+    pub(super) fn follow_avoidance_path(
+        &mut self,
+        game: &mut Game,
+        entities: &[RefCell<Entity>],
+    ) -> bool {
+        if let Some(target) = self.avoidance_path.last() {
+            if DIST_RADIUS.powf(2.) < Vector2::from(*target).distance2(Vector2::from(self.pos)) {
+                let target_pos = *target;
+                self.move_to(game, target_pos.into(), target_pos.backward, entities)
+                    .into()
+            } else {
+                self.avoidance_path.pop();
+                if let Some(ss) = self.search_state.as_mut() {
+                    if let Some(path) = ss.found_path.as_mut() {
+                        path.pop();
+                        if let Some(node) = path.last() {
+                            ss.start = ss.search_tree[*node].state;
+                            // println!("follow_avoidance_path Start set to {:?}", ss.start);
+                        }
+                        self.prune_unreachable();
+                    }
+                }
+                true
+            }
+        } else {
+            false
+        }
+    }
+
     /// RRT* search
+    ///
+    /// Returns true if the path is found
     pub(super) fn avoidance_search(
         &mut self,
         game: &Game,
@@ -176,14 +209,14 @@ impl Agent {
             }
         }
 
-        if self
-            .search_state
-            .as_ref()
-            .map(|ss| ss.found_path.is_some())
-            .unwrap_or(false)
-        {
-            return true;
-        }
+        // if self
+        //     .search_state
+        //     .as_ref()
+        //     .map(|ss| ss.found_path.is_some())
+        //     .unwrap_or(false)
+        // {
+        //     return true;
+        // }
 
         /// Check if the goal is close enough to the added node, and if it was, return a built path
         fn check_goal(
@@ -198,6 +231,9 @@ impl Agent {
                 let mut node = start;
                 let mut path = vec![];
                 while let Some(next_node) = nodes[node].from {
+                    if nodes[next_node].pruned {
+                        break;
+                    }
                     path.push(next_node);
                     node = next_node;
                 }
@@ -426,7 +462,11 @@ impl Agent {
 
                     let nodes = &mut search_state.search_tree;
 
-                    // println!("Using existing tree with {} nodes", nodes.len());
+                    // println!(
+                    //     "Using existing tree with {} nodes start from {:?}",
+                    //     nodes.len(),
+                    //     search_state.start
+                    // );
 
                     const SEARCH_NODES: usize = 100;
 
@@ -434,11 +474,14 @@ impl Agent {
                         // Descending the tree is not a good way to sample a random node in a tree, since
                         // the chances are much higher on shallow nodes. We want to give chances uniformly
                         // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
-                        for _i in 0..SEARCH_NODES {
+                        'roll_dice: for _i in 0..SEARCH_NODES {
                             let path = 'trace_tree: {
                                 let root =
                                     Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
                                 let root_node = &nodes[root];
+                                if root_node.pruned {
+                                    continue 'roll_dice;
+                                }
                                 if env.switch_back || 0. < root_node.speed {
                                     if let Some(path) = search(self, root, 1., &mut env, nodes) {
                                         break 'trace_tree Some(path);
@@ -547,7 +590,52 @@ impl Agent {
             //     }
             // }
         }
-        false
+
+        self.search_state
+            .as_ref()
+            .map(|ss| ss.found_path.is_some())
+            .unwrap_or(false)
+    }
+
+    pub(super) fn prune_unreachable(&mut self) {
+        let Some(ref mut ss) = self.search_state else {
+            return;
+        };
+
+        let Some(ref mut found_path) = ss.found_path else {
+            return;
+        };
+
+        let mut visited = vec![false; ss.search_tree.len()];
+
+        let mut start = found_path.clone();
+
+        // Mark initial nodes as visited
+        for node in &start {
+            visited[*node] = true;
+        }
+
+        while let Some(node) = start.pop() {
+            // println!("node {node} to-s: {:?}", ss.search_tree[node].to);
+            for to in &ss.search_tree[node].to {
+                if !visited[*to] {
+                    start.push(*to);
+                    visited[*to] = true;
+                }
+            }
+        }
+
+        let mut num_pruned = 0;
+        for (visited, state) in visited.into_iter().zip(&mut ss.search_tree) {
+            if !visited {
+                state.pruned = true;
+                num_pruned += 1;
+            }
+        }
+        println!(
+            "prune_unreachable pruned: {num_pruned} / {}",
+            ss.search_tree.len()
+        );
     }
 }
 
@@ -583,6 +671,9 @@ mod render {
                             continue;
                         }
                         if 0. < (direction as f64 * 2. - 1.) * state.speed {
+                            continue;
+                        }
+                        if state.pruned {
                             continue;
                         }
                         let point = Point::new(state.state.x, state.state.y);

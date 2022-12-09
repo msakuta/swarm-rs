@@ -217,6 +217,7 @@ impl Agent {
         ));
         let (res, time) =
             measure_time(|| self.avoidance_search(game, entities, |_, _| (), cmd.back, false));
+        // println!("Avoidance goal set to {:?}, returns {res:?}", self.goal);
         if let Ok(mut time_window) = TIME_WINDOW.lock() {
             time_window.push_back(time);
             while 10 < time_window.len() {
@@ -330,15 +331,14 @@ impl Agent {
                     self.last_motion_result = Some(MotionResult::Drive(res));
                 }
                 Some(Command::MoveTo(com)) => {
-                    println!("Moving to: {com:?}");
                     let res = self.move_to(game, com.0, false, entities);
                     self.last_motion_result = Some(MotionResult::MoveTo(res));
                 }
-                Some(Command::FollowPath(com)) => {
+                Some(Command::FollowPath(_com)) => {
                     let res = self.follow_path(game, entities);
                     self.last_motion_result = Some(MotionResult::FollowPath(res));
                 }
-                _ => (),
+                _ => self.last_motion_result = None,
             }
         }
         // if let Some(target) = self.target.and_then(|target| {
@@ -395,22 +395,8 @@ impl From<FollowPathResult> for bool {
 
 impl Agent {
     fn follow_path(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) -> FollowPathResult {
-        if let Some(target) = self.avoidance_path.last() {
-            if DIST_RADIUS.powf(2.) < Vector2::from(*target).distance2(Vector2::from(self.pos)) {
-                let target_pos = *target;
-                self.move_to(game, target_pos.into(), target_pos.backward, entities)
-                    .into()
-            } else {
-                self.avoidance_path.pop();
-                if let Some(path) = self
-                    .search_state
-                    .as_mut()
-                    .and_then(|state| state.found_path.as_mut())
-                {
-                    path.pop();
-                }
-                FollowPathResult::Following
-            }
+        if self.follow_avoidance_path(game, entities) {
+            FollowPathResult::Following
         } else if let Some(target) = self.path.last() {
             if 5. < Vector2::from(*target).distance(Vector2::from(self.pos)) {
                 let target_pos = *target;
