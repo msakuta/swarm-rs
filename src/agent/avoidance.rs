@@ -130,7 +130,7 @@ pub struct SearchState {
     search_tree: Vec<StateWithCost>,
     start: AgentState,
     goal: AgentState,
-    found_path: Option<Vec<usize>>,
+    pub(super) found_path: Option<Vec<usize>>,
 }
 
 impl Agent {

@@ -169,6 +169,7 @@ impl BehaviorNode for FindPath {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(super) struct FollowPathCommand;
 
 pub(super) struct FollowPath;

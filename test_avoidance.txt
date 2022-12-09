@@ -6,7 +6,9 @@ tree main = Sequence {
 }
 
 tree TestAvoidance(in pos) = Sequence {
-    Avoidance (goal <- pos, back <- "true")
+    #Retry (n <- "10") {
+        Avoidance (goal <- pos, back <- "true")
+    #}
     var arrived = false
     Retry (n <- "10") {
         if (!arrived) {

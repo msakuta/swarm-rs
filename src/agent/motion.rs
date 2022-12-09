@@ -4,7 +4,17 @@ use cgmath::{InnerSpace, Vector2};
 
 use crate::{entity::Entity, game::Game, triangle_utils::check_shape_in_mesh};
 
-use super::{wrap_angle, Agent, AgentState, AGENT_SPEED};
+use super::{wrap_angle, Agent, AgentState, FollowPathResult, AGENT_SPEED};
+
+/// The agent can take only one of the motion commands in one tick.
+/// This enum will store the result from previous tick, because behavior tree may try
+/// to perform multiple commands in a tick, but the actual agent can take only one move.
+#[derive(Debug)]
+pub(super) enum MotionResult {
+    Drive(bool),
+    MoveTo(bool),
+    FollowPath(FollowPathResult),
+}
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum OrientToResult {

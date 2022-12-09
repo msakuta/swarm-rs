@@ -13,6 +13,7 @@ use self::{
         GetPathNextNodeCommand, GetStateCommand, IsTargetVisibleCommand, MoveToCommand,
         ShootCommand,
     },
+    motion::MotionResult,
 };
 use crate::{
     collision::{CollisionShape, Obb},
@@ -62,7 +63,7 @@ pub(crate) struct Agent {
     pub avoidance_path: Vec<PathNode>,
     pub path: Vec<[f64; 2]>,
     pub trace: VecDeque<[f64; 2]>,
-    last_motion_result: bool,
+    last_motion_result: Option<MotionResult>,
     behavior_tree: Option<BehaviorTree>,
     blackboard: Blackboard,
 }
@@ -106,7 +107,7 @@ impl Agent {
             avoidance_path: vec![],
             path: vec![],
             trace: VecDeque::new(),
-            last_motion_result: false,
+            last_motion_result: None,
             behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
         })
@@ -240,6 +241,7 @@ impl Agent {
             enum Command {
                 Drive(DriveCommand),
                 MoveTo(MoveToCommand),
+                FollowPath(FollowPathCommand),
             }
             let mut command = None;
             let mut ctx = Context::new(std::mem::take(&mut self.blackboard));
@@ -251,7 +253,13 @@ impl Agent {
                     return None; //self.drive_command(game, entities, com);
                 } else if let Some(com) = f.downcast_ref::<MoveToCommand>() {
                     command = Some(Command::MoveTo(*com));
-                    return Some(Box::new(self.last_motion_result) as Box<dyn std::any::Any>);
+                    return self.last_motion_result.as_ref().and_then(|r| {
+                        if let MotionResult::MoveTo(r) = r {
+                            Some(Box::new(*r) as Box<dyn std::any::Any>)
+                        } else {
+                            None
+                        }
+                    });
                 } else if f.downcast_ref::<FindEnemyCommand>().is_some() {
                     // println!("FindEnemy process");
                     self.find_enemy(entities);
@@ -267,9 +275,15 @@ impl Agent {
                         let found_path = self.find_path(Some(&target), game).is_ok();
                         return Some(Box::new(found_path) as Box<dyn std::any::Any>);
                     }
-                } else if f.downcast_ref::<FollowPathCommand>().is_some() {
-                    let ret = self.follow_path(game, entities);
-                    return Some(Box::new(ret) as Box<dyn std::any::Any>);
+                } else if let Some(cmd) = f.downcast_ref::<FollowPathCommand>() {
+                    command = Some(Command::FollowPath(*cmd));
+                    return self.last_motion_result.as_ref().and_then(|r| {
+                        if let MotionResult::FollowPath(r) = r {
+                            Some(Box::new(*r) as Box<dyn std::any::Any>)
+                        } else {
+                            Some(Box::new(FollowPathResult::Following) as Box<dyn std::any::Any>)
+                        }
+                    });
                 } else if f.downcast_ref::<ShootCommand>().is_some() {
                     let forward = Vector2::new(self.orient.cos(), self.orient.sin());
                     self.shoot_bullet(bullets, (Vector2::from(self.pos) + forward).into());
@@ -324,11 +338,17 @@ impl Agent {
 
             match command {
                 Some(Command::Drive(com)) => {
-                    self.last_motion_result = self.drive(com.0, game, entities);
+                    let res = self.drive(com.0, game, entities);
+                    self.last_motion_result = Some(MotionResult::Drive(res));
                 }
                 Some(Command::MoveTo(com)) => {
                     println!("Moving to: {com:?}");
-                    self.last_motion_result = self.move_to(game, com.0, false, entities);
+                    let res = self.move_to(game, com.0, false, entities);
+                    self.last_motion_result = Some(MotionResult::MoveTo(res));
+                }
+                Some(Command::FollowPath(com)) => {
+                    let res = self.follow_path(game, entities);
+                    self.last_motion_result = Some(MotionResult::FollowPath(res));
                 }
                 _ => (),
             }
@@ -362,7 +382,7 @@ impl Agent {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum FollowPathResult {
     Following,
     Blocked,
@@ -388,12 +408,19 @@ impl From<FollowPathResult> for bool {
 impl Agent {
     fn follow_path(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) -> FollowPathResult {
         if let Some(target) = self.avoidance_path.last() {
-            if DIST_RADIUS < Vector2::from(*target).distance(Vector2::from(self.pos)) {
+            if DIST_RADIUS.powf(2.) < Vector2::from(*target).distance2(Vector2::from(self.pos)) {
                 let target_pos = *target;
                 self.move_to(game, target_pos.into(), target_pos.backward, entities)
                     .into()
             } else {
                 self.avoidance_path.pop();
+                if let Some(path) = self
+                    .search_state
+                    .as_mut()
+                    .and_then(|state| state.found_path.as_mut())
+                {
+                    path.pop();
+                }
                 FollowPathResult::Following
             }
         } else if let Some(target) = self.path.last() {
