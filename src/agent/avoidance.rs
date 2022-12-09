@@ -467,7 +467,7 @@ impl Agent {
                                 .collect();
                                 // println!("Materialized found path: {:?}", self.path);
                                 search_state.found_path = Some(path);
-                                self.search_state = None; //Some(search_state);
+                                self.search_state = Some(search_state);
                                 return true;
                             }
                         }
