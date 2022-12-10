@@ -58,8 +58,6 @@ pub(crate) struct Agent {
     pub health: u32,
     pub goal: Option<AgentState>,
     pub search_state: Option<SearchState>,
-    /// Avoidance path is more local.
-    pub avoidance_path: Vec<PathNode>,
     pub path: Vec<[f64; 2]>,
     pub trace: VecDeque<[f64; 2]>,
     last_motion_result: Option<MotionResult>,
@@ -108,7 +106,6 @@ impl Agent {
             health: AGENT_MAX_HEALTH,
             goal: None,
             search_state: None,
-            avoidance_path: vec![],
             path: vec![],
             trace: VecDeque::new(),
             last_motion_result: None,

@@ -309,7 +309,7 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                 let (rest, last) = if let Some(goal) = agent.get_goal() {
                     bez_path.move_to(to_point(goal.into()));
                     let goal: [f64; 2] = goal.into();
-                    (path, path.last().copied().or(Some(goal.into())))
+                    (&path[..], path.last().copied().or(Some(goal.into())))
                 } else if let Some((first, rest)) = path.split_first() {
                     bez_path.move_to(to_point((*first).into()));
                     (rest, rest.last().copied().or_else(|| Some(*first)))

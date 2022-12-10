@@ -86,9 +86,12 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_avoidance_path(&self) -> Option<&[PathNode]> {
+    pub(crate) fn get_avoidance_path(&self) -> Option<Vec<PathNode>> {
         match self {
-            Entity::Agent(agent) => Some(&agent.avoidance_path),
+            Entity::Agent(agent) => agent
+                .search_state
+                .as_ref()
+                .and_then(|ss| ss.avoidance_path().map(|path| path.collect())),
             _ => None,
         }
     }

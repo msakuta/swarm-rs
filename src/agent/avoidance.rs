@@ -137,6 +137,14 @@ pub struct SearchState {
     pub(super) found_path: Option<Vec<usize>>,
 }
 
+impl SearchState {
+    pub(crate) fn avoidance_path(&self) -> Option<impl Iterator<Item = PathNode> + '_> {
+        self.found_path
+            .as_ref()
+            .map(|path| path.iter().map(|node| (&self.search_tree[*node]).into()))
+    }
+}
+
 impl Agent {
     pub(super) fn step_move(px: f64, py: f64, heading: f64, steer: f64, motion: f64) -> AgentState {
         let [x, y] = [motion, 0.];
@@ -163,24 +171,23 @@ impl Agent {
         game: &mut Game,
         entities: &[RefCell<Entity>],
     ) -> bool {
-        if let Some(target) = self.avoidance_path.last() {
-            if DIST_RADIUS.powf(2.) < Vector2::from(*target).distance2(Vector2::from(self.pos)) {
-                let target_pos = *target;
-                self.move_to(game, target_pos.into(), target_pos.backward, entities)
+        let Some(ref mut ss) = self.search_state else { return false };
+        let Some(ref mut found_path) = ss.found_path else { return false };
+        if let Some(target) = found_path.last() {
+            let target_state = &ss.search_tree[*target];
+            let state = target_state.state;
+            let speed = target_state.speed;
+            if DIST_RADIUS.powf(2.) < Vector2::from(state).distance2(Vector2::from(self.pos)) {
+                self.move_to(game, state.into(), speed < 0., entities)
                     .into()
             } else {
-                self.avoidance_path.pop();
-                if let Some(ss) = self.search_state.as_mut() {
-                    if let Some(path) = ss.found_path.as_mut() {
-                        path.pop();
-                        if let Some(node) = path.last() {
-                            ss.start = ss.search_tree[*node].state;
-                            // println!("follow_avoidance_path Start set to {:?}", ss.start);
-                        }
-                        let (_, time) = measure_time(|| self.prune_unreachable());
-                        println!("prune_unreachable: {time:?}");
-                    }
+                found_path.pop();
+                if let Some(node) = found_path.last() {
+                    ss.start = ss.search_tree[*node].state;
+                    // println!("follow_avoidance_path Start set to {:?}", ss.start);
                 }
+                let (_, time) = measure_time(|| self.prune_unreachable());
+                println!("prune_unreachable: {time:?}");
                 true
             }
         } else {
@@ -503,16 +510,6 @@ impl Agent {
                             };
 
                             if let Some(path) = path {
-                                self.avoidance_path = std::iter::once(PathNode {
-                                    x: goal.x,
-                                    y: goal.y,
-                                    backward: path
-                                        .first()
-                                        .map(|j| nodes[*j].speed < 0.)
-                                        .unwrap_or(false),
-                                })
-                                .chain(path.iter().map(|i| (&nodes[*i]).into()))
-                                .collect();
                                 // println!("Materialized found path: {:?}", self.path);
                                 search_state.found_path = Some(path);
                                 self.search_state = Some(search_state);
@@ -536,32 +533,31 @@ impl Agent {
             if let Some(goal) = self.goal {
                 // println!("Rebuilding tree with {} nodes should be 0", nodes.len());
                 let mut nodes: Vec<StateWithCost> = vec![];
-                if backward || -0.1 < self.speed {
-                    let root = StateWithCost::new(self.to_state(), 0., 0., 1.);
-                    let root_id = nodes.len();
-                    nodes.push(root.clone());
-                    if let Some(path) = search(self, root_id, 1., &mut env, &mut nodes) {
-                        self.avoidance_path = path.iter().map(|i| (&nodes[*i]).into()).collect();
-                        self.search_state = None;
-                        return true;
+                let found_path = 'find_path: {
+                    if backward || -0.1 < self.speed {
+                        let root = StateWithCost::new(self.to_state(), 0., 0., 1.);
+                        let root_id = nodes.len();
+                        nodes.push(root.clone());
+                        if let Some(path) = search(self, root_id, 1., &mut env, &mut nodes) {
+                            break 'find_path Some(path);
+                        }
                     }
-                }
-                if backward || self.speed < 0.1 {
-                    let root = StateWithCost::new(self.to_state(), 0., 0., -1.);
-                    let root_id = nodes.len();
-                    nodes.push(root.clone());
-                    if let Some(path) = search(self, root_id, -1., &mut env, &mut nodes) {
-                        self.avoidance_path = path.iter().map(|i| (&nodes[*i]).into()).collect();
-                        self.search_state = None;
-                        return true;
+                    if backward || self.speed < 0.1 {
+                        let root = StateWithCost::new(self.to_state(), 0., 0., -1.);
+                        let root_id = nodes.len();
+                        nodes.push(root.clone());
+                        if let Some(path) = search(self, root_id, -1., &mut env, &mut nodes) {
+                            break 'find_path Some(path);
+                        }
                     }
-                }
+                    None
+                };
                 if !nodes.is_empty() {
                     let search_state = SearchState {
                         search_tree: nodes,
                         start: self.to_state(),
                         goal: goal,
-                        found_path: None,
+                        found_path,
                     };
                     // else{
                     //     *search_state = SearchState{
@@ -662,6 +658,14 @@ impl Agent {
                 collision_checker,
             ) {
                 ss.search_tree[i].pruned = true;
+                if ss
+                    .found_path
+                    .as_ref()
+                    .map(|path| path.iter().any(|j| *j == i))
+                    .unwrap_or(false)
+                {
+                    ss.found_path = None;
+                }
             }
         }
 
