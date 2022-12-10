@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashSet};
 
 use cgmath::{MetricSpace, Vector2, Zero};
 use rand::{distributions::Uniform, prelude::Distribution};
@@ -94,6 +94,7 @@ pub(crate) struct StateWithCost {
     from: Option<usize>,
     to: Vec<usize>,
     pruned: bool,
+    blocked: bool,
 }
 
 impl StateWithCost {
@@ -108,7 +109,12 @@ impl StateWithCost {
             from: None,
             to: vec![],
             pruned: false,
+            blocked: false,
         }
+    }
+
+    fn is_passable(&self) -> bool {
+        !self.blocked && !self.pruned
     }
 }
 
@@ -132,7 +138,7 @@ const MAX_STEER: f64 = std::f64::consts::PI / 3.;
 #[derive(Debug)]
 pub struct SearchState {
     search_tree: Vec<StateWithCost>,
-    start: AgentState,
+    start_set: HashSet<usize>,
     goal: AgentState,
     pub(super) found_path: Option<Vec<usize>>,
 }
@@ -181,13 +187,15 @@ impl Agent {
                 self.move_to(game, state.into(), speed < 0., entities)
                     .into()
             } else {
-                found_path.pop();
-                if let Some(node) = found_path.last() {
-                    ss.start = ss.search_tree[*node].state;
-                    // println!("follow_avoidance_path Start set to {:?}", ss.start);
+                if let Some(prev_start) = found_path.pop() {
+                    ss.start_set.remove(&prev_start);
+                    if let Some(node) = found_path.last() {
+                        ss.start_set.insert(*node);
+                        // println!("follow_avoidance_path Start set to {:?}", ss.start);
+                    }
+                    let (_, time) = measure_time(|| self.prune_unreachable());
+                    println!("prune_unreachable: {time:?}");
                 }
-                let (_, time) = measure_time(|| self.prune_unreachable());
-                println!("prune_unreachable: {time:?}");
                 true
             }
         } else {
@@ -230,6 +238,7 @@ impl Agent {
 
         /// Check if the goal is close enough to the added node, and if it was, return a built path
         fn check_goal(
+            start_set: &HashSet<usize>,
             start: usize,
             goal: &Option<AgentState>,
             nodes: &[StateWithCost],
@@ -241,10 +250,13 @@ impl Agent {
                 let mut node = start;
                 let mut path = vec![];
                 while let Some(next_node) = nodes[node].from {
-                    if nodes[next_node].pruned {
-                        break;
+                    if !nodes[next_node].is_passable() {
+                        return None;
                     }
                     path.push(next_node);
+                    if start_set.contains(&next_node) {
+                        break;
+                    }
                     node = next_node;
                 }
                 println!(
@@ -279,11 +291,12 @@ impl Agent {
         fn search(
             this: &Agent,
             start: usize,
+            start_set: &HashSet<usize>,
             direction: f64,
             env: &mut SearchEnv,
             nodes: &mut Vec<StateWithCost>,
         ) -> Option<Vec<usize>> {
-            if let Some(path) = check_goal(start, &this.goal, &nodes) {
+            if let Some(path) = check_goal(start_set, start, &this.goal, &nodes) {
                 return Some(path);
             }
 
@@ -402,6 +415,10 @@ impl Agent {
                     };
                     let existing_cost = existing_node.cost;
                     if i == start || existing_from == start {
+                        nodes[i].blocked = false;
+                        if nodes[i].blocked {
+                            println!("Reviving blocked node {i}");
+                        }
                         continue 'skip;
                     }
                     let Some((to_index, _)) = nodes[existing_from].to
@@ -436,6 +453,10 @@ impl Agent {
                         nodes[i].cost = shortcut_cost;
                         nodes[existing_from].to.remove(to_index);
                         nodes[i].from = Some(start);
+                        if nodes[i].blocked {
+                            println!("Reviving blocked node {i}");
+                        }
+                        nodes[i].blocked = false;
                         nodes[start].to.push(i);
                         // nodes[i].state = node.state;
                     }
@@ -463,90 +484,108 @@ impl Agent {
             None
         }
 
-        let searched_path =
-            if let Some((mut search_state, goal)) = self.search_state.take().zip(self.goal) {
-                if compare_distance(&self.to_state(), &search_state.start, DIST_THRESHOLD * 100.)
-                    && compare_distance(&goal, &search_state.goal, DIST_THRESHOLD)
-                {
-                    // for root in &search_state.searchTree {
-                    //     enumTree(root, &mut nodes);
-                    // }
+        let searched_path = if let Some((mut search_state, goal)) =
+            self.search_state.take().zip(self.goal)
+        {
+            // let start_state = &search_state.search_tree[search_state.start].state;
+            if
+            //compare_distance(&self.to_state(), start_state, DIST_THRESHOLD * 100.) &&
+            compare_distance(&goal, &search_state.goal, DIST_THRESHOLD) {
+                // for root in &search_state.searchTree {
+                //     enumTree(root, &mut nodes);
+                // }
 
-                    let nodes = &mut search_state.search_tree;
+                let nodes = &mut search_state.search_tree;
 
-                    // println!(
-                    //     "Using existing tree with {} nodes start from {:?}",
-                    //     nodes.len(),
-                    //     search_state.start
-                    // );
+                // println!(
+                //     "Using existing tree with {} nodes start from {:?}",
+                //     nodes.len(),
+                //     search_state.start
+                // );
 
-                    const SEARCH_NODES: usize = 100;
+                const SEARCH_NODES: usize = 100;
 
-                    if 0 < nodes.len() && nodes.len() < 10000 {
-                        // Descending the tree is not a good way to sample a random node in a tree, since
-                        // the chances are much higher on shallow nodes. We want to give chances uniformly
-                        // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
-                        'roll_dice: for _i in 0..SEARCH_NODES {
-                            let path = 'trace_tree: {
-                                let root =
-                                    Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
-                                let root_node = &nodes[root];
-                                if root_node.pruned {
-                                    continue 'roll_dice;
-                                }
-                                if env.switch_back || 0. < root_node.speed {
-                                    if let Some(path) = search(self, root, 1., &mut env, nodes) {
-                                        break 'trace_tree Some(path);
-                                    }
-                                }
-                                let root_node = &nodes[root];
-                                if env.switch_back || root_node.speed < 0. {
-                                    if let Some(path) = search(self, root, -1., &mut env, nodes) {
-                                        break 'trace_tree Some(path);
-                                    }
-                                }
-                                env.tree_size += 1;
-                                None
-                            };
-
-                            if let Some(path) = path {
-                                // println!("Materialized found path: {:?}", self.path);
-                                search_state.found_path = Some(path);
-                                self.search_state = Some(search_state);
-                                return true;
+                if 0 < nodes.len() && nodes.len() < 10000 {
+                    // Descending the tree is not a good way to sample a random node in a tree, since
+                    // the chances are much higher on shallow nodes. We want to give chances uniformly
+                    // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
+                    'roll_dice: for _i in 0..SEARCH_NODES {
+                        let path = 'trace_tree: {
+                            let root =
+                                Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
+                            let root_node = &nodes[root];
+                            if !root_node.is_passable() {
+                                continue 'roll_dice;
                             }
+                            if env.switch_back || 0. < root_node.speed {
+                                if let Some(path) =
+                                    search(self, root, &search_state.start_set, 1., &mut env, nodes)
+                                {
+                                    break 'trace_tree Some(path);
+                                }
+                            }
+                            let root_node = &nodes[root];
+                            if env.switch_back || root_node.speed < 0. {
+                                if let Some(path) = search(
+                                    self,
+                                    root,
+                                    &search_state.start_set,
+                                    -1.,
+                                    &mut env,
+                                    nodes,
+                                ) {
+                                    break 'trace_tree Some(path);
+                                }
+                            }
+                            env.tree_size += 1;
+                            None
+                        };
+
+                        if let Some(path) = path {
+                            // println!("Materialized found path: {:?}", self.path);
+                            search_state.found_path = Some(path);
+                            self.search_state = Some(search_state);
+                            return true;
                         }
                     }
-
-                    // let treeSize = env.tree_size;
-                    search_state.goal = goal;
-                    self.search_state = Some(search_state);
-                    true
-                } else {
-                    false
                 }
+
+                // let treeSize = env.tree_size;
+                search_state.goal = goal;
+                self.search_state = Some(search_state);
+                true
             } else {
                 false
-            };
+            }
+        } else {
+            false
+        };
 
         if !searched_path {
             if let Some(goal) = self.goal {
                 // println!("Rebuilding tree with {} nodes should be 0", nodes.len());
                 let mut nodes: Vec<StateWithCost> = vec![];
+                let mut root_set = HashSet::new();
                 let found_path = 'find_path: {
                     if backward || -0.1 < self.speed {
                         let root = StateWithCost::new(self.to_state(), 0., 0., 1.);
                         let root_id = nodes.len();
                         nodes.push(root.clone());
-                        if let Some(path) = search(self, root_id, 1., &mut env, &mut nodes) {
+                        root_set.insert(root_id);
+                        if let Some(path) =
+                            search(self, root_id, &root_set, 1., &mut env, &mut nodes)
+                        {
                             break 'find_path Some(path);
                         }
-                    }
+                    };
                     if backward || self.speed < 0.1 {
                         let root = StateWithCost::new(self.to_state(), 0., 0., -1.);
                         let root_id = nodes.len();
                         nodes.push(root.clone());
-                        if let Some(path) = search(self, root_id, -1., &mut env, &mut nodes) {
+                        root_set.insert(root_id);
+                        if let Some(path) =
+                            search(self, root_id, &root_set, -1., &mut env, &mut nodes)
+                        {
                             break 'find_path Some(path);
                         }
                     }
@@ -555,7 +594,7 @@ impl Agent {
                 if !nodes.is_empty() {
                     let search_state = SearchState {
                         search_tree: nodes,
-                        start: self.to_state(),
+                        start_set: root_set,
                         goal: goal,
                         found_path,
                     };
@@ -651,13 +690,14 @@ impl Agent {
             let Some(from) = ss.search_tree[i].from else { continue };
             let start_state = ss.search_tree[from].state;
             let next_state = ss.search_tree[i].state;
+            ss.search_tree[i].blocked = false;
             if interpolate(
                 start_state,
                 next_state,
                 DIST_RADIUS * 0.5,
                 collision_checker,
             ) {
-                ss.search_tree[i].pruned = true;
+                ss.search_tree[i].blocked = true;
                 if ss
                     .found_path
                     .as_ref()
@@ -697,62 +737,71 @@ mod render {
                 .iter()
                 .enumerate()
             {
-                for level in 0..=3 {
-                    let level_width = level as f64 * 0.5;
-                    let mut bez_path = BezPath::new();
-                    for state in &self.search_tree {
-                        if state.max_level != level {
-                            continue;
-                        }
-                        if 0. < (direction as f64 * 2. - 1.) * state.speed {
-                            continue;
-                        }
-                        if state.pruned {
-                            continue;
-                        }
-                        let point = Point::new(state.state.x, state.state.y);
-                        if let Some(from) = state.from {
-                            let from_state = self.search_tree[from].state;
-                            bez_path.move_to(Point::new(from_state.x, from_state.y));
-                            bez_path.line_to(point);
-                            if circle_visible && 0 < level {
-                                let interpolates = 1 << level;
-                                for i in 1..interpolates {
-                                    let pos = lerp(
-                                        &state.state.into(),
-                                        &from_state.into(),
-                                        i as f64 / interpolates as f64,
-                                    );
-                                    let circle = Circle::new(
-                                        *view_transform * to_point(pos),
-                                        2. + level_width,
-                                    );
-                                    ctx.fill(circle, brush);
-                                }
+                for pruned in [false, true] {
+                    let brush = if pruned {
+                        let rgba = brush.as_rgba8();
+                        Color::rgba8(rgba.0, rgba.1, rgba.2, rgba.3 / 4)
+                    } else {
+                        brush.clone()
+                    };
+                    for level in 0..=3 {
+                        let level_width = level as f64 * 0.5;
+                        let mut bez_path = BezPath::new();
+                        for state in &self.search_tree {
+                            if state.max_level != level {
+                                continue;
                             }
-                            if shape_visible && 0 < level {
-                                if let Some(vertices) = state.state.collision_shape().to_vertices()
-                                {
-                                    if let Some((first, rest)) = vertices.split_first() {
-                                        let mut path = BezPath::new();
-                                        path.move_to(to_point(*first));
-                                        for v in rest {
-                                            path.line_to(to_point(*v));
+                            if 0. < (direction as f64 * 2. - 1.) * state.speed {
+                                continue;
+                            }
+                            if (state.pruned || state.blocked) ^ pruned {
+                                continue;
+                            }
+                            let point = Point::new(state.state.x, state.state.y);
+                            if let Some(from) = state.from {
+                                let from_state = self.search_tree[from].state;
+                                bez_path.move_to(Point::new(from_state.x, from_state.y));
+                                bez_path.line_to(point);
+                                if circle_visible && 0 < level {
+                                    let interpolates = 1 << level;
+                                    for i in 1..interpolates {
+                                        let pos = lerp(
+                                            &state.state.into(),
+                                            &from_state.into(),
+                                            i as f64 / interpolates as f64,
+                                        );
+                                        let circle = Circle::new(
+                                            *view_transform * to_point(pos),
+                                            2. + level_width,
+                                        );
+                                        ctx.fill(circle, &brush);
+                                    }
+                                }
+                                if shape_visible && 0 < level {
+                                    if let Some(vertices) =
+                                        state.state.collision_shape().to_vertices()
+                                    {
+                                        if let Some((first, rest)) = vertices.split_first() {
+                                            let mut path = BezPath::new();
+                                            path.move_to(to_point(*first));
+                                            for v in rest {
+                                                path.line_to(to_point(*v));
+                                            }
+                                            path.close_path();
+                                            ctx.stroke(*view_transform * path, &brush, 0.5);
                                         }
-                                        path.close_path();
-                                        ctx.stroke(*view_transform * path, brush, 0.5);
                                     }
                                 }
                             }
+                            if circle_visible {
+                                let circle = Circle::new(*view_transform * point, 2. + level_width);
+                                ctx.fill(circle, &brush);
+                                let circle = Circle::new(point, DIST_RADIUS);
+                                ctx.stroke(*view_transform * circle, &brush, 0.5);
+                            }
                         }
-                        if circle_visible {
-                            let circle = Circle::new(*view_transform * point, 2. + level_width);
-                            ctx.fill(circle, brush);
-                            let circle = Circle::new(point, DIST_RADIUS);
-                            ctx.stroke(*view_transform * circle, brush, 0.5);
-                        }
+                        ctx.stroke(*view_transform * bez_path, &brush, 0.5 + level_width);
                     }
-                    ctx.stroke(*view_transform * bez_path, brush, 0.5 + level_width);
                 }
             }
         }
