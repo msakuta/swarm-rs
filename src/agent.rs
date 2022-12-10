@@ -6,7 +6,6 @@ mod motion;
 
 pub(crate) use self::avoidance::{AgentState, PathNode, SearchState};
 use self::{
-    avoidance::DIST_RADIUS,
     behavior_nodes::{
         build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, DriveCommand,
         FaceToTargetCommand, FindEnemyCommand, FindPathCommand, FollowPathCommand,
@@ -76,6 +75,11 @@ const AGENT_VISIBLE_DISTANCE: f64 = 10.;
 pub(crate) const BULLET_RADIUS: f64 = 0.15;
 pub(crate) const BULLET_SPEED: f64 = 2.;
 
+struct GameEnv<'a> {
+    game: &'a mut Game,
+    entities: &'a [RefCell<Entity>],
+}
+
 impl Agent {
     pub(crate) fn new(
         id_gen: &mut usize,
@@ -142,7 +146,7 @@ impl Agent {
                 if dist2 < (AGENT_HALFLENGTH * 2.).powf(2.) {
                     let entity_shape = entity.get_shape();
                     if shape.intersects(&entity_shape) {
-                        println!("Collision with another entity");
+                        // println!("Collision with another entity");
                         return true;
                     }
                 }
@@ -341,6 +345,13 @@ impl Agent {
                 _ => self.last_motion_result = None,
             }
         }
+
+        if let (Some(_), time) =
+            measure_time(|| self.check_avoidance_collision(&GameEnv { game, entities }))
+        {
+            println!("check_avoidance_collision time: {time:.06}");
+        }
+
         // if let Some(target) = self.target.and_then(|target| {
         //     entities.iter().find(|a| {
         //         a.try_borrow()

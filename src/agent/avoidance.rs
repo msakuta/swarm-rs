@@ -5,12 +5,14 @@ use rand::{distributions::Uniform, prelude::Distribution};
 
 use super::{
     interpolation::{interpolate, interpolate_steer},
-    wrap_angle, Agent, AGENT_HALFLENGTH, AGENT_HALFWIDTH,
+    wrap_angle, Agent, GameEnv, AGENT_HALFLENGTH, AGENT_HALFWIDTH,
 };
 use crate::{
+    agent::interpolation::AsPoint,
     collision::{bsearch_collision, CollisionShape, Obb},
     entity::Entity,
     game::Game,
+    measure_time,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -175,7 +177,8 @@ impl Agent {
                             ss.start = ss.search_tree[*node].state;
                             // println!("follow_avoidance_path Start set to {:?}", ss.start);
                         }
-                        self.prune_unreachable();
+                        let (_, time) = measure_time(|| self.prune_unreachable());
+                        println!("prune_unreachable: {time:?}");
                     }
                 }
                 true
@@ -306,13 +309,15 @@ impl Agent {
              -> (bool, usize) {
                 const USE_SEPAX: bool = true;
                 const USE_STEER: bool = false;
-                let collision_checker = |pos: [f64; 2]| {
-                    let state = AgentState::new(pos[0], pos[1], heading);
+                let collision_checker = |state: AgentState| {
                     if Agent::collision_check(Some(this.id), state, env.entities) {
                         return false;
                     }
-                    !env.game
-                        .check_hit(&start_state.collision_shape().with_position(pos.into()))
+                    !env.game.check_hit(
+                        &start_state
+                            .collision_shape()
+                            .with_position(state.as_point().into()),
+                    )
                 };
                 if USE_SEPAX {
                     let (hit, level) = env
@@ -636,6 +641,31 @@ impl Agent {
             "prune_unreachable pruned: {num_pruned} / {}",
             ss.search_tree.len()
         );
+    }
+
+    /// Check existing avoidance search state with actual entity positions, and
+    /// prune those states that has new collisions.
+    pub(super) fn check_avoidance_collision(&mut self, env: &GameEnv) -> Option<()> {
+        let ss = self.search_state.as_mut()?;
+
+        let collision_checker =
+            |state: AgentState| Agent::collision_check(Some(self.id), state, env.entities);
+
+        for i in 0..ss.search_tree.len() {
+            let Some(from) = ss.search_tree[i].from else { continue };
+            let start_state = ss.search_tree[from].state;
+            let next_state = ss.search_tree[i].state;
+            if interpolate(
+                start_state,
+                next_state,
+                DIST_RADIUS * 0.5,
+                collision_checker,
+            ) {
+                ss.search_tree[i].pruned = true;
+            }
+        }
+
+        Some(())
     }
 }
 
