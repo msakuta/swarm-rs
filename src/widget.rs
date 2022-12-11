@@ -89,6 +89,14 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     ),
             )
             .with_child(
+                Checkbox::new("Use space sampler")
+                    .lens(Field::new(
+                        |data: &AppData| &data.game.use_space_sampler,
+                        |data: &mut AppData| &mut data.game.use_space_sampler,
+                    ))
+                    .padding(5.),
+            )
+            .with_child(
                 Checkbox::new("Target line")
                     .lens(AppData::target_visible)
                     .padding(5.),

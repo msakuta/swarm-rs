@@ -5,7 +5,10 @@ use std::{cell::RefCell, collections::HashSet};
 
 use cgmath::{MetricSpace, Vector2};
 
-use self::{sampler::Sampler, search::search};
+use self::{
+    sampler::{ForwardKinematicSampler, SpaceSampler, StateSampler},
+    search::search,
+};
 use super::{
     interpolation::interpolate, wrap_angle, Agent, GameEnv, AGENT_HALFLENGTH, AGENT_HALFWIDTH,
 };
@@ -217,7 +220,7 @@ impl Agent {
     }
 }
 
-struct SearchEnv<'a> {
+pub(super) struct SearchEnv<'a> {
     game: &'a Game,
     switch_back: bool,
     expand_states: usize,
@@ -237,6 +240,31 @@ impl Agent {
         callback: impl Fn(&StateWithCost, &StateWithCost),
         backward: bool,
         switch_back: bool,
+        use_space_sampler: bool,
+    ) -> bool {
+        let mut env = SearchEnv {
+            game,
+            switch_back,
+            expand_states: 1,
+            skipped_nodes: 0,
+            tree_size: 0,
+            entities,
+        };
+
+        if use_space_sampler {
+            self.avoidance_search_gen::<SpaceSampler>(&mut env, callback, backward)
+        } else {
+            self.avoidance_search_gen::<ForwardKinematicSampler>(&mut env, callback, backward)
+        }
+    }
+
+    /// Templatized logic for searching avoidance path. The type argument speicfy how to
+    /// sample a new node.
+    pub(super) fn avoidance_search_gen<Sampler: StateSampler>(
+        &mut self,
+        env: &mut SearchEnv,
+        callback: impl Fn(&StateWithCost, &StateWithCost),
+        backward: bool,
     ) -> bool {
         // println!(
         //     "search invoked: state: {} goal: {:?}",
@@ -250,24 +278,6 @@ impl Agent {
                 self.search_state = None;
             }
         }
-
-        // if self
-        //     .search_state
-        //     .as_ref()
-        //     .map(|ss| ss.found_path.is_some())
-        //     .unwrap_or(false)
-        // {
-        //     return true;
-        // }
-
-        let mut env = SearchEnv {
-            game,
-            switch_back,
-            expand_states: 1,
-            skipped_nodes: 0,
-            tree_size: 0,
-            entities,
-        };
 
         let searched_path =
             if let Some((mut search_state, goal)) = self.search_state.take().zip(self.goal) {
@@ -287,15 +297,14 @@ impl Agent {
                     //     search_state.start
                     // );
 
-                    const SEARCH_NODES: usize = 10;
+                    const SEARCH_NODES: usize = 100;
 
                     if 0 < nodes.len() && nodes.len() < 10000 {
                         // Descending the tree is not a good way to sample a random node in a tree, since
                         // the chances are much higher on shallow nodes. We want to give chances uniformly
                         // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
                         for _i in 0..SEARCH_NODES {
-                            let path =
-                                search::<Sampler>(self, &search_state.start_set, &mut env, nodes);
+                            let path = search::<Sampler>(self, &search_state.start_set, env, nodes);
 
                             env.tree_size += 1;
 
@@ -322,23 +331,11 @@ impl Agent {
         if !searched_path {
             if let Some(goal) = self.goal {
                 // println!("Rebuilding tree with {} nodes should be 0", nodes.len());
-                let mut nodes: Vec<StateWithCost> = vec![];
-                let mut root_set = HashSet::new();
-                if backward || -0.1 < self.speed {
-                    let root = StateWithCost::new(self.to_state(), 0., 0., 1.);
-                    let root_id = nodes.len();
-                    nodes.push(root.clone());
-                    root_set.insert(root_id);
-                };
-                if backward || self.speed < 0.1 {
-                    let root = StateWithCost::new(self.to_state(), 0., 0., -1.);
-                    let root_id = nodes.len();
-                    nodes.push(root.clone());
-                    root_set.insert(root_id);
-                }
+                let mut nodes: Vec<StateWithCost> = Sampler::initial_search(self, backward);
 
                 if !nodes.is_empty() {
-                    let found_path = search::<Sampler>(self, &root_set, &mut env, &mut nodes);
+                    let root_set = (0..nodes.len()).collect();
+                    let found_path = search::<Sampler>(self, &root_set, env, &mut nodes);
 
                     let search_state = SearchState {
                         search_tree: nodes,

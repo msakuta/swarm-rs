@@ -1,12 +1,14 @@
 use cgmath::{MetricSpace, Vector2};
 use rand::{distributions::Uniform, prelude::Distribution};
 
-use crate::agent::Agent;
+use crate::agent::{wrap_angle, Agent};
 
-use super::{AgentState, SearchEnv, StateWithCost, DIST_RADIUS};
+use super::{compare_distance, AgentState, SearchEnv, StateWithCost, DIST_RADIUS, DIST_THRESHOLD};
 
-pub(super) trait StateSampler {
+pub(in super::super) trait StateSampler {
     fn new(env: &SearchEnv) -> Self;
+    fn compare_state(s1: &AgentState, s2: &AgentState) -> bool;
+    fn initial_search(agent: &Agent, backward: bool) -> Vec<StateWithCost>;
     /// Sample a new state. Shall return an index to the starting node and the new state as a tuple.
     fn sample(
         &mut self,
@@ -29,6 +31,25 @@ impl StateSampler for ForwardKinematicSampler {
             change_direction: false,
             start_cost: None,
         }
+    }
+
+    fn compare_state(s1: &AgentState, s2: &AgentState) -> bool {
+        let delta_angle = wrap_angle(s1.heading - s2.heading);
+        // println!("compareState deltaAngle: {}", deltaAngle);
+        compare_distance(s1, s2, DIST_THRESHOLD) && delta_angle.abs() < std::f64::consts::PI / 6.
+    }
+
+    fn initial_search(agent: &Agent, backward: bool) -> Vec<StateWithCost> {
+        let mut nodes = vec![];
+        if backward || -0.1 < agent.speed {
+            let root = StateWithCost::new(agent.to_state(), 0., 0., 1.);
+            nodes.push(root.clone());
+        };
+        if backward || agent.speed < 0.1 {
+            let root = StateWithCost::new(agent.to_state(), 0., 0., -1.);
+            nodes.push(root.clone());
+        }
+        nodes
     }
 
     fn sample(
@@ -85,6 +106,15 @@ impl StateSampler for SpaceSampler {
         Self(0.)
     }
 
+    fn compare_state(s1: &AgentState, s2: &AgentState) -> bool {
+        compare_distance(s1, s2, DIST_THRESHOLD)
+    }
+
+    fn initial_search(agent: &Agent, _backward: bool) -> Vec<StateWithCost> {
+        let root = StateWithCost::new(agent.to_state(), 0., 0., 1.);
+        vec![root]
+    }
+
     fn sample(
         &mut self,
         nodes: &[StateWithCost],
@@ -129,5 +159,3 @@ impl StateSampler for SpaceSampler {
         self.0 + distance
     }
 }
-
-pub(super) type Sampler = ForwardKinematicSampler;

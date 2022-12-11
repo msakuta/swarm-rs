@@ -136,7 +136,7 @@ pub(super) fn search<S: StateSampler>(
 
         // First, check if there is already a "samey" node exists
         for i in 0..nodes.len() {
-            if !compare_state(&nodes[i].state, &node.state) {
+            if !S::compare_state(&nodes[i].state, &node.state) {
                 continue;
             }
             let existing_node = &nodes[i];
