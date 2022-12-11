@@ -153,7 +153,12 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     )
                 }),
                 1.,
-            )),
+            ))
+            .with_child(
+                Label::new(|app_data: &AppData, _: &_| format!("{:?}", app_data.mouse_pos))
+                    .padding(5.0)
+                    .expand_width(),
+            ),
         Flex::column()
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .with_child(

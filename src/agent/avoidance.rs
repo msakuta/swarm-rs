@@ -172,7 +172,7 @@ impl Agent {
         AgentState {
             x: dx,
             y: dy,
-            heading,
+            heading: wrap_angle(heading),
         }
     }
 
@@ -302,36 +302,53 @@ impl Agent {
 
         trait StateSampler {
             fn new(env: &SearchEnv) -> Self;
+            /// Sample a new state. Shall return an index to the starting node and the new state as a tuple.
             fn sample(
                 &mut self,
-                start_node: &StateWithCost,
-                direction: f64,
+                nodes: &[StateWithCost],
                 env: &SearchEnv,
-            ) -> StateWithCost;
+            ) -> Option<(usize, StateWithCost)>;
             fn calculate_cost(&self, distance: f64) -> f64;
-            fn next_direction(&self, direction: f64) -> f64;
         }
 
-        /// Control space sampler.
+        /// Control space sampler. It is very cheap and can explore feasible path in kinematic model,
+        /// but it suffers from very slow space coverage rate.
         struct ForwardKinematicSampler {
             change_direction: bool,
             start_cost: Option<f64>,
         }
 
         impl StateSampler for ForwardKinematicSampler {
-            fn new(env: &SearchEnv) -> Self {
+            fn new(_env: &SearchEnv) -> Self {
                 Self {
-                    change_direction: env.switch_back && rand::random::<f64>() < 0.2,
+                    change_direction: false,
                     start_cost: None,
                 }
             }
 
             fn sample(
                 &mut self,
-                start_node: &StateWithCost,
-                direction: f64,
-                _env: &SearchEnv,
-            ) -> StateWithCost {
+                nodes: &[StateWithCost],
+                env: &SearchEnv,
+            ) -> Option<(usize, StateWithCost)> {
+                let (start, start_node) = {
+                    let total_passables = nodes.iter().filter(|node| node.is_passable()).count();
+                    if total_passables == 0 {
+                        return None;
+                    }
+                    let candidate =
+                        Uniform::from(0..total_passables).sample(&mut rand::thread_rng());
+                    nodes
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, node)| node.is_passable())
+                        .nth(candidate)?
+                };
+
+                let direction = start_node.speed.signum();
+
+                self.change_direction = env.switch_back && rand::random::<f64>() < 0.2;
+
                 let steer = rand::random::<f64>() - 0.5;
                 let next_direction = if self.change_direction {
                     -direction
@@ -344,7 +361,10 @@ impl Agent {
 
                 self.start_cost = Some(start_node.cost);
 
-                StateWithCost::new(next, self.calculate_cost(distance), steer, next_direction)
+                Some((
+                    start,
+                    StateWithCost::new(next, self.calculate_cost(distance), steer, next_direction),
+                ))
             }
 
             /// Changing direction costs
@@ -353,16 +373,9 @@ impl Agent {
                     + distance
                     + if self.change_direction { 10000. } else { 0. }
             }
-
-            fn next_direction(&self, direction: f64) -> f64 {
-                if self.change_direction {
-                    -direction
-                } else {
-                    direction
-                }
-            }
         }
 
+        /// Spatially random sampler. It is closer to pure RRT, which guarantees asymptotically filling space coverage
         struct SpaceSampler(f64);
 
         impl StateSampler for SpaceSampler {
@@ -372,121 +385,136 @@ impl Agent {
 
             fn sample(
                 &mut self,
-                start_node: &StateWithCost,
-                direction: f64,
+                nodes: &[StateWithCost],
                 env: &SearchEnv,
-            ) -> StateWithCost {
+            ) -> Option<(usize, StateWithCost)> {
                 let distance: f64 = DIST_RADIUS * 2. + rand::random::<f64>() * DIST_RADIUS * 3.;
-                self.0 = start_node.cost;
-                let state = AgentState {
-                    x: rand::random::<f64>() * env.game.xs as f64,
-                    y: rand::random::<f64>() * env.game.ys as f64,
-                    heading: start_node.state.heading,
-                };
-                StateWithCost::new(state, self.calculate_cost(distance), 0., direction)
+                let position = Vector2::new(
+                    rand::random::<f64>() * env.game.xs as f64,
+                    rand::random::<f64>() * env.game.ys as f64,
+                );
+
+                let (i, closest_node) = nodes
+                    .iter()
+                    .enumerate()
+                    .fold(None, |acc: Option<(usize, &StateWithCost)>, (ib, b)| {
+                        if let Some((ia, a)) = acc {
+                            let distance_a = Vector2::from(a.state).distance(position);
+                            let distance_b = Vector2::from(b.state).distance(position);
+                            if distance_a < distance_b {
+                                Some((ia, a))
+                            } else {
+                                Some((ib, b))
+                            }
+                        } else {
+                            Some((ib, b))
+                        }
+                    })
+                    .unwrap();
+
+                self.0 = closest_node.cost;
+
+                let state = AgentState::new(position[0], position[1], closest_node.state.heading);
+                let direction = closest_node.speed.signum();
+
+                Some((
+                    i,
+                    StateWithCost::new(state, self.calculate_cost(distance), 0., direction),
+                ))
             }
 
             fn calculate_cost(&self, distance: f64) -> f64 {
                 self.0 + distance
             }
-
-            /// Always the same direction
-            fn next_direction(&self, direction: f64) -> f64 {
-                direction
-            }
         }
 
-        type Sampler = SpaceSampler;
+        type Sampler = ForwardKinematicSampler;
 
         fn search<S: StateSampler>(
             this: &Agent,
-            start: usize,
             start_set: &HashSet<usize>,
-            direction: f64,
             env: &mut SearchEnv,
             nodes: &mut Vec<StateWithCost>,
         ) -> Option<Vec<usize>> {
-            if let Some(path) = check_goal(start_set, start, &this.goal, &nodes) {
-                return Some(path);
-            }
+            'skip: for _i in 0..env.expand_states {
+                let mut sampler = S::new(env);
+                let (start, mut node) = sampler.sample(nodes, env)?;
+                let next_direction = node.speed.signum();
+                let start_state = nodes[start].state;
 
-            // println!(
-            //     "Searching {} states from {start}/{}",
-            //     env.expandStates,
-            //     nodes.len()
-            // );
+                // println!(
+                //     "Searching {} states from {start}/{}",
+                //     env.expandStates,
+                //     nodes.len()
+                // );
 
-            let start_state = nodes[start].state;
-            let this_shape = start_state.collision_shape();
+                // let start_state = nodes[start].state;
+                let this_shape = this.get_shape();
 
-            let collision_check = |next: AgentState,
-                                   next_direction: f64,
-                                   distance: f64,
-                                   heading: f64,
-                                   steer: f64|
-             -> (bool, usize) {
-                const USE_SEPAX: bool = true;
-                const USE_STEER: bool = false;
-                let collision_checker = |state: AgentState| {
-                    if Agent::collision_check(Some(this.id), state, env.entities, true) {
-                        return false;
-                    }
-                    !env.game.check_hit(
-                        &start_state
-                            .collision_shape()
-                            .with_position(state.as_point().into()),
-                    )
-                };
-                if USE_SEPAX {
-                    let (hit, level) = env
-                        .entities
-                        .iter()
-                        .filter_map(|entity| entity.try_borrow().ok())
-                        .fold((false, 0usize), |acc, entity| {
-                            let shape = entity.get_shape();
-                            let pos = Vector2::from(start_state);
-                            let diff = Vector2::from(next) - pos;
-                            let (hit, level) =
-                                bsearch_collision(&this_shape, &diff, &shape, &Vector2::zero());
-                            (acc.0 || hit, acc.1.max(level))
-                        });
+                let collision_check = |next: AgentState,
+                                       next_direction: f64,
+                                       distance: f64,
+                                       heading: f64,
+                                       steer: f64|
+                 -> (bool, usize) {
+                    const USE_SEPAX: bool = true;
+                    const USE_STEER: bool = false;
+                    let collision_checker = |state: AgentState| {
+                        if Agent::collision_check(Some(this.id), state, env.entities, true) {
+                            return false;
+                        }
+                        !env.game.check_hit(
+                            &start_state
+                                .collision_shape()
+                                .with_position(state.as_point().into()),
+                        )
+                    };
+                    if USE_SEPAX {
+                        let (hit, level) = env
+                            .entities
+                            .iter()
+                            .filter_map(|entity| entity.try_borrow().ok())
+                            .fold((false, 0usize), |acc, entity| {
+                                let shape = entity.get_shape();
+                                let pos = Vector2::from(start_state);
+                                let diff = Vector2::from(next) - pos;
+                                let (hit, level) =
+                                    bsearch_collision(&this_shape, &diff, &shape, &Vector2::zero());
+                                (acc.0 || hit, acc.1.max(level))
+                            });
 
-                    if hit {
-                        (hit, level)
+                        if hit {
+                            (hit, level)
+                        } else {
+                            (
+                                interpolate(start_state, next, DIST_RADIUS * 0.5, |pos| {
+                                    !env.game.check_hit(
+                                        &start_state.collision_shape().with_position(pos.into()),
+                                    )
+                                }),
+                                level,
+                            )
+                        }
+                    } else if USE_STEER {
+                        (
+                            interpolate_steer(
+                                &start_state,
+                                steer,
+                                next_direction * distance,
+                                DIST_RADIUS,
+                                &collision_checker,
+                            ),
+                            0,
+                        )
                     } else {
                         (
-                            interpolate(start_state, next, DIST_RADIUS * 0.5, |pos| {
-                                !env.game.check_hit(
-                                    &start_state.collision_shape().with_position(pos.into()),
-                                )
-                            }),
-                            level,
+                            interpolate(start_state, next, DIST_RADIUS, &collision_checker),
+                            0,
                         )
                     }
-                } else if USE_STEER {
-                    (
-                        interpolate_steer(
-                            &start_state,
-                            steer,
-                            next_direction * distance,
-                            DIST_RADIUS,
-                            &collision_checker,
-                        ),
-                        0,
-                    )
-                } else {
-                    (
-                        interpolate(start_state, next, DIST_RADIUS, &collision_checker),
-                        0,
-                    )
-                }
-            };
+                };
 
-            'skip: for _i in 0..env.expand_states {
                 // let AgentState { x, y, heading } = start_state;
-                let mut sampler = S::new(env);
-                let mut node = sampler.sample(&nodes[start], direction, env);
-                let mut next_direction = sampler.next_direction(direction);
 
                 // First, check if there is already a "samey" node exists
                 for i in 0..nodes.len() {
@@ -516,7 +544,7 @@ impl Agent {
 
                     // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
                     if existing_cost > shortcut_cost {
-                        let delta = Vector2::from(node.state) - Vector2::from(start_state);
+                        let delta = Vector2::from(nodes[i].state) - Vector2::from(start_state);
                         let heading = delta.y.atan2(delta.x);
                         let heading = if next_direction < 0. {
                             wrap_angle(heading + std::f64::consts::PI)
@@ -570,6 +598,11 @@ impl Agent {
                 node.id = new_node_id;
                 node.max_level = level;
                 nodes.push(node);
+
+                if let Some(path) = check_goal(start_set, new_node_id, &this.goal, &nodes) {
+                    return Some(path);
+                }
+
                 // callback(start, node);
             }
             None
@@ -593,48 +626,17 @@ impl Agent {
                     //     search_state.start
                     // );
 
-                    const SEARCH_NODES: usize = 100;
+                    const SEARCH_NODES: usize = 10;
 
                     if 0 < nodes.len() && nodes.len() < 10000 {
                         // Descending the tree is not a good way to sample a random node in a tree, since
                         // the chances are much higher on shallow nodes. We want to give chances uniformly
                         // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
-                        'roll_dice: for _i in 0..SEARCH_NODES {
-                            let path = 'trace_tree: {
-                                let root =
-                                    Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
-                                let root_node = &nodes[root];
-                                if !root_node.is_passable() {
-                                    continue 'roll_dice;
-                                }
-                                if env.switch_back || 0. < root_node.speed {
-                                    if let Some(path) = search::<Sampler>(
-                                        self,
-                                        root,
-                                        &search_state.start_set,
-                                        1.,
-                                        &mut env,
-                                        nodes,
-                                    ) {
-                                        break 'trace_tree Some(path);
-                                    }
-                                }
-                                let root_node = &nodes[root];
-                                if env.switch_back || root_node.speed < 0. {
-                                    if let Some(path) = search::<Sampler>(
-                                        self,
-                                        root,
-                                        &search_state.start_set,
-                                        -1.,
-                                        &mut env,
-                                        nodes,
-                                    ) {
-                                        break 'trace_tree Some(path);
-                                    }
-                                }
-                                env.tree_size += 1;
-                                None
-                            };
+                        for _i in 0..SEARCH_NODES {
+                            let path =
+                                search::<Sampler>(self, &search_state.start_set, &mut env, nodes);
+
+                            env.tree_size += 1;
 
                             if let Some(path) = path {
                                 // println!("Materialized found path: {:?}", self.path);
@@ -661,32 +663,22 @@ impl Agent {
                 // println!("Rebuilding tree with {} nodes should be 0", nodes.len());
                 let mut nodes: Vec<StateWithCost> = vec![];
                 let mut root_set = HashSet::new();
-                let found_path = 'find_path: {
-                    if backward || -0.1 < self.speed {
-                        let root = StateWithCost::new(self.to_state(), 0., 0., 1.);
-                        let root_id = nodes.len();
-                        nodes.push(root.clone());
-                        root_set.insert(root_id);
-                        if let Some(path) =
-                            search::<Sampler>(self, root_id, &root_set, 1., &mut env, &mut nodes)
-                        {
-                            break 'find_path Some(path);
-                        }
-                    };
-                    if backward || self.speed < 0.1 {
-                        let root = StateWithCost::new(self.to_state(), 0., 0., -1.);
-                        let root_id = nodes.len();
-                        nodes.push(root.clone());
-                        root_set.insert(root_id);
-                        if let Some(path) =
-                            search::<Sampler>(self, root_id, &root_set, -1., &mut env, &mut nodes)
-                        {
-                            break 'find_path Some(path);
-                        }
-                    }
-                    None
+                if backward || -0.1 < self.speed {
+                    let root = StateWithCost::new(self.to_state(), 0., 0., 1.);
+                    let root_id = nodes.len();
+                    nodes.push(root.clone());
+                    root_set.insert(root_id);
                 };
+                if backward || self.speed < 0.1 {
+                    let root = StateWithCost::new(self.to_state(), 0., 0., -1.);
+                    let root_id = nodes.len();
+                    nodes.push(root.clone());
+                    root_set.insert(root_id);
+                }
+
                 if !nodes.is_empty() {
+                    let found_path = search::<Sampler>(self, &root_set, &mut env, &mut nodes);
+
                     let search_state = SearchState {
                         search_tree: nodes,
                         start_set: root_set,
@@ -861,6 +853,7 @@ mod render {
             _brush: &Color,
             circle_visible: bool,
             shape_visible: bool,
+            scale: f64,
         ) {
             // let rgba = brush.as_rgba8();
             // let brush = Color::rgba8(rgba.0 / 2, rgba.1 / 2, rgba.2 / 2, rgba.3);
@@ -893,6 +886,21 @@ mod render {
                                 let from_state = self.search_tree[from].state;
                                 bez_path.move_to(Point::new(from_state.x, from_state.y));
                                 bez_path.line_to(point);
+
+                                if 20. < scale * DIST_RADIUS {
+                                    let mut arrow_head = BezPath::new();
+                                    let angle =
+                                        (point.y - from_state.y).atan2(point.x - from_state.x);
+                                    let rot =
+                                        Affine::translate((*view_transform * point).to_vec2())
+                                            * Affine::rotate(angle);
+                                    arrow_head.move_to(rot * Point::ZERO);
+                                    arrow_head.line_to(rot * Point::new(-7., 3.));
+                                    arrow_head.line_to(rot * Point::new(-7., -3.));
+                                    arrow_head.close_path();
+                                    ctx.fill(arrow_head, &brush);
+                                }
+
                                 if circle_visible && 0 < level {
                                     let interpolates = 1 << level;
                                     for i in 1..interpolates {

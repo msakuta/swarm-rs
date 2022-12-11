@@ -21,6 +21,10 @@ impl AppData {
     pub(crate) fn view_transform(&self) -> Affine {
         Affine::scale(self.scale) * Affine::translate(self.origin)
     }
+
+    pub(crate) fn inverse_view_transform(&self) -> Affine {
+        Affine::translate(-self.origin) * Affine::scale(1. / self.scale)
+    }
 }
 
 impl Widget<AppData> for BoardWidget {
@@ -48,6 +52,8 @@ impl Widget<AppData> for BoardWidget {
                 self.panning = None;
             }
             Event::MouseMove(e) => {
+                let affine = data.inverse_view_transform();
+                data.mouse_pos = Some(affine * e.pos);
                 if let Some(ref mut panning) = self.panning {
                     let newpos = Vec2::new(e.pos.x, e.pos.y);
                     let delta = (newpos - *panning) / data.scale;

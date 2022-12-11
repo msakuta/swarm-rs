@@ -316,6 +316,7 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                     brush,
                     data.avoidance_circle_visible,
                     data.avoidance_shape_visible,
+                    data.scale,
                 );
             }
         }

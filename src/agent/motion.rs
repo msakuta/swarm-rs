@@ -168,6 +168,7 @@ impl Agent {
 
             self.drive(if backward { -distance } else { distance }, game, others)
         } else {
+            self.speed = 0.;
             true
         }
     }

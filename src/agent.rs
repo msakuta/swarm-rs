@@ -348,7 +348,10 @@ impl Agent {
                     let res = self.follow_path(game, entities);
                     self.last_motion_result = Some(MotionResult::FollowPath(res));
                 }
-                _ => self.last_motion_result = None,
+                _ => {
+                    self.last_motion_result = None;
+                    self.speed = 0.;
+                }
             }
         }
 

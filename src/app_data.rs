@@ -1,6 +1,6 @@
 use crate::{game::Game, WINDOW_HEIGHT};
 
-use druid::{Data, Lens, Vec2};
+use druid::{Data, Lens, Point, Vec2};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -28,6 +28,7 @@ pub(crate) struct AppData {
     pub(crate) origin: Vec2,
     pub(crate) scale: f64,
     pub(crate) message: String,
+    pub(super) mouse_pos: Option<Point>,
     pub(crate) get_board_time: f64,
     #[data(ignore)]
     pub(crate) render_board_time: Cell<f64>,
@@ -71,6 +72,7 @@ impl AppData {
             origin: Vec2::new(0., 0.),
             scale,
             message: "".to_string(),
+            mouse_pos: None,
             render_board_time: Cell::new(0.),
             get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
