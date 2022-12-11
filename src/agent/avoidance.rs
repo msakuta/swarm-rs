@@ -43,6 +43,18 @@ impl AgentState {
     }
 }
 
+impl From<AgentState> for [f64; 2] {
+    fn from(s: AgentState) -> Self {
+        [s.x, s.y]
+    }
+}
+
+impl From<AgentState> for Vector2<f64> {
+    fn from(s: AgentState) -> Self {
+        Self::new(s.x, s.y)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PathNode {
     pub x: f64,
@@ -88,7 +100,7 @@ pub(crate) struct StateWithCost {
     cost: f64,
     speed: f64,
     id: usize,
-    _steer: f64,
+    steer: f64,
     /// The maximum recursion level to determine collision. Used for debugging
     max_level: usize,
     from: Option<usize>,
@@ -102,7 +114,7 @@ impl StateWithCost {
         Self {
             state,
             cost,
-            _steer: steer,
+            steer,
             speed,
             id: 0,
             max_level: 0,
@@ -124,7 +136,7 @@ const DIST_THRESHOLD: f64 = DIST_RADIUS * DIST_RADIUS;
 fn compare_state(s1: &AgentState, s2: &AgentState) -> bool {
     let delta_angle = wrap_angle(s1.heading - s2.heading);
     // println!("compareState deltaAngle: {}", deltaAngle);
-    compare_distance(s1, s2, DIST_THRESHOLD) && delta_angle.abs() < std::f64::consts::PI / 4.
+    compare_distance(s1, s2, DIST_THRESHOLD) && delta_angle.abs() < std::f64::consts::PI / 6.
 }
 
 fn compare_distance(s1: &AgentState, s2: &AgentState, threshold: f64) -> bool {
@@ -288,7 +300,105 @@ impl Agent {
             entities,
         };
 
-        fn search(
+        trait StateSampler {
+            fn new(env: &SearchEnv) -> Self;
+            fn sample(
+                &mut self,
+                start_node: &StateWithCost,
+                direction: f64,
+                env: &SearchEnv,
+            ) -> StateWithCost;
+            fn calculate_cost(&self, distance: f64) -> f64;
+            fn next_direction(&self, direction: f64) -> f64;
+        }
+
+        /// Control space sampler.
+        struct ForwardKinematicSampler {
+            change_direction: bool,
+            start_cost: Option<f64>,
+        }
+
+        impl StateSampler for ForwardKinematicSampler {
+            fn new(env: &SearchEnv) -> Self {
+                Self {
+                    change_direction: env.switch_back && rand::random::<f64>() < 0.2,
+                    start_cost: None,
+                }
+            }
+
+            fn sample(
+                &mut self,
+                start_node: &StateWithCost,
+                direction: f64,
+                _env: &SearchEnv,
+            ) -> StateWithCost {
+                let steer = rand::random::<f64>() - 0.5;
+                let next_direction = if self.change_direction {
+                    -direction
+                } else {
+                    direction
+                };
+                let distance: f64 = DIST_RADIUS * 2. + rand::random::<f64>() * DIST_RADIUS * 3.;
+                let AgentState { x, y, heading } = start_node.state;
+                let next = Agent::step_move(x, y, heading, steer, next_direction * distance);
+
+                self.start_cost = Some(start_node.cost);
+
+                StateWithCost::new(next, self.calculate_cost(distance), steer, next_direction)
+            }
+
+            /// Changing direction costs
+            fn calculate_cost(&self, distance: f64) -> f64 {
+                self.start_cost.unwrap()
+                    + distance
+                    + if self.change_direction { 10000. } else { 0. }
+            }
+
+            fn next_direction(&self, direction: f64) -> f64 {
+                if self.change_direction {
+                    -direction
+                } else {
+                    direction
+                }
+            }
+        }
+
+        struct SpaceSampler(f64);
+
+        impl StateSampler for SpaceSampler {
+            fn new(_env: &SearchEnv) -> Self {
+                Self(0.)
+            }
+
+            fn sample(
+                &mut self,
+                start_node: &StateWithCost,
+                direction: f64,
+                env: &SearchEnv,
+            ) -> StateWithCost {
+                let distance: f64 = DIST_RADIUS * 2. + rand::random::<f64>() * DIST_RADIUS * 3.;
+                self.0 = start_node.cost;
+                let state = AgentState {
+                    x: rand::random::<f64>() * env.game.xs as f64,
+                    y: rand::random::<f64>() * env.game.ys as f64,
+                    heading: start_node.state.heading,
+                };
+                StateWithCost::new(state, self.calculate_cost(distance), 0., direction)
+            }
+
+            fn calculate_cost(&self, distance: f64) -> f64 {
+                self.0 + distance
+            }
+
+            /// Always the same direction
+            fn next_direction(&self, direction: f64) -> f64 {
+                direction
+            }
+        }
+
+        type Sampler = SpaceSampler;
+
+        fn search<S: StateSampler>(
             this: &Agent,
             start: usize,
             start_set: &HashSet<usize>,
@@ -305,18 +415,6 @@ impl Agent {
             //     env.expandStates,
             //     nodes.len()
             // );
-
-            impl From<AgentState> for [f64; 2] {
-                fn from(s: AgentState) -> Self {
-                    [s.x, s.y]
-                }
-            }
-
-            impl From<AgentState> for Vector2<f64> {
-                fn from(s: AgentState) -> Self {
-                    Self::new(s.x, s.y)
-                }
-            }
 
             let start_state = nodes[start].state;
             let this_shape = start_state.collision_shape();
@@ -385,24 +483,10 @@ impl Agent {
             };
 
             'skip: for _i in 0..env.expand_states {
-                let AgentState { x, y, heading } = nodes[start].state;
-                let steer = rand::random::<f64>() - 0.5;
-                let change_direction = env.switch_back && rand::random::<f64>() < 0.2;
-                let next_direction = if change_direction {
-                    -direction
-                } else {
-                    direction
-                };
-                let distance: f64 = DIST_RADIUS * 2. + rand::random::<f64>() * DIST_RADIUS * 3.;
-                let next = Agent::step_move(x, y, heading, steer, next_direction * distance);
-
-                // Changing direction costs
-                let calculate_cost = |distance| {
-                    nodes[start].cost + distance + if change_direction { 10000. } else { 0. }
-                };
-
-                let mut node =
-                    StateWithCost::new(next, calculate_cost(distance), steer, next_direction);
+                // let AgentState { x, y, heading } = start_state;
+                let mut sampler = S::new(env);
+                let mut node = sampler.sample(&nodes[start], direction, env);
+                let mut next_direction = sampler.next_direction(direction);
 
                 // First, check if there is already a "samey" node exists
                 for i in 0..nodes.len() {
@@ -428,12 +512,12 @@ impl Agent {
                     };
                     let distance =
                         Vector2::from(nodes[i].state).distance(Vector2::from(start_state));
-                    let shortcut_cost = calculate_cost(distance);
+                    let shortcut_cost = sampler.calculate_cost(distance);
 
                     // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
                     if existing_cost > shortcut_cost {
-                        let direction = Vector2::from(next) - Vector2::new(x, y);
-                        let heading = direction.y.atan2(direction.x);
+                        let delta = Vector2::from(node.state) - Vector2::from(start_state);
+                        let heading = delta.y.atan2(delta.x);
                         let heading = if next_direction < 0. {
                             wrap_angle(heading + std::f64::consts::PI)
                         } else {
@@ -444,7 +528,7 @@ impl Agent {
                             next_direction,
                             distance,
                             heading,
-                            steer,
+                            node.steer,
                         );
                         if hit {
                             continue 'skip;
@@ -465,8 +549,15 @@ impl Agent {
                 }
                 // println!("stepMove: {:?} -> {:?}", nodes[start], next);
 
-                let (hit, level) =
-                    collision_check(next, next_direction, distance, next.heading, steer);
+                let distance = Vector2::from(node.state).distance(start_state.into());
+
+                let (hit, level) = collision_check(
+                    node.state,
+                    next_direction,
+                    distance,
+                    node.state.heading,
+                    node.steer,
+                );
 
                 if hit {
                     // println!("Search hit something!, {nextDirection} * {distance}");
@@ -484,82 +575,86 @@ impl Agent {
             None
         }
 
-        let searched_path = if let Some((mut search_state, goal)) =
-            self.search_state.take().zip(self.goal)
-        {
-            // let start_state = &search_state.search_tree[search_state.start].state;
-            if
-            //compare_distance(&self.to_state(), start_state, DIST_THRESHOLD * 100.) &&
-            compare_distance(&goal, &search_state.goal, DIST_THRESHOLD) {
-                // for root in &search_state.searchTree {
-                //     enumTree(root, &mut nodes);
-                // }
+        let searched_path =
+            if let Some((mut search_state, goal)) = self.search_state.take().zip(self.goal) {
+                // let start_state = &search_state.search_tree[search_state.start].state;
+                if
+                //compare_distance(&self.to_state(), start_state, DIST_THRESHOLD * 100.) &&
+                compare_distance(&goal, &search_state.goal, DIST_THRESHOLD) {
+                    // for root in &search_state.searchTree {
+                    //     enumTree(root, &mut nodes);
+                    // }
 
-                let nodes = &mut search_state.search_tree;
+                    let nodes = &mut search_state.search_tree;
 
-                // println!(
-                //     "Using existing tree with {} nodes start from {:?}",
-                //     nodes.len(),
-                //     search_state.start
-                // );
+                    // println!(
+                    //     "Using existing tree with {} nodes start from {:?}",
+                    //     nodes.len(),
+                    //     search_state.start
+                    // );
 
-                const SEARCH_NODES: usize = 100;
+                    const SEARCH_NODES: usize = 100;
 
-                if 0 < nodes.len() && nodes.len() < 10000 {
-                    // Descending the tree is not a good way to sample a random node in a tree, since
-                    // the chances are much higher on shallow nodes. We want to give chances uniformly
-                    // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
-                    'roll_dice: for _i in 0..SEARCH_NODES {
-                        let path = 'trace_tree: {
-                            let root =
-                                Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
-                            let root_node = &nodes[root];
-                            if !root_node.is_passable() {
-                                continue 'roll_dice;
-                            }
-                            if env.switch_back || 0. < root_node.speed {
-                                if let Some(path) =
-                                    search(self, root, &search_state.start_set, 1., &mut env, nodes)
-                                {
-                                    break 'trace_tree Some(path);
+                    if 0 < nodes.len() && nodes.len() < 10000 {
+                        // Descending the tree is not a good way to sample a random node in a tree, since
+                        // the chances are much higher on shallow nodes. We want to give chances uniformly
+                        // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
+                        'roll_dice: for _i in 0..SEARCH_NODES {
+                            let path = 'trace_tree: {
+                                let root =
+                                    Uniform::from(0..nodes.len()).sample(&mut rand::thread_rng());
+                                let root_node = &nodes[root];
+                                if !root_node.is_passable() {
+                                    continue 'roll_dice;
                                 }
-                            }
-                            let root_node = &nodes[root];
-                            if env.switch_back || root_node.speed < 0. {
-                                if let Some(path) = search(
-                                    self,
-                                    root,
-                                    &search_state.start_set,
-                                    -1.,
-                                    &mut env,
-                                    nodes,
-                                ) {
-                                    break 'trace_tree Some(path);
+                                if env.switch_back || 0. < root_node.speed {
+                                    if let Some(path) = search::<Sampler>(
+                                        self,
+                                        root,
+                                        &search_state.start_set,
+                                        1.,
+                                        &mut env,
+                                        nodes,
+                                    ) {
+                                        break 'trace_tree Some(path);
+                                    }
                                 }
-                            }
-                            env.tree_size += 1;
-                            None
-                        };
+                                let root_node = &nodes[root];
+                                if env.switch_back || root_node.speed < 0. {
+                                    if let Some(path) = search::<Sampler>(
+                                        self,
+                                        root,
+                                        &search_state.start_set,
+                                        -1.,
+                                        &mut env,
+                                        nodes,
+                                    ) {
+                                        break 'trace_tree Some(path);
+                                    }
+                                }
+                                env.tree_size += 1;
+                                None
+                            };
 
-                        if let Some(path) = path {
-                            // println!("Materialized found path: {:?}", self.path);
-                            search_state.found_path = Some(path);
-                            self.search_state = Some(search_state);
-                            return true;
+                            if let Some(path) = path {
+                                // println!("Materialized found path: {:?}", self.path);
+                                search_state.found_path = Some(path);
+                                self.search_state = Some(search_state);
+                                return true;
+                            }
                         }
                     }
-                }
 
-                // let treeSize = env.tree_size;
-                search_state.goal = goal;
-                self.search_state = Some(search_state);
-                true
+                    // let treeSize = env.tree_size;
+                    search_state.goal = goal;
+                    self.search_state = Some(search_state);
+                    true
+                } else {
+                    false
+                }
             } else {
                 false
-            }
-        } else {
-            false
-        };
+            };
 
         if !searched_path {
             if let Some(goal) = self.goal {
@@ -573,7 +668,7 @@ impl Agent {
                         nodes.push(root.clone());
                         root_set.insert(root_id);
                         if let Some(path) =
-                            search(self, root_id, &root_set, 1., &mut env, &mut nodes)
+                            search::<Sampler>(self, root_id, &root_set, 1., &mut env, &mut nodes)
                         {
                             break 'find_path Some(path);
                         }
@@ -584,7 +679,7 @@ impl Agent {
                         nodes.push(root.clone());
                         root_set.insert(root_id);
                         if let Some(path) =
-                            search(self, root_id, &root_set, -1., &mut env, &mut nodes)
+                            search::<Sampler>(self, root_id, &root_set, -1., &mut env, &mut nodes)
                         {
                             break 'find_path Some(path);
                         }
@@ -708,6 +803,42 @@ impl Agent {
                 }
             }
         }
+
+        let mut visited = vec![false; ss.search_tree.len()];
+
+        let mut start = ss.start_set.clone();
+
+        // Mark initial nodes as visited
+        for node in &start {
+            visited[*node] = true;
+        }
+
+        while let Some(node) = start.iter().copied().next() {
+            start.remove(&node);
+            // println!("node {node} to-s: {:?}", ss.search_tree[node].to);
+            for to in &ss.search_tree[node].to {
+                if !visited[*to] {
+                    start.insert(*to);
+                    visited[*to] = true;
+                }
+            }
+        }
+
+        let mut num_detached = 0;
+        // Assign infinite cost to those "detached" nodes by the obstacle
+        for (_, state) in visited
+            .iter()
+            .zip(ss.search_tree.iter_mut())
+            .filter(|(visited, _)| !**visited)
+        {
+            state.cost = 1e8;
+            num_detached += 1;
+        }
+
+        println!(
+            "check_avoidance_collision detached: {num_detached} / {}",
+            ss.search_tree.len()
+        );
 
         Some(())
     }

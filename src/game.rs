@@ -140,8 +140,8 @@ impl Game {
             let dy = yi as isize - ys / 2;
             dx.abs() < xs * 3 / 8
                 && dy.abs() < ys / 8
-                && !(-xs * 3 / 16 < dx && dx < -xs / 16 && -ys / 16 < dy)
-                && !(xs / 16 < dx && dx < xs * 3 / 16 && dy < ys / 16)
+                && !(-xs * 3 / 16 < dx && dx < -xs * 2 / 16 && -ys / 16 < dy)
+                && !(xs * 2 / 16 < dx && dx < xs * 3 / 16 && dy < ys / 16)
         })
     }
 
