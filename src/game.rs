@@ -175,7 +175,7 @@ impl Game {
                 heading: rng.next() * std::f64::consts::PI * 2.,
             };
 
-            if Agent::collision_check(None, state_candidate, entities) {
+            if Agent::collision_check(None, state_candidate, entities, false) {
                 continue;
             }
 

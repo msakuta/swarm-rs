@@ -49,6 +49,13 @@ impl CollisionShape {
             radius: (obb.xs.powf(2.) + obb.ys.powf(2.)).sqrt(),
         }
     }
+
+    pub(crate) fn buffer(&self, size: f64) -> Self {
+        let Self::BBox(mut obb) = *self;
+        obb.xs += size;
+        obb.ys += size;
+        Self::BBox(obb)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

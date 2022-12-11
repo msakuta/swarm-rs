@@ -129,7 +129,7 @@ impl Agent {
             heading: self.orient,
         };
 
-        if Self::collision_check(Some(self.id), target_state, others) {
+        if Self::collision_check(Some(self.id), target_state, others, false) {
             self.speed = 0.;
             return false;
         }

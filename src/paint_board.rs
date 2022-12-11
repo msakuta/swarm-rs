@@ -296,6 +296,30 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             }
         }
 
+        if data.avoidance_visible {
+            if let Some(goal) = agent.get_goal() {
+                const CROSS_SIZE: f64 = 5.;
+                let goal = *view_transform * Point::new(goal.x, goal.y);
+                let mut bez_path = BezPath::new();
+                bez_path.move_to(goal + Vec2::new(-CROSS_SIZE, CROSS_SIZE));
+                bez_path.line_to(goal + Vec2::new(CROSS_SIZE, -CROSS_SIZE));
+                bez_path.move_to(goal + Vec2::new(-CROSS_SIZE, -CROSS_SIZE));
+                bez_path.line_to(goal + Vec2::new(CROSS_SIZE, CROSS_SIZE));
+                ctx.stroke(bez_path, brush, 2.);
+            }
+
+            if let Some(search_state) = agent.get_search_state() {
+                search_state.render(
+                    ctx,
+                    env,
+                    view_transform,
+                    brush,
+                    data.avoidance_circle_visible,
+                    data.avoidance_shape_visible,
+                );
+            }
+        }
+
         if data.path_visible {
             let avoidance_drawn = 'breaky: {
                 let Some(path) = agent
@@ -335,30 +359,6 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                 }
                 bez_path.line_to(to_point(agent.get_pos()));
                 ctx.stroke(*view_transform * bez_path, brush, 1.);
-            }
-        }
-
-        if data.avoidance_visible {
-            if let Some(goal) = agent.get_goal() {
-                const CROSS_SIZE: f64 = 5.;
-                let goal = *view_transform * Point::new(goal.x, goal.y);
-                let mut bez_path = BezPath::new();
-                bez_path.move_to(goal + Vec2::new(-CROSS_SIZE, CROSS_SIZE));
-                bez_path.line_to(goal + Vec2::new(CROSS_SIZE, -CROSS_SIZE));
-                bez_path.move_to(goal + Vec2::new(-CROSS_SIZE, -CROSS_SIZE));
-                bez_path.line_to(goal + Vec2::new(CROSS_SIZE, CROSS_SIZE));
-                ctx.stroke(bez_path, brush, 2.);
-            }
-
-            if let Some(search_state) = agent.get_search_state() {
-                search_state.render(
-                    ctx,
-                    env,
-                    view_transform,
-                    brush,
-                    data.avoidance_circle_visible,
-                    data.avoidance_shape_visible,
-                );
             }
         }
 

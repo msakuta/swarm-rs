@@ -330,7 +330,7 @@ impl Agent {
                 const USE_SEPAX: bool = true;
                 const USE_STEER: bool = false;
                 let collision_checker = |state: AgentState| {
-                    if Agent::collision_check(Some(this.id), state, env.entities) {
+                    if Agent::collision_check(Some(this.id), state, env.entities, true) {
                         return false;
                     }
                     !env.game.check_hit(
@@ -684,7 +684,7 @@ impl Agent {
         let ss = self.search_state.as_mut()?;
 
         let collision_checker =
-            |state: AgentState| Agent::collision_check(Some(self.id), state, env.entities);
+            |state: AgentState| Agent::collision_check(Some(self.id), state, env.entities, true);
 
         for i in 0..ss.search_tree.len() {
             let Some(from) = ss.search_tree[i].from else { continue };

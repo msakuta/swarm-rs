@@ -132,6 +132,7 @@ impl Agent {
         ignore: Option<usize>,
         newpos: AgentState,
         others: &[RefCell<Entity>],
+        prediction: bool,
     ) -> bool {
         let shape = newpos.collision_shape();
         for entity in others.iter() {
@@ -139,9 +140,17 @@ impl Agent {
                 if Some(entity.get_id()) == ignore {
                     continue;
                 }
+                let buffer = if prediction && entity.get_speed() != 0. {
+                    1.
+                } else {
+                    0.
+                };
                 let dist2 = Vector2::from(entity.get_pos()).distance2(Vector2::from(newpos));
-                if dist2 < (AGENT_HALFLENGTH * 2.).powf(2.) {
-                    let entity_shape = entity.get_shape();
+                if dist2 < ((AGENT_HALFLENGTH + buffer) * 2.).powf(2.) {
+                    let mut entity_shape = entity.get_shape();
+                    if buffer != 0. {
+                        entity_shape = entity_shape.buffer(buffer);
+                    }
                     if shape.intersects(&entity_shape) {
                         // println!("Collision with another entity");
                         return true;

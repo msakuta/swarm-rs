@@ -135,6 +135,13 @@ impl Entity {
         }
     }
 
+    pub(crate) fn get_speed(&self) -> f64 {
+        match self {
+            Entity::Agent(agent) => agent.speed,
+            _ => 0.,
+        }
+    }
+
     pub(crate) fn damage(&mut self) -> bool {
         match self {
             Entity::Agent(agent) => {
