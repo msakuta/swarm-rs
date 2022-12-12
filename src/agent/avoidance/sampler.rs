@@ -1,4 +1,4 @@
-use cgmath::{MetricSpace, Vector2};
+use cgmath::{InnerSpace, MetricSpace, Vector2};
 use rand::{distributions::Uniform, prelude::Distribution};
 
 use crate::agent::{wrap_angle, Agent};
@@ -125,10 +125,9 @@ impl StateSampler for SpaceSampler {
             rand::random::<f64>() * env.game.ys as f64,
         );
 
-        let (i, closest_node) = nodes
-            .iter()
-            .enumerate()
-            .fold(None, |acc: Option<(usize, &StateWithCost)>, (ib, b)| {
+        let (i, closest_node) = nodes.iter().enumerate().fold(
+            None,
+            |acc: Option<(usize, &StateWithCost)>, (ib, b)| {
                 if let Some((ia, a)) = acc {
                     let distance_a = Vector2::from(a.state).distance(position);
                     let distance_b = Vector2::from(b.state).distance(position);
@@ -140,13 +139,18 @@ impl StateSampler for SpaceSampler {
                 } else {
                     Some((ib, b))
                 }
-            })
-            .unwrap();
+            },
+        )?;
+
+        const STEER_DISTANCE: f64 = DIST_RADIUS * 2.5;
 
         self.0 = closest_node.cost;
-        let distance = Vector2::from(closest_node.state).distance(position);
+        let closest_point = Vector2::from(closest_node.state);
+        let distance = closest_point.distance(position).min(STEER_DISTANCE);
+        let steer = (position - closest_point).normalize() * distance;
+        let position = closest_point + steer;
 
-        let state = AgentState::new(position[0], position[1], closest_node.state.heading);
+        let state = AgentState::new(position.x, position.y, closest_node.state.heading);
         let direction = closest_node.speed.signum();
 
         Some((
