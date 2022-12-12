@@ -11,9 +11,7 @@ use crate::{
     collision::bsearch_collision,
 };
 
-use super::{
-    compare_distance, sampler::StateSampler, AgentState, SearchEnv, StateWithCost,
-};
+use super::{compare_distance, sampler::StateSampler, AgentState, SearchEnv, StateWithCost};
 
 /// Check if the goal is close enough to the added node, and if it was, return a built path
 fn check_goal(

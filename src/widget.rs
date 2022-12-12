@@ -163,13 +163,15 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 1.,
             ))
             .with_child(
-                Label::new(|app_data: &AppData, _: &_| if let Some(pos) = app_data.mouse_pos {
-                    format!("{:.03}, {:.03}", pos.x, pos.y)
-                } else {
-                    "".to_string()
+                Label::new(|app_data: &AppData, _: &_| {
+                    if let Some(pos) = app_data.mouse_pos {
+                        format!("{:.03}, {:.03}", pos.x, pos.y)
+                    } else {
+                        "".to_string()
+                    }
                 })
-                    .padding(5.0)
-                    .expand_width(),
+                .padding(5.0)
+                .expand_width(),
             ),
         Flex::column()
             .cross_axis_alignment(CrossAxisAlignment::Start)
