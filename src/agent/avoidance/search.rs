@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{
-    compare_distance, compare_state, sampler::StateSampler, AgentState, SearchEnv, StateWithCost,
+    compare_distance, sampler::StateSampler, AgentState, SearchEnv, StateWithCost,
 };
 
 /// Check if the goal is close enough to the added node, and if it was, return a built path
