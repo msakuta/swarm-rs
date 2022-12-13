@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use cgmath::{InnerSpace, MetricSpace, Vector2};
 use rand::{distributions::Uniform, prelude::Distribution};
 
@@ -242,61 +244,67 @@ impl StateSampler for SpaceSampler {
         start: usize,
         mut collision_check: impl FnMut(AgentState, f64, f64, f64, f64) -> (bool, usize),
     ) {
+        static TOTAL_INVOKES: AtomicUsize = AtomicUsize::new(0);
+        static REWIRE_COUNT: AtomicUsize = AtomicUsize::new(0);
         const REWIRE_DISTANCE: f64 = DIST_RADIUS * 3.;
         let next_direction = node.speed.signum();
         let start_state = node.state;
-        let lowest_cost = nodes.iter().enumerate().fold(None, |acc, (i, node)| {
-            if REWIRE_DISTANCE.powf(2.) < Vector2::from(nodes[i].state).distance2(node.state.into())
-            {
-                return acc;
-            }
-            let existing_node = &nodes[i];
-            let Some(existing_from) = existing_node.from else {
-                return acc;
-            };
-            let existing_cost = existing_node.cost;
-            let Some((to_index, _)) = nodes[existing_from].to
+        let lowest_cost = nodes
+            .iter()
+            .enumerate()
+            .fold(None, |acc, (i, existing_node)| {
+                if REWIRE_DISTANCE.powf(2.)
+                    < Vector2::from(existing_node.state).distance2(node.state.into())
+                {
+                    return acc;
+                }
+                let Some(existing_from) = existing_node.from else {
+                    return acc;
+                };
+                let existing_cost = existing_node.cost;
+                let Some((to_index, _)) = nodes[existing_from].to
                 .iter().copied().enumerate().find(|(_, j)| *j == i) else {
-                return acc;
-            };
-            let distance = Vector2::from(nodes[i].state).distance(Vector2::from(start_state));
-            let shortcut_cost = self.calculate_cost(distance);
-            if existing_cost > shortcut_cost {
-                let ret = (i, to_index, existing_from, shortcut_cost);
-                if let Some((_, _, _, acc_cost)) = acc {
-                    if shortcut_cost < acc_cost {
-                        Some(ret)
+                    return acc;
+                };
+                let delta = Vector2::from(existing_node.state) - Vector2::from(start_state);
+                let distance = delta.magnitude();
+                let heading = delta.y.atan2(delta.x);
+                let heading = if next_direction < 0. {
+                    wrap_angle(heading + std::f64::consts::PI)
+                } else {
+                    heading
+                };
+                let (hit, _level) = collision_check(
+                    existing_node.state,
+                    next_direction,
+                    distance,
+                    heading,
+                    node.steer,
+                );
+                if hit {
+                    return acc;
+                }
+                let shortcut_cost = self.calculate_cost(distance);
+                if existing_cost > shortcut_cost {
+                    let ret = (i, to_index, existing_from, heading, shortcut_cost);
+                    if let Some((_, _, _, _, acc_cost)) = acc {
+                        if shortcut_cost < acc_cost {
+                            Some(ret)
+                        } else {
+                            acc
+                        }
                     } else {
-                        acc
+                        Some(ret)
                     }
                 } else {
-                    Some(ret)
+                    acc
                 }
-            } else {
-                acc
-            }
-        });
+            });
 
-        if let Some((i, to_index, existing_from, shortcut_cost)) = lowest_cost {
-            // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
-            let delta = Vector2::from(nodes[i].state) - Vector2::from(start_state);
-            let distance = delta.magnitude();
-            let heading = delta.y.atan2(delta.x);
-            let heading = if next_direction < 0. {
-                wrap_angle(heading + std::f64::consts::PI)
-            } else {
-                heading
-            };
-            let (hit, _level) = collision_check(
-                nodes[i].state,
-                next_direction,
-                distance,
-                heading,
-                node.steer,
-            );
-            if hit {
-                return;
-            }
+        let invokes = TOTAL_INVOKES.fetch_add(1, Ordering::Relaxed);
+
+        // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
+        if let Some((i, to_index, existing_from, heading, shortcut_cost)) = lowest_cost {
             nodes[i].state.heading = heading;
             nodes[i].cost = shortcut_cost;
             nodes[existing_from].to.remove(to_index);
@@ -307,6 +315,11 @@ impl StateSampler for SpaceSampler {
             nodes[i].blocked = false;
             nodes[start].to.push(i);
             // nodes[i].state = node.state;
+
+            let count = REWIRE_COUNT.fetch_add(1, Ordering::Relaxed);
+            if count % 100 == 0 {
+                println!("SpaceSampler: Rewired {count}/{invokes} times");
+            }
         }
     }
 }
