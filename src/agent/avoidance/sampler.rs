@@ -256,28 +256,28 @@ impl StateSampler for SpaceSampler {
             };
             let existing_cost = existing_node.cost;
             let Some((to_index, _)) = nodes[existing_from].to
-                .iter().copied().enumerate().find(|(_, j)| *j == i) else
-            {
+                .iter().copied().enumerate().find(|(_, j)| *j == i) else {
                 return acc;
             };
             let distance = Vector2::from(nodes[i].state).distance(Vector2::from(start_state));
             let shortcut_cost = self.calculate_cost(distance);
             if existing_cost > shortcut_cost {
-                if let Some((_, acc_cost)) = acc {
+                let ret = (i, to_index, existing_from, shortcut_cost);
+                if let Some((_, _, _, acc_cost)) = acc {
                     if shortcut_cost < acc_cost {
-                        Some((i, shortcut_cost))
+                        Some(ret)
                     } else {
                         acc
                     }
                 } else {
-                    acc
+                    Some(ret)
                 }
             } else {
                 acc
             }
         });
 
-        if let Some((i, shortcut_cost)) = lowest_cost {
+        if let Some((i, to_index, existing_from, shortcut_cost)) = lowest_cost {
             // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
             let delta = Vector2::from(nodes[i].state) - Vector2::from(start_state);
             let distance = delta.magnitude();
@@ -297,14 +297,6 @@ impl StateSampler for SpaceSampler {
             if hit {
                 return;
             }
-            let Some(existing_from) = nodes[i].from else {
-                return;
-            };
-            let Some((to_index, _)) = nodes[existing_from].to
-                .iter().copied().enumerate().find(|(_, j)| *j == i) else
-            {
-                return;
-            };
             nodes[i].state.heading = heading;
             nodes[i].cost = shortcut_cost;
             nodes[existing_from].to.remove(to_index);

@@ -363,10 +363,10 @@ impl Agent {
             }
         }
 
-        if let (Some(_), time) =
+        if let (Some(_), _time) =
             measure_time(|| self.check_avoidance_collision(&GameEnv { game, entities }))
         {
-            println!("check_avoidance_collision time: {time:.06}");
+            // println!("check_avoidance_collision time: {time:.06}");
         }
 
         // if let Some(target) = self.target.and_then(|target| {

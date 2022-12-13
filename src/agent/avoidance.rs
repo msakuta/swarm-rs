@@ -486,10 +486,10 @@ impl Agent {
             num_detached += 1;
         }
 
-        println!(
-            "check_avoidance_collision detached: {num_detached} / {}",
-            ss.search_tree.len()
-        );
+        // println!(
+        //     "check_avoidance_collision detached: {num_detached} / {}",
+        //     ss.search_tree.len()
+        // );
 
         Some(())
     }
