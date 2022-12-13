@@ -141,7 +141,6 @@ pub(super) fn search<S: StateSampler>(
             let Some(existing_from) = existing_node.from else {
                 continue;
             };
-            let existing_cost = existing_node.cost;
             if i == start || existing_from == start {
                 nodes[i].blocked = false;
                 if nodes[i].blocked {
@@ -149,48 +148,12 @@ pub(super) fn search<S: StateSampler>(
                 }
                 continue 'skip;
             }
-            let Some((to_index, _)) = nodes[existing_from].to
-                .iter().copied().enumerate().find(|(_, j)| *j == i) else
-            {
-                continue
-            };
-            let distance = Vector2::from(nodes[i].state).distance(Vector2::from(start_state));
-            let shortcut_cost = sampler.calculate_cost(distance);
-
-            // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
-            if existing_cost > shortcut_cost {
-                let delta = Vector2::from(nodes[i].state) - Vector2::from(start_state);
-                let heading = delta.y.atan2(delta.x);
-                let heading = if next_direction < 0. {
-                    wrap_angle(heading + std::f64::consts::PI)
-                } else {
-                    heading
-                };
-                let (hit, _level) = collision_check(
-                    nodes[i].state,
-                    next_direction,
-                    distance,
-                    heading,
-                    node.steer,
-                );
-                if hit {
-                    continue 'skip;
-                }
-                nodes[i].state.heading = heading;
-                nodes[i].cost = shortcut_cost;
-                nodes[existing_from].to.remove(to_index);
-                nodes[i].from = Some(start);
-                if nodes[i].blocked {
-                    println!("Reviving blocked node {i}");
-                }
-                nodes[i].blocked = false;
-                nodes[start].to.push(i);
-                // nodes[i].state = node.state;
-            }
             env.skipped_nodes += 1;
             continue 'skip;
         }
         // println!("stepMove: {:?} -> {:?}", nodes[start], next);
+
+        sampler.rewire(nodes, &node, start, collision_check);
 
         let distance = Vector2::from(node.state).distance(start_state.into());
 

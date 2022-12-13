@@ -16,6 +16,13 @@ pub(in super::super) trait StateSampler {
         env: &SearchEnv,
     ) -> Option<(usize, StateWithCost)>;
     fn calculate_cost(&self, distance: f64) -> f64;
+    fn rewire(
+        &self,
+        nodes: &mut [StateWithCost],
+        node: &StateWithCost,
+        start: usize,
+        collision_check: impl FnMut(AgentState, f64, f64, f64, f64) -> (bool, usize),
+    );
 }
 
 /// Control space sampler. It is very cheap and can explore feasible path in kinematic model,
@@ -96,6 +103,71 @@ impl StateSampler for ForwardKinematicSampler {
     fn calculate_cost(&self, distance: f64) -> f64 {
         self.start_cost.unwrap() + distance + if self.change_direction { 10000. } else { 0. }
     }
+
+    fn rewire(
+        &self,
+        nodes: &mut [StateWithCost],
+        node: &StateWithCost,
+        start: usize,
+        mut collision_check: impl FnMut(AgentState, f64, f64, f64, f64) -> (bool, usize),
+    ) {
+        let next_direction = node.speed.signum();
+        let start_state = node.state;
+        for i in 0..nodes.len() {
+            if !Self::compare_state(&nodes[i].state, &node.state) {
+                continue;
+            }
+            let existing_node = &nodes[i];
+            let Some(existing_from) = existing_node.from else {
+                continue;
+            };
+            let existing_cost = existing_node.cost;
+            if i == start || existing_from == start {
+                nodes[i].blocked = false;
+                if nodes[i].blocked {
+                    println!("Reviving blocked node {i}");
+                }
+                return;
+            }
+            let Some((to_index, _)) = nodes[existing_from].to
+                .iter().copied().enumerate().find(|(_, j)| *j == i) else
+            {
+                continue
+            };
+            let distance = Vector2::from(nodes[i].state).distance(Vector2::from(start_state));
+            let shortcut_cost = self.calculate_cost(distance);
+            // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
+            if existing_cost > shortcut_cost {
+                let delta = Vector2::from(nodes[i].state) - Vector2::from(start_state);
+                let heading = delta.y.atan2(delta.x);
+                let heading = if next_direction < 0. {
+                    wrap_angle(heading + std::f64::consts::PI)
+                } else {
+                    heading
+                };
+                let (hit, _level) = collision_check(
+                    nodes[i].state,
+                    next_direction,
+                    distance,
+                    heading,
+                    node.steer,
+                );
+                if hit {
+                    return;
+                }
+                nodes[i].state.heading = heading;
+                nodes[i].cost = shortcut_cost;
+                nodes[existing_from].to.remove(to_index);
+                nodes[i].from = Some(start);
+                if nodes[i].blocked {
+                    println!("Reviving blocked node {i}");
+                }
+                nodes[i].blocked = false;
+                nodes[start].to.push(i);
+                // nodes[i].state = node.state;
+            }
+        }
+    }
 }
 
 /// Spatially random sampler. It is closer to pure RRT, which guarantees asymptotically filling space coverage
@@ -161,5 +233,88 @@ impl StateSampler for SpaceSampler {
 
     fn calculate_cost(&self, distance: f64) -> f64 {
         self.0 + distance
+    }
+
+    fn rewire(
+        &self,
+        nodes: &mut [StateWithCost],
+        node: &StateWithCost,
+        start: usize,
+        mut collision_check: impl FnMut(AgentState, f64, f64, f64, f64) -> (bool, usize),
+    ) {
+        const REWIRE_DISTANCE: f64 = DIST_RADIUS * 3.;
+        let next_direction = node.speed.signum();
+        let start_state = node.state;
+        let lowest_cost = nodes.iter().enumerate().fold(None, |acc, (i, node)| {
+            if REWIRE_DISTANCE.powf(2.) < Vector2::from(nodes[i].state).distance2(node.state.into())
+            {
+                return acc;
+            }
+            let existing_node = &nodes[i];
+            let Some(existing_from) = existing_node.from else {
+                return acc;
+            };
+            let existing_cost = existing_node.cost;
+            let Some((to_index, _)) = nodes[existing_from].to
+                .iter().copied().enumerate().find(|(_, j)| *j == i) else
+            {
+                return acc;
+            };
+            let distance = Vector2::from(nodes[i].state).distance(Vector2::from(start_state));
+            let shortcut_cost = self.calculate_cost(distance);
+            if existing_cost > shortcut_cost {
+                if let Some((_, acc_cost)) = acc {
+                    if shortcut_cost < acc_cost {
+                        Some((i, shortcut_cost))
+                    } else {
+                        acc
+                    }
+                } else {
+                    acc
+                }
+            } else {
+                acc
+            }
+        });
+
+        if let Some((i, shortcut_cost)) = lowest_cost {
+            // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
+            let delta = Vector2::from(nodes[i].state) - Vector2::from(start_state);
+            let distance = delta.magnitude();
+            let heading = delta.y.atan2(delta.x);
+            let heading = if next_direction < 0. {
+                wrap_angle(heading + std::f64::consts::PI)
+            } else {
+                heading
+            };
+            let (hit, _level) = collision_check(
+                nodes[i].state,
+                next_direction,
+                distance,
+                heading,
+                node.steer,
+            );
+            if hit {
+                return;
+            }
+            let Some(existing_from) = nodes[i].from else {
+                return;
+            };
+            let Some((to_index, _)) = nodes[existing_from].to
+                .iter().copied().enumerate().find(|(_, j)| *j == i) else
+            {
+                return;
+            };
+            nodes[i].state.heading = heading;
+            nodes[i].cost = shortcut_cost;
+            nodes[existing_from].to.remove(to_index);
+            nodes[i].from = Some(start);
+            if nodes[i].blocked {
+                println!("Reviving blocked node {i}");
+            }
+            nodes[i].blocked = false;
+            nodes[start].to.push(i);
+            // nodes[i].state = node.state;
+        }
     }
 }
