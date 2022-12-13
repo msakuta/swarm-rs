@@ -232,7 +232,7 @@ impl Agent {
                 |_, _| (),
                 cmd.back,
                 false,
-                game.use_space_sampler,
+                game.avoidance_mode,
             )
         });
         // println!("Avoidance goal set to {:?}, returns {res:?}", self.goal);

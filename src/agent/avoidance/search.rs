@@ -55,9 +55,6 @@ pub(super) fn search<S: StateSampler>(
 ) -> Option<Vec<usize>> {
     'skip: for _i in 0..env.expand_states {
         let mut sampler = S::new(env);
-        let (start, mut node) = sampler.sample(nodes, env)?;
-        let next_direction = node.speed.signum();
-        let start_state = nodes[start].state;
 
         // println!(
         //     "Searching {} states from {start}/{}",
@@ -66,12 +63,12 @@ pub(super) fn search<S: StateSampler>(
         // );
 
         // let start_state = nodes[start].state;
-        let this_shape = this.get_shape();
+        // let this_shape = this.get_shape();
 
-        let collision_check = |next: AgentState,
+        let collision_check = |start_state: AgentState,
+                               next_state: AgentState,
                                next_direction: f64,
                                distance: f64,
-                               heading: f64,
                                steer: f64|
          -> (bool, usize) {
             const USE_SEPAX: bool = true;
@@ -87,6 +84,7 @@ pub(super) fn search<S: StateSampler>(
                 )
             };
             if USE_SEPAX {
+                let start_shape = start_state.collision_shape();
                 let (hit, level) = env
                     .entities
                     .iter()
@@ -94,9 +92,9 @@ pub(super) fn search<S: StateSampler>(
                     .fold((false, 0usize), |acc, entity| {
                         let shape = entity.get_shape();
                         let pos = Vector2::from(start_state);
-                        let diff = Vector2::from(next) - pos;
+                        let diff = Vector2::from(next_state) - pos;
                         let (hit, level) =
-                            bsearch_collision(&this_shape, &diff, &shape, &Vector2::zero());
+                            bsearch_collision(&start_shape, &diff, &shape, &Vector2::zero());
                         (acc.0 || hit, acc.1.max(level))
                     });
 
@@ -104,7 +102,7 @@ pub(super) fn search<S: StateSampler>(
                     (hit, level)
                 } else {
                     (
-                        interpolate(start_state, next, DIST_RADIUS * 0.5, |pos| {
+                        interpolate(start_state, next_state, DIST_RADIUS * 0.5, |pos| {
                             !env.game
                                 .check_hit(&start_state.collision_shape().with_position(pos.into()))
                         }),
@@ -124,11 +122,15 @@ pub(super) fn search<S: StateSampler>(
                 )
             } else {
                 (
-                    interpolate(start_state, next, DIST_RADIUS, &collision_checker),
+                    interpolate(start_state, next_state, DIST_RADIUS, &collision_checker),
                     0,
                 )
             }
         };
+
+        let (start, mut node) = sampler.sample(nodes, env, collision_check)?;
+        let next_direction = node.speed.signum();
+        let start_state = nodes[start].state;
 
         // let AgentState { x, y, heading } = start_state;
 
@@ -153,15 +155,13 @@ pub(super) fn search<S: StateSampler>(
         }
         // println!("stepMove: {:?} -> {:?}", nodes[start], next);
 
-        sampler.rewire(nodes, &node, start, collision_check);
-
         let distance = Vector2::from(node.state).distance(start_state.into());
 
         let (hit, level) = collision_check(
+            start_state,
             node.state,
             next_direction,
             distance,
-            node.state.heading,
             node.steer,
         );
 
@@ -176,6 +176,8 @@ pub(super) fn search<S: StateSampler>(
         node.id = new_node_id;
         node.max_level = level;
         nodes.push(node);
+
+        sampler.rewire(nodes, new_node_id, start, collision_check);
 
         if let Some(path) = check_goal(start_set, new_node_id, &this.goal, &nodes) {
             return Some(path);

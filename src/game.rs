@@ -49,6 +49,13 @@ impl Profiler {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Data)]
+pub(crate) enum AvoidanceMode {
+    Kinematic,
+    Rrt,
+    RrtStar,
+}
+
 #[derive(Debug, Clone, Data)]
 pub(crate) struct Game {
     pub(crate) xs: usize,
@@ -62,7 +69,7 @@ pub(crate) struct Game {
     pub(crate) interval: f64,
     pub(crate) rng: Rc<Xor128>,
     pub(crate) id_gen: usize,
-    pub(crate) use_space_sampler: bool,
+    pub(crate) avoidance_mode: AvoidanceMode,
     pub(crate) temp_ents: Rc<RefCell<Vec<TempEnt>>>,
     pub(crate) triangle_profiler: Rc<RefCell<Profiler>>,
     pub(crate) pixel_profiler: Rc<RefCell<Profiler>>,
@@ -93,7 +100,7 @@ impl Game {
             interval: 32.,
             rng: Rc::new(Xor128::new(9318245)),
             id_gen,
-            use_space_sampler: false,
+            avoidance_mode: AvoidanceMode::RrtStar,
             temp_ents: Rc::new(RefCell::new(vec![])),
             triangle_profiler: Rc::new(RefCell::new(Profiler::new())),
             pixel_profiler: Rc::new(RefCell::new(Profiler::new())),

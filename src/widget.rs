@@ -3,6 +3,7 @@ use std::rc::Rc;
 use crate::{
     app_data::{AppData, LineMode},
     board_widget::BoardWidget,
+    game::AvoidanceMode,
 };
 use behavior_tree_lite::parse_file;
 use druid::widget::{
@@ -89,12 +90,20 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     ),
             )
             .with_child(
-                Checkbox::new("Use space sampler")
+                Flex::row()
+                .with_child(Label::new("Avoidance mode:").padding(3.0))
+                .with_child(
+                    RadioGroup::new([
+                        ("Kinematic", AvoidanceMode::Kinematic),
+                        ("RRT", AvoidanceMode::Rrt),
+                        ("RRT*", AvoidanceMode::RrtStar),
+                    ])
                     .lens(Field::new(
-                        |data: &AppData| &data.game.use_space_sampler,
-                        |data: &mut AppData| &mut data.game.use_space_sampler,
+                        |data: &AppData| &data.game.avoidance_mode,
+                        |data: &mut AppData| &mut data.game.avoidance_mode,
                     ))
                     .padding(5.),
+                )
             )
             .with_child(
                 Checkbox::new("Target line")

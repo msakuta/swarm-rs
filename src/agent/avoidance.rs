@@ -7,7 +7,7 @@ use std::{cell::RefCell, collections::HashSet};
 use cgmath::{MetricSpace, Vector2};
 
 use self::{
-    sampler::{ForwardKinematicSampler, SpaceSampler, StateSampler},
+    sampler::{ForwardKinematicSampler, RrtStarSampler, SpaceSampler, StateSampler},
     search::search,
 };
 use super::{
@@ -16,7 +16,7 @@ use super::{
 use crate::{
     collision::{CollisionShape, Obb},
     entity::Entity,
-    game::Game,
+    game::{AvoidanceMode, Game},
     measure_time,
 };
 
@@ -241,7 +241,7 @@ impl Agent {
         callback: impl Fn(&StateWithCost, &StateWithCost),
         backward: bool,
         switch_back: bool,
-        use_space_sampler: bool,
+        avoidance_mode: AvoidanceMode,
     ) -> bool {
         let mut env = SearchEnv {
             game,
@@ -252,10 +252,16 @@ impl Agent {
             entities,
         };
 
-        if use_space_sampler {
-            self.avoidance_search_gen::<SpaceSampler>(&mut env, callback, backward)
-        } else {
-            self.avoidance_search_gen::<ForwardKinematicSampler>(&mut env, callback, backward)
+        match avoidance_mode {
+            AvoidanceMode::Kinematic => {
+                self.avoidance_search_gen::<ForwardKinematicSampler>(&mut env, callback, backward)
+            }
+            AvoidanceMode::Rrt => {
+                self.avoidance_search_gen::<SpaceSampler>(&mut env, callback, backward)
+            }
+            AvoidanceMode::RrtStar => {
+                self.avoidance_search_gen::<RrtStarSampler>(&mut env, callback, backward)
+            }
         }
     }
 
