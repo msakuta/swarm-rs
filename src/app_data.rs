@@ -1,4 +1,4 @@
-use crate::{game::Game, WINDOW_HEIGHT};
+use crate::{agent::AvoidanceRenderParams, game::Game, WINDOW_HEIGHT};
 
 use druid::{Data, Lens, Point, Vec2};
 use std::{
@@ -34,9 +34,7 @@ pub(crate) struct AppData {
     pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
     pub(crate) path_visible: bool,
-    pub(crate) avoidance_visible: bool,
-    pub(crate) avoidance_circle_visible: bool,
-    pub(crate) avoidance_shape_visible: bool,
+    pub(crate) avoidance_render_params: AvoidanceRenderParams,
     pub(crate) target_visible: bool,
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
@@ -77,9 +75,7 @@ impl AppData {
             get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
             path_visible: true,
-            avoidance_visible: true,
-            avoidance_circle_visible: false,
-            avoidance_shape_visible: true,
+            avoidance_render_params: AvoidanceRenderParams::new(),
             target_visible: false,
             entity_label_visible: true,
             entity_trace_visible: false,

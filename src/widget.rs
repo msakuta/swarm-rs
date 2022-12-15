@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
+    agent::AvoidanceRenderParams,
     app_data::{AppData, LineMode},
     board_widget::BoardWidget,
     game::AvoidanceMode,
@@ -74,18 +75,8 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                             .padding(5.),
                     )
                     .with_child(
-                        Checkbox::new("Avoidance")
-                            .lens(AppData::avoidance_visible)
-                            .padding(5.),
-                    )
-                    .with_child(
-                        Checkbox::new("Circle")
-                            .lens(AppData::avoidance_circle_visible)
-                            .padding(5.),
-                    )
-                    .with_child(
-                        Checkbox::new("Shape")
-                            .lens(AppData::avoidance_shape_visible)
+                        AvoidanceRenderParams::gen_widgets()
+                            .lens(AppData::avoidance_render_params)
                             .padding(5.),
                     ),
             )

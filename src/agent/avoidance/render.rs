@@ -2,19 +2,48 @@ use crate::{agent::interpolation::lerp, paint_board::to_point};
 
 use super::{sampler::REWIRE_DISTANCE, SearchState, DIST_RADIUS};
 use druid::{
-    kurbo::Circle, piet::kurbo::BezPath, Affine, Color, Env, FontDescriptor, FontFamily, PaintCtx,
-    Point, RenderContext, TextLayout,
+    kurbo::Circle,
+    piet::kurbo::BezPath,
+    widget::{Checkbox, Flex},
+    Affine, Color, Data, Env, FontDescriptor, FontFamily, Lens, PaintCtx, Point, RenderContext,
+    TextLayout, Widget, WidgetExt,
 };
 
+#[derive(Clone, Lens, Data)]
+pub(crate) struct AvoidanceRenderParams {
+    pub visible: bool,
+    pub circle_visible: bool,
+    pub shape_visible: bool,
+    pub cost_visible: bool,
+}
+
+impl AvoidanceRenderParams {
+    pub fn new() -> Self {
+        Self {
+            visible: true,
+            circle_visible: false,
+            shape_visible: false,
+            cost_visible: false,
+        }
+    }
+
+    pub fn gen_widgets() -> impl Widget<Self> {
+        Flex::row()
+            .with_child(Checkbox::new("Avoidance").lens(Self::visible))
+            .with_child(Checkbox::new("Circle").lens(Self::circle_visible))
+            .with_child(Checkbox::new("Shape").lens(Self::shape_visible))
+            .with_child(Checkbox::new("Cost").lens(Self::cost_visible))
+    }
+}
+
 impl SearchState {
-    pub fn render(
+    pub(crate) fn render(
         &self,
         ctx: &mut PaintCtx,
         env: &Env,
         view_transform: &Affine,
+        params: &AvoidanceRenderParams,
         _brush: &Color,
-        circle_visible: bool,
-        shape_visible: bool,
         scale: f64,
     ) {
         // let rgba = brush.as_rgba8();
@@ -61,7 +90,7 @@ impl SearchState {
                                 ctx.fill(arrow_head, &brush);
                             }
 
-                            if circle_visible && 0 < level {
+                            if params.circle_visible && 0 < level {
                                 let interpolates = 1 << level;
                                 for i in 1..interpolates {
                                     let pos = lerp(
@@ -76,7 +105,7 @@ impl SearchState {
                                     ctx.fill(circle, &brush);
                                 }
                             }
-                            if shape_visible && 0 < level {
+                            if params.shape_visible && 0 < level {
                                 if let Some(vertices) = state.state.collision_shape().to_vertices()
                                 {
                                     if let Some((first, rest)) = vertices.split_first() {
@@ -90,7 +119,7 @@ impl SearchState {
                                     }
                                 }
                             }
-                            if 20. < scale * DIST_RADIUS {
+                            if 20. < scale * DIST_RADIUS && params.cost_visible {
                                 let mut layout =
                                     TextLayout::<String>::from_text(format!("{:.01}", state.cost));
                                 layout.set_font(
@@ -101,7 +130,7 @@ impl SearchState {
                                 layout.draw(ctx, *view_transform * to_point(state.state.into()));
                             }
                         }
-                        if circle_visible {
+                        if params.circle_visible {
                             let circle = Circle::new(*view_transform * point, 2. + level_width);
                             ctx.fill(circle, &brush);
                             let circle = Circle::new(point, DIST_RADIUS);

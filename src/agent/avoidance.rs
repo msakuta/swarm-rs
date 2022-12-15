@@ -6,6 +6,7 @@ use std::{cell::RefCell, collections::HashSet};
 
 use cgmath::{MetricSpace, Vector2};
 
+pub(crate) use self::render::AvoidanceRenderParams;
 use self::{
     sampler::{ForwardKinematicSampler, RrtStarSampler, SpaceSampler, StateSampler},
     search::search,

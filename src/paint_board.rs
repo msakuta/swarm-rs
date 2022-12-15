@@ -296,7 +296,7 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             }
         }
 
-        if data.avoidance_visible {
+        if data.avoidance_render_params.visible {
             if let Some(goal) = agent.get_goal() {
                 const CROSS_SIZE: f64 = 5.;
                 let goal = *view_transform * Point::new(goal.x, goal.y);
@@ -313,9 +313,8 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                     ctx,
                     env,
                     view_transform,
+                    &data.avoidance_render_params,
                     brush,
-                    data.avoidance_circle_visible,
-                    data.avoidance_shape_visible,
                     data.scale,
                 );
             }

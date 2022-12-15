@@ -4,7 +4,7 @@ mod find_path;
 mod interpolation;
 mod motion;
 
-pub(crate) use self::avoidance::{AgentState, PathNode, SearchState};
+pub(crate) use self::avoidance::{AgentState, AvoidanceRenderParams, PathNode, SearchState};
 use self::{
     behavior_nodes::{
         build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, DriveCommand,
