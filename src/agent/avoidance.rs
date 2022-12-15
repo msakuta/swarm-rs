@@ -9,7 +9,7 @@ use cgmath::{MetricSpace, Vector2};
 pub(crate) use self::render::AvoidanceRenderParams;
 use self::{
     sampler::{ForwardKinematicSampler, RrtStarSampler, SpaceSampler, StateSampler},
-    search::search,
+    search::{can_connect_goal, search},
 };
 use super::{
     interpolation::interpolate, wrap_angle, Agent, GameEnv, AGENT_HALFLENGTH, AGENT_HALFWIDTH,
@@ -158,6 +158,7 @@ pub struct SearchState {
     search_tree: Vec<StateWithCost>,
     start_set: HashSet<usize>,
     goal: AgentState,
+    last_solution: Option<usize>,
     pub(super) found_path: Option<Vec<usize>>,
 }
 
@@ -247,7 +248,7 @@ impl Agent {
         let mut env = SearchEnv {
             game,
             switch_back,
-            expand_states: 1,
+            expand_states: game.avoidance_expands as usize,
             skipped_nodes: 0,
             tree_size: 0,
             entities,
@@ -289,10 +290,15 @@ impl Agent {
 
         let searched_path =
             if let Some((mut search_state, goal)) = self.search_state.take().zip(self.goal) {
-                // let start_state = &search_state.search_tree[search_state.start].state;
-                if
-                //compare_distance(&self.to_state(), start_state, DIST_THRESHOLD * 100.) &&
-                compare_distance(&goal, &search_state.goal, DIST_THRESHOLD) {
+                if let Some(goal) = search_state.last_solution {
+                    if let Some(path) =
+                        can_connect_goal(&search_state.start_set, &search_state.search_tree, goal)
+                    {
+                        // Restore previous solution
+                        search_state.found_path = Some(path);
+                    }
+                }
+                if compare_distance(&goal, &search_state.goal, DIST_THRESHOLD) {
                     // for root in &search_state.searchTree {
                     //     enumTree(root, &mut nodes);
                     // }
@@ -305,23 +311,20 @@ impl Agent {
                     //     search_state.start
                     // );
 
-                    const SEARCH_NODES: usize = 1;
-
                     if 0 < nodes.len() && nodes.len() < 10000 {
                         // Descending the tree is not a good way to sample a random node in a tree, since
                         // the chances are much higher on shallow nodes. We want to give chances uniformly
                         // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
-                        for _i in 0..SEARCH_NODES {
-                            let path = search::<Sampler>(self, &search_state.start_set, env, nodes);
+                        let path = search::<Sampler>(self, &search_state.start_set, env, nodes);
 
-                            env.tree_size += 1;
+                        env.tree_size += 1;
 
-                            if let Some(path) = path {
-                                // println!("Materialized found path: {:?}", self.path);
-                                search_state.found_path = Some(path);
-                                self.search_state = Some(search_state);
-                                return true;
-                            }
+                        if let Some(path) = path {
+                            // println!("Materialized found path: {:?}", self.path);
+                            search_state.last_solution = path.last().copied();
+                            search_state.found_path = Some(path);
+                            self.search_state = Some(search_state);
+                            return true;
                         }
                     }
 
@@ -349,6 +352,7 @@ impl Agent {
                         search_tree: nodes,
                         start_set: root_set,
                         goal: goal,
+                        last_solution: None,
                         found_path,
                     };
                     // else{

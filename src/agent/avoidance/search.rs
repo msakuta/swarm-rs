@@ -6,12 +6,31 @@ use crate::{
     agent::{
         avoidance::DIST_RADIUS,
         interpolation::{interpolate, interpolate_steer, AsPoint},
-        wrap_angle, Agent,
+        Agent,
     },
     collision::bsearch_collision,
 };
 
 use super::{compare_distance, sampler::StateSampler, AgentState, SearchEnv, StateWithCost};
+
+pub(super) fn can_connect_goal(
+    start_set: &HashSet<usize>,
+    nodes: &[StateWithCost],
+    mut node: usize,
+) -> Option<Vec<usize>> {
+    let mut path = vec![];
+    while let Some(next_node) = nodes[node].from {
+        if !nodes[next_node].is_passable() {
+            return None;
+        }
+        path.push(next_node);
+        if start_set.contains(&next_node) {
+            return Some(path);
+        }
+        node = next_node;
+    }
+    None
+}
 
 /// Check if the goal is close enough to the added node, and if it was, return a built path
 fn check_goal(
@@ -47,6 +66,8 @@ fn check_goal(
     None
 }
 
+/// Perform the search using sampling strategy given by `S`.
+/// Returns path node ids or None if the path is not found yet.
 pub(super) fn search<S: StateSampler>(
     this: &Agent,
     start_set: &HashSet<usize>,

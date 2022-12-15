@@ -198,12 +198,6 @@ impl StateSampler for ForwardKinematicSampler {
             // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
             if existing_cost > shortcut_cost {
                 let delta = Vector2::from(nodes[i].state) - Vector2::from(start_state);
-                let heading = delta.y.atan2(delta.x);
-                let heading = if next_direction < 0. {
-                    wrap_angle(heading + std::f64::consts::PI)
-                } else {
-                    heading
-                };
                 let (hit, _level) = collision_check(
                     start_state,
                     nodes[i].state,
@@ -214,7 +208,7 @@ impl StateSampler for ForwardKinematicSampler {
                 if hit {
                     return;
                 }
-                nodes[i].state.heading = heading;
+                nodes[i].state.heading = heading_from_delta(&delta, next_direction);
                 nodes[i].cost = shortcut_cost;
                 nodes[existing_from].to.remove(to_index);
                 nodes[i].from = Some(start);
@@ -226,6 +220,15 @@ impl StateSampler for ForwardKinematicSampler {
                 // nodes[i].state = node.state;
             }
         }
+    }
+}
+
+fn heading_from_delta(delta: &Vector2<f64>, next_direction: f64) -> f64 {
+    let heading = delta.y.atan2(delta.x);
+    if next_direction < 0. {
+        wrap_angle(heading + std::f64::consts::PI)
+    } else {
+        heading
     }
 }
 
@@ -349,7 +352,7 @@ impl StateSampler for RrtStarSampler {
             closest_point + steer
         };
 
-        let state = AgentState::new(position.x, position.y, closest_node.state.heading);
+        let mut state = AgentState::new(position.x, position.y, closest_node.state.heading);
         let direction = closest_node.speed.signum();
 
         let next_direction = direction;
@@ -374,19 +377,20 @@ impl StateSampler for RrtStarSampler {
                     return acc;
                 }
                 let this_cost = existing_node.cost + distance;
-                if let Some((_, acc_cost)) = acc {
+                if let Some((_, acc_cost, _)) = acc {
                     if this_cost < acc_cost {
-                        Some((i, this_cost))
+                        Some((i, this_cost, delta))
                     } else {
                         acc
                     }
                 } else {
-                    Some((i, this_cost))
+                    Some((i, this_cost, delta))
                 }
             });
 
         // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
-        if let Some((i, lowest_cost)) = lowest_cost {
+        if let Some((i, lowest_cost, delta)) = lowest_cost {
+            state.heading = heading_from_delta(&delta, next_direction);
             Some((i, StateWithCost::new(state, lowest_cost, 0., direction)))
         } else {
             None
@@ -413,7 +417,8 @@ impl StateSampler for RrtStarSampler {
                 continue;
             }
             let existing_node = &nodes[i];
-            let dist2 = Vector2::from(existing_node.state).distance2(new_node_state.into());
+            let delta = Vector2::from(new_node_state) - Vector2::from(existing_node.state);
+            let dist2 = delta.magnitude2();
             if REWIRE_DISTANCE.powf(2.) < dist2 {
                 continue;
             }
@@ -443,6 +448,7 @@ impl StateSampler for RrtStarSampler {
                 let existing_node = &mut nodes[i];
                 let existing_cost = existing_node.cost;
                 existing_node.cost = new_cost;
+                existing_node.state.heading = heading_from_delta(&delta, next_direction);
                 existing_node.from = Some(new_node);
 
                 // Changing a cost of a middle node will cause cascading effect to the nodes.

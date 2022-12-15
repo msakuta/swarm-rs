@@ -3,7 +3,7 @@ use cgmath::Vector2;
 use crate::{
     agent::Agent,
     agent::{Bullet, PathNode},
-    collision::{BoundingCircle, CollisionShape, Obb},
+    collision::{CollisionShape, Obb},
     game::Game,
     spawner::Spawner,
 };
