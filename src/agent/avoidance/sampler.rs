@@ -19,7 +19,20 @@ pub(in super::super) trait StateSampler {
         env: &SearchEnv,
         collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
     ) -> Option<(usize, StateWithCost)>;
-    fn calculate_cost(&self, distance: f64) -> f64;
+
+    /// Attempt to merge a new candidate node to one of the existing ones and returns true if successful.
+    ///
+    /// It is only really useful with ForwardKinematicSampler.
+    #[allow(unused_variables)]
+    fn merge_same_nodes(
+        &self,
+        node: &StateWithCost,
+        start: usize,
+        nodes: &mut [StateWithCost],
+        env: &mut SearchEnv,
+    ) -> bool {
+        false
+    }
 
     /// Rewire the tree edges to optimize the search. The default does nothing.
     #[allow(unused_variables)]
@@ -38,6 +51,13 @@ pub(in super::super) trait StateSampler {
 pub(super) struct ForwardKinematicSampler {
     change_direction: bool,
     start_cost: Option<f64>,
+}
+
+impl ForwardKinematicSampler {
+    /// Changing direction costs
+    fn calculate_cost(&self, distance: f64) -> f64 {
+        self.start_cost.unwrap() + distance + if self.change_direction { 10000. } else { 0. }
+    }
 }
 
 impl StateSampler for ForwardKinematicSampler {
@@ -108,9 +128,33 @@ impl StateSampler for ForwardKinematicSampler {
         ))
     }
 
-    /// Changing direction costs
-    fn calculate_cost(&self, distance: f64) -> f64 {
-        self.start_cost.unwrap() + distance + if self.change_direction { 10000. } else { 0. }
+    fn merge_same_nodes(
+        &self,
+        node: &StateWithCost,
+        start: usize,
+        nodes: &mut [StateWithCost],
+        env: &mut SearchEnv,
+    ) -> bool {
+        // Check if there is already a "samey" node exists
+        for i in 0..nodes.len() {
+            if !Self::compare_state(&nodes[i].state, &node.state) {
+                continue;
+            }
+            let existing_node = &nodes[i];
+            let Some(existing_from) = existing_node.from else {
+                continue;
+            };
+            if i == start || existing_from == start {
+                nodes[i].blocked = false;
+                if nodes[i].blocked {
+                    println!("Reviving blocked node {i}");
+                }
+                return true;
+            }
+            env.skipped_nodes += 1;
+            return true;
+        }
+        false
     }
 
     fn rewire(
@@ -188,6 +232,14 @@ impl StateSampler for ForwardKinematicSampler {
 /// Spatially random sampler. It is closer to pure RRT, which guarantees asymptotically filling space coverage
 pub(super) struct SpaceSampler(f64);
 
+impl SpaceSampler {
+    fn calculate_cost(&self, distance: f64) -> f64 {
+        self.0 + distance
+    }
+}
+
+const STEER_DISTANCE: f64 = DIST_RADIUS * 2.5;
+
 impl StateSampler for SpaceSampler {
     fn new(_env: &SearchEnv) -> Self {
         Self(0.)
@@ -213,24 +265,7 @@ impl StateSampler for SpaceSampler {
             rand::random::<f64>() * env.game.ys as f64,
         );
 
-        let (i, closest_node) = nodes.iter().enumerate().fold(
-            None,
-            |acc: Option<(usize, &StateWithCost)>, (ib, b)| {
-                if let Some((ia, a)) = acc {
-                    let distance_a = Vector2::from(a.state).distance(position);
-                    let distance_b = Vector2::from(b.state).distance(position);
-                    if distance_a < distance_b {
-                        Some((ia, a))
-                    } else {
-                        Some((ib, b))
-                    }
-                } else {
-                    Some((ib, b))
-                }
-            },
-        )?;
-
-        const STEER_DISTANCE: f64 = DIST_RADIUS * 2.5;
+        let (i, closest_node) = find_closest_node(nodes, position)?;
 
         self.0 = closest_node.cost;
         let closest_point = Vector2::from(closest_node.state);
@@ -246,20 +281,41 @@ impl StateSampler for SpaceSampler {
             StateWithCost::new(state, self.calculate_cost(distance), 0., direction),
         ))
     }
-
-    fn calculate_cost(&self, distance: f64) -> f64 {
-        self.0 + distance
-    }
 }
 
-const REWIRE_DISTANCE: f64 = DIST_RADIUS * 3.;
+fn find_closest_node(
+    nodes: &[StateWithCost],
+    position: Vector2<f64>,
+) -> Option<(usize, &StateWithCost)> {
+    let (i, closest_node) =
+        nodes
+            .iter()
+            .enumerate()
+            .fold(None, |acc: Option<(usize, &StateWithCost)>, (ib, b)| {
+                if let Some((ia, a)) = acc {
+                    let distance_a = Vector2::from(a.state).distance(position);
+                    let distance_b = Vector2::from(b.state).distance(position);
+                    if distance_a < distance_b {
+                        Some((ia, a))
+                    } else {
+                        Some((ib, b))
+                    }
+                } else {
+                    Some((ib, b))
+                }
+            })?;
+    Some((i, closest_node))
+}
+
+/// Rewiring distance has to be long enough to make RRT* effective
+pub(super) const REWIRE_DISTANCE: f64 = DIST_RADIUS * 5.;
 
 /// RRT* sampler, awkward capitalization in Rust convention
-pub(super) struct RrtStarSampler(f64);
+pub(super) struct RrtStarSampler;
 
 impl StateSampler for RrtStarSampler {
     fn new(_env: &SearchEnv) -> Self {
-        Self(0.)
+        Self
     }
 
     fn compare_state(s1: &AgentState, s2: &AgentState) -> bool {
@@ -282,27 +338,9 @@ impl StateSampler for RrtStarSampler {
             rand::random::<f64>() * env.game.ys as f64,
         );
 
-        let (i, closest_node) = nodes.iter().enumerate().fold(
-            None,
-            |acc: Option<(usize, &StateWithCost)>, (ib, b)| {
-                if let Some((ia, a)) = acc {
-                    let distance_a = Vector2::from(a.state).distance(position);
-                    let distance_b = Vector2::from(b.state).distance(position);
-                    if distance_a < distance_b {
-                        Some((ia, a))
-                    } else {
-                        Some((ib, b))
-                    }
-                } else {
-                    Some((ib, b))
-                }
-            },
-        )?;
+        let (closest_id, closest_node) = find_closest_node(nodes, position)?;
 
-        const STEER_DISTANCE: f64 = DIST_RADIUS * 2.5;
-
-        self.0 = closest_node.cost;
-        let closest_point = Vector2::from(nodes[i].state);
+        let closest_point = Vector2::from(nodes[closest_id].state);
         let distance = closest_point.distance(position).min(STEER_DISTANCE);
         let position = if distance < STEER_DISTANCE {
             position
@@ -349,18 +387,10 @@ impl StateSampler for RrtStarSampler {
 
         // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
         if let Some((i, lowest_cost)) = lowest_cost {
-            self.0 = lowest_cost;
-            Some((
-                i,
-                StateWithCost::new(state, self.calculate_cost(distance), 0., direction),
-            ))
+            Some((i, StateWithCost::new(state, lowest_cost, 0., direction)))
         } else {
             None
         }
-    }
-
-    fn calculate_cost(&self, distance: f64) -> f64 {
-        self.0 + distance
     }
 
     fn rewire(
@@ -376,8 +406,10 @@ impl StateSampler for RrtStarSampler {
         let new_node_cost = nodes[new_node].cost;
         let next_direction = nodes[new_node].speed.signum();
 
+        let invokes = TOTAL_INVOKES.fetch_add(1, Ordering::Relaxed);
+
         for i in 0..nodes.len() {
-            if i == new_node {
+            if i == new_node || !nodes[i].is_passable() {
                 continue;
             }
             let existing_node = &nodes[i];
@@ -409,9 +441,33 @@ impl StateSampler for RrtStarSampler {
                     nodes[existing_from].to.remove(to_index);
                 };
                 let existing_node = &mut nodes[i];
+                let existing_cost = existing_node.cost;
                 existing_node.cost = new_cost;
                 existing_node.from = Some(new_node);
+
+                // Changing a cost of a middle node will cause cascading effect to the nodes.
+                update_cost(nodes, i);
+
+                let rewire_count = REWIRE_COUNT.fetch_add(1, Ordering::Relaxed);
+                if rewire_count % 100 == 0 {
+                    println!(
+                        "rewired cost {existing_cost} -> {new_cost}: {rewire_count}/{invokes}"
+                    );
+                }
             }
         }
     }
+}
+
+fn update_cost(nodes: &mut [StateWithCost], cur: usize) {
+    let parent_cost = nodes[cur].cost;
+    let parent_state = nodes[cur].state;
+    // Work around borrow checker by temporarily taking the children
+    let children = std::mem::take(&mut nodes[cur].to);
+    for node in &children {
+        let child = &mut nodes[*node];
+        child.cost = parent_cost + Vector2::from(child.state).distance(parent_state.into());
+        update_cost(nodes, *node);
+    }
+    nodes[cur].to = children;
 }

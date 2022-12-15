@@ -304,7 +304,7 @@ impl Agent {
                     //     search_state.start
                     // );
 
-                    const SEARCH_NODES: usize = 100;
+                    const SEARCH_NODES: usize = 1;
 
                     if 0 < nodes.len() && nodes.len() < 10000 {
                         // Descending the tree is not a good way to sample a random node in a tree, since
@@ -481,16 +481,16 @@ impl Agent {
             }
         }
 
-        let mut num_detached = 0;
+        // let mut num_detached = 0;
         // Assign infinite cost to those "detached" nodes by the obstacle
-        for (_, state) in visited
-            .iter()
-            .zip(ss.search_tree.iter_mut())
-            .filter(|(visited, _)| !**visited)
-        {
-            state.cost = 1e8;
-            num_detached += 1;
-        }
+        // for (_, state) in visited
+        //     .iter()
+        //     .zip(ss.search_tree.iter_mut())
+        //     .filter(|(visited, _)| !**visited)
+        // {
+        //     state.cost = 1e8;
+        //     num_detached += 1;
+        // }
 
         // println!(
         //     "check_avoidance_collision detached: {num_detached} / {}",

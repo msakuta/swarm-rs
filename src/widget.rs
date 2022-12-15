@@ -91,19 +91,19 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             )
             .with_child(
                 Flex::row()
-                .with_child(Label::new("Avoidance mode:").padding(3.0))
-                .with_child(
-                    RadioGroup::new([
-                        ("Kinematic", AvoidanceMode::Kinematic),
-                        ("RRT", AvoidanceMode::Rrt),
-                        ("RRT*", AvoidanceMode::RrtStar),
-                    ])
-                    .lens(Field::new(
-                        |data: &AppData| &data.game.avoidance_mode,
-                        |data: &mut AppData| &mut data.game.avoidance_mode,
-                    ))
-                    .padding(5.),
-                )
+                    .with_child(Label::new("Avoidance mode:").padding(3.0))
+                    .with_child(
+                        RadioGroup::new([
+                            ("Kinematic", AvoidanceMode::Kinematic),
+                            ("RRT", AvoidanceMode::Rrt),
+                            ("RRT*", AvoidanceMode::RrtStar),
+                        ])
+                        .lens(Field::new(
+                            |data: &AppData| &data.game.avoidance_mode,
+                            |data: &mut AppData| &mut data.game.avoidance_mode,
+                        ))
+                        .padding(5.),
+                    ),
             )
             .with_child(
                 Checkbox::new("Target line")

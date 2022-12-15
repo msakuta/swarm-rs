@@ -1,15 +1,16 @@
 use crate::{agent::interpolation::lerp, paint_board::to_point};
 
-use super::{SearchState, DIST_RADIUS};
+use super::{sampler::REWIRE_DISTANCE, SearchState, DIST_RADIUS};
 use druid::{
-    kurbo::Circle, piet::kurbo::BezPath, Affine, Color, Env, PaintCtx, Point, RenderContext,
+    kurbo::Circle, piet::kurbo::BezPath, Affine, Color, Env, FontDescriptor, FontFamily, PaintCtx,
+    Point, RenderContext, TextLayout,
 };
 
 impl SearchState {
     pub fn render(
         &self,
         ctx: &mut PaintCtx,
-        _env: &Env,
+        env: &Env,
         view_transform: &Affine,
         _brush: &Color,
         circle_visible: bool,
@@ -89,12 +90,24 @@ impl SearchState {
                                     }
                                 }
                             }
+                            if 20. < scale * DIST_RADIUS {
+                                let mut layout =
+                                    TextLayout::<String>::from_text(format!("{:.01}", state.cost));
+                                layout.set_font(
+                                    FontDescriptor::new(FontFamily::SANS_SERIF).with_size(16.0),
+                                );
+                                layout.set_text_color(brush.clone());
+                                layout.rebuild_if_needed(ctx.text(), env);
+                                layout.draw(ctx, *view_transform * to_point(state.state.into()));
+                            }
                         }
                         if circle_visible {
                             let circle = Circle::new(*view_transform * point, 2. + level_width);
                             ctx.fill(circle, &brush);
                             let circle = Circle::new(point, DIST_RADIUS);
                             ctx.stroke(*view_transform * circle, &brush, 0.5);
+                            let circle = Circle::new(point, REWIRE_DISTANCE);
+                            ctx.stroke(*view_transform * circle, &brush, 0.3);
                         }
                     }
                     ctx.stroke(*view_transform * bez_path, &brush, 0.5 + level_width);

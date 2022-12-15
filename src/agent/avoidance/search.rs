@@ -133,24 +133,7 @@ pub(super) fn search<S: StateSampler>(
         let start_state = nodes[start].state;
 
         // let AgentState { x, y, heading } = start_state;
-
-        // First, check if there is already a "samey" node exists
-        for i in 0..nodes.len() {
-            if !S::compare_state(&nodes[i].state, &node.state) {
-                continue;
-            }
-            let existing_node = &nodes[i];
-            let Some(existing_from) = existing_node.from else {
-                continue;
-            };
-            if i == start || existing_from == start {
-                nodes[i].blocked = false;
-                if nodes[i].blocked {
-                    println!("Reviving blocked node {i}");
-                }
-                continue 'skip;
-            }
-            env.skipped_nodes += 1;
+        if sampler.merge_same_nodes(&node, start, nodes, env) {
             continue 'skip;
         }
         // println!("stepMove: {:?} -> {:?}", nodes[start], next);
