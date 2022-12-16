@@ -2,7 +2,10 @@ mod render;
 mod sampler;
 mod search;
 
-use std::{cell::RefCell, collections::HashSet};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
 
 use cgmath::{MetricSpace, Vector2};
 
@@ -152,6 +155,10 @@ fn compare_distance(s1: &AgentState, s2: &AgentState, threshold: f64) -> bool {
 }
 
 const MAX_STEER: f64 = std::f64::consts::PI / 3.;
+const CELL_SIZE: f64 = 10.;
+const CELL_COUNT: usize = 10;
+
+type GridMap = HashMap<[i32; 2], HashSet<usize>>;
 
 #[derive(Debug)]
 pub struct SearchState {
@@ -160,6 +167,7 @@ pub struct SearchState {
     goal: AgentState,
     last_solution: Option<usize>,
     pub(super) found_path: Option<Vec<usize>>,
+    pub(super) grid_map: GridMap,
 }
 
 impl SearchState {
@@ -315,7 +323,13 @@ impl Agent {
                         // Descending the tree is not a good way to sample a random node in a tree, since
                         // the chances are much higher on shallow nodes. We want to give chances uniformly
                         // among all nodes in the tree, so we randomly pick one from a linear list of all nodes.
-                        let path = search::<Sampler>(self, &search_state.start_set, env, nodes);
+                        let path = search::<Sampler>(
+                            self,
+                            &search_state.start_set,
+                            env,
+                            nodes,
+                            &mut search_state.grid_map,
+                        );
 
                         env.tree_size += 1;
 
@@ -346,7 +360,9 @@ impl Agent {
 
                 if !nodes.is_empty() {
                     let root_set = (0..nodes.len()).collect();
-                    let found_path = search::<Sampler>(self, &root_set, env, &mut nodes);
+                    let mut grid_map = HashMap::new();
+                    let found_path =
+                        search::<Sampler>(self, &root_set, env, &mut nodes, &mut grid_map);
 
                     let search_state = SearchState {
                         search_tree: nodes,
@@ -354,6 +370,7 @@ impl Agent {
                         goal: goal,
                         last_solution: None,
                         found_path,
+                        grid_map,
                     };
                     // else{
                     //     *search_state = SearchState{
