@@ -27,9 +27,11 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("SetBool", boxify(|| SetBool));
     registry.register("Print", boxify(|| PrintNode));
     registry.register("HasTarget", boxify(|| HasTarget));
+    registry.register("TargetPos", boxify(|| TargetPosNode));
     registry.register("FindEnemy", boxify(|| FindEnemy));
-    registry.register("HasPath", boxify(|| HasPath));
-    registry.register("FindPath", boxify(|| FindPath));
+    registry.register("HasPath", boxify(|| HasPathNode));
+    registry.register("ClearPath", boxify(|| ClearPathNode));
+    registry.register("FindPath", boxify(|| FindPathNode));
     registry.register("Drive", boxify(|| DriveNode));
     registry.register("MoveTo", boxify(|| MoveToNode));
     registry.register("FollowPath", boxify(|| FollowPath));
@@ -133,20 +135,19 @@ impl BehaviorNode for FindEnemy {
     }
 }
 
-pub(super) struct HasPath;
+pub(super) struct HasPathNode;
 
-impl<'a> BehaviorNode for HasPath {
-    fn provided_ports(&self) -> Vec<PortSpec> {
-        vec![PortSpec::new_in("has_path")]
-    }
-
+impl BehaviorNode for HasPathNode {
     fn tick(
         &mut self,
-        _arg: BehaviorCallback,
-        ctx: &mut behavior_tree_lite::Context,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        let has_path = ctx.get::<bool>("has_path");
-        if has_path.copied().unwrap_or(false) {
+        let has_path = arg(self)
+            .and_then(|a| a.downcast::<bool>().ok())
+            .map(|b| *b)
+            .unwrap_or(false);
+        if has_path {
             BehaviorResult::Success
         } else {
             BehaviorResult::Fail
@@ -154,18 +155,65 @@ impl<'a> BehaviorNode for HasPath {
     }
 }
 
-pub(super) struct FindPathCommand;
+pub(super) struct ClearPathNode;
 
-pub(super) struct FindPath;
-
-impl BehaviorNode for FindPath {
+impl BehaviorNode for ClearPathNode {
     fn tick(
         &mut self,
         arg: BehaviorCallback,
         _ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        arg(&FindPathCommand);
+        arg(self);
         BehaviorResult::Success
+    }
+}
+
+pub(super) struct TargetPosCommand;
+
+struct TargetPosNode;
+
+impl BehaviorNode for TargetPosNode {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_out("pos")]
+    }
+
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if let Some(pos) =
+            arg(&TargetPosCommand).and_then(|pos| pos.downcast_ref::<[f64; 2]>().copied())
+        {
+            ctx.set("pos", pos);
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct FindPathCommand(pub [f64; 2]);
+
+pub(super) struct FindPathNode;
+
+impl BehaviorNode for FindPathNode {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("target")]
+    }
+
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        println!("FindPath invoked");
+        if let Some(target) = ctx.get::<[f64; 2]>("target") {
+            arg(&FindPathCommand(*target));
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
     }
 }
 

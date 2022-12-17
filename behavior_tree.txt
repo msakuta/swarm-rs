@@ -17,11 +17,14 @@ tree main = Sequence {
 
 tree FollowPathAndAvoid = Sequence {
     Fallback {
-        HasPath (has_path <- has_path)
-        FindPath
+        HasPath
+        Sequence {
+            TargetPos (pos -> target)
+            FindPath (target <- target)
+        }
     }
     Sequence {
-        HasPath (has_path <- has_path)
+        HasPath
         Fallback {
             FollowPath
             Sequence {

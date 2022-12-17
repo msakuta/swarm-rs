@@ -360,7 +360,7 @@ impl StateSampler for RrtStarSampler {
         nodes: &[StateWithCost],
         env: &SearchEnv,
         grid_map: &GridMap,
-        mut collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
+        collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
     ) -> Option<(usize, StateWithCost)> {
         let position = Vector2::new(
             rand::random::<f64>() * env.game.xs as f64,
@@ -383,36 +383,14 @@ impl StateSampler for RrtStarSampler {
 
         let next_direction = direction;
         let start_state = closest_node.state;
-        let lowest_cost = nodes
-            .iter()
-            .enumerate()
-            .fold(None, |acc, (i, existing_node)| {
-                let delta = Vector2::from(state) - Vector2::from(existing_node.state);
-                if REWIRE_DISTANCE.powf(2.) < delta.magnitude2() {
-                    return acc;
-                }
-                let distance = delta.magnitude();
-                let (hit, _level) = collision_check(
-                    existing_node.state,
-                    start_state,
-                    next_direction,
-                    distance,
-                    0.,
-                );
-                if hit {
-                    return acc;
-                }
-                let this_cost = existing_node.cost + distance;
-                if let Some((_, acc_cost, _)) = acc {
-                    if this_cost < acc_cost {
-                        Some((i, this_cost, delta))
-                    } else {
-                        acc
-                    }
-                } else {
-                    Some((i, this_cost, delta))
-                }
-            });
+        let lowest_cost = find_lowest_cost(
+            nodes,
+            state,
+            collision_check,
+            start_state,
+            next_direction,
+            grid_map,
+        );
 
         // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
         if let Some((i, lowest_cost, delta)) = lowest_cost {
@@ -489,6 +467,59 @@ impl StateSampler for RrtStarSampler {
             }
         }
     }
+}
+
+fn find_lowest_cost(
+    nodes: &[StateWithCost],
+    state: AgentState,
+    mut collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
+    start_state: AgentState,
+    next_direction: f64,
+    grid_map: &GridMap,
+) -> Option<(usize, f64, Vector2<f64>)> {
+    let center = ((state.x / CELL_SIZE) as i32, (state.y / CELL_SIZE) as i32);
+    const MAX_SEARCH_CELL_RADIUS: i32 = 10;
+    // Gradually expand cells to scan
+    for cell_radius in 0..MAX_SEARCH_CELL_RADIUS {
+        let mut closest = None;
+        for iy in -cell_radius..=cell_radius {
+            for ix in -cell_radius..=cell_radius {
+                let Some(cell_nodes) = grid_map.get(&[center.0 + ix, center.1 + iy]) else { continue };
+                closest = cell_nodes.iter().fold(closest, |acc, &i| {
+                    let existing_node = &nodes[i];
+                    let delta = Vector2::from(state) - Vector2::from(existing_node.state);
+                    if REWIRE_DISTANCE.powf(2.) < delta.magnitude2() {
+                        return acc;
+                    }
+                    let distance = delta.magnitude();
+                    let (hit, _level) = collision_check(
+                        existing_node.state,
+                        start_state,
+                        next_direction,
+                        distance,
+                        0.,
+                    );
+                    if hit {
+                        return acc;
+                    }
+                    let this_cost = existing_node.cost + distance;
+                    if let Some((_, acc_cost, _)) = acc {
+                        if this_cost < acc_cost {
+                            Some((i, this_cost, delta))
+                        } else {
+                            acc
+                        }
+                    } else {
+                        Some((i, this_cost, delta))
+                    }
+                })
+            }
+        }
+        if let Some(closest) = closest {
+            return Some(closest);
+        }
+    }
+    None
 }
 
 fn update_cost(nodes: &mut [StateWithCost], cur: usize) {

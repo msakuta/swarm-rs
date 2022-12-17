@@ -50,9 +50,9 @@ impl AppData {
         let seed = 123513;
         let scale = WINDOW_HEIGHT / game.ys as f64;
 
-        const SOURCE_FILE: &'static str = "test_avoidance.txt";
+        const SOURCE_FILE: &'static str = "test_global_nav.txt";
 
-        let source_buffer = Rc::new(include_str!("../test_avoidance.txt").to_string());
+        let source_buffer = Rc::new(include_str!("../test_global_nav.txt").to_string());
 
         game.source = source_buffer.clone();
 

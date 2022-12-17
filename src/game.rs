@@ -339,10 +339,10 @@ impl Game {
             if let Some(agent) = self.try_new_agent(pos, 0, &entities, false) {
                 entities.push(RefCell::new(agent));
             }
-            let pos = [self.xs as f64 / 2., self.ys as f64 / 2.];
-            if let Some(agent) = self.try_new_agent(pos, 0, &entities, true) {
-                entities.push(RefCell::new(agent));
-            }
+            // let pos = [self.xs as f64 / 2., self.ys as f64 / 2.];
+            // if let Some(agent) = self.try_new_agent(pos, 0, &entities, true) {
+            //     entities.push(RefCell::new(agent));
+            // }
         }
 
         // for team in 0..2 {

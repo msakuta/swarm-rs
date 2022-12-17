@@ -9,12 +9,13 @@ use self::{
     behavior_nodes::{
         build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, DriveCommand,
         FaceToTargetCommand, FindEnemyCommand, FindPathCommand, FollowPathCommand,
-        GetPathNextNodeCommand, GetStateCommand, IsTargetVisibleCommand, MoveToCommand,
-        ShootCommand,
+        GetPathNextNodeCommand, GetStateCommand, HasPathNode, IsTargetVisibleCommand,
+        MoveToCommand, ShootCommand, TargetPosCommand,
     },
     motion::MotionResult,
 };
 use crate::{
+    agent::behavior_nodes::ClearPathNode,
     collision::{CollisionShape, Obb},
     entity::Entity,
     game::{Game, Profiler},
@@ -268,8 +269,14 @@ impl Agent {
                     return MotionResult::as_move_to(&self.last_motion_result);
                 } else if f.downcast_ref::<FindEnemyCommand>().is_some() {
                     // println!("FindEnemy process");
-                    self.find_enemy(entities);
-                } else if f.downcast_ref::<FindPathCommand>().is_some() {
+                    self.find_enemy(entities)
+                } else if f.downcast_ref::<HasPathNode>().is_some() {
+                    return Some(Box::new(!self.path.is_empty()));
+                } else if f.downcast_ref::<ClearPathNode>().is_some() {
+                    let ret = !self.path.is_empty();
+                    self.path.clear();
+                    return Some(Box::new(ret));
+                } else if f.downcast_ref::<TargetPosCommand>().is_some() {
                     if let Some(target) = self.target.and_then(|target| {
                         entities.iter().find(|a| {
                             a.try_borrow()
@@ -278,9 +285,11 @@ impl Agent {
                         })
                     }) {
                         let target = target.borrow_mut();
-                        let found_path = self.find_path(Some(&target), game).is_ok();
-                        return Some(Box::new(found_path) as Box<dyn std::any::Any>);
+                        return Some(Box::new(target.get_pos()));
                     }
+                } else if let Some(com) = f.downcast_ref::<FindPathCommand>() {
+                    let found_path = self.find_path(com.0, game).is_ok();
+                    return Some(Box::new(found_path) as Box<dyn std::any::Any>);
                 } else if let Some(cmd) = f.downcast_ref::<FollowPathCommand>() {
                     command = Some(Command::FollowPath(*cmd));
                     return MotionResult::as_follow_path(&self.last_motion_result);
