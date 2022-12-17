@@ -4,7 +4,7 @@ use cgmath::{MetricSpace, Vector2, Zero};
 
 use crate::{
     agent::{
-        avoidance::{CELL_COUNT, DIST_RADIUS},
+        avoidance::{DIST_RADIUS, MAX_CELL_COUNT},
         interpolation::{interpolate, interpolate_steer, AsPoint},
         Agent,
     },
@@ -15,6 +15,22 @@ use super::{
     compare_distance, sampler::StateSampler, AgentState, GridMap, SearchEnv, StateWithCost,
     CELL_SIZE,
 };
+
+pub(super) fn to_cell(state: AgentState) -> [i32; 2] {
+    [
+        state.x.div_euclid(CELL_SIZE) as i32,
+        state.y.div_euclid(CELL_SIZE) as i32,
+    ]
+}
+
+pub(super) fn insert_to_grid_map(grid_map: &mut GridMap, idx: [i32; 2], value: usize) {
+    let cell = grid_map.entry(idx).or_insert_with(|| HashSet::new());
+    cell.insert(value);
+}
+
+pub(super) fn count_from_grid_map(grid_map: &mut GridMap, idx: [i32; 2]) -> usize {
+    grid_map.get(&idx).map(|cell| cell.len()).unwrap_or(0)
+}
 
 pub(super) fn can_connect_goal(
     start_set: &HashSet<usize>,
@@ -153,18 +169,11 @@ pub(super) fn search<S: StateSampler>(
             }
         };
 
-        let to_cell = |state: AgentState| {
-            [
-                state.x.div_euclid(CELL_SIZE) as i32,
-                state.y.div_euclid(CELL_SIZE) as i32,
-            ]
-        };
-
         let found = 'found: {
             for _ in 0..100 {
-                let (start, node) = sampler.sample(nodes, env, collision_check)?;
-                let grid_cell = to_cell(node.state);
-                if CELL_COUNT < grid_map.get(&grid_cell).map(|cell| cell.len()).unwrap_or(0) {
+                let (start, node) = sampler.sample(nodes, env, grid_map, collision_check)?;
+                let cell_count = count_from_grid_map(grid_map, to_cell(node.state));
+                if MAX_CELL_COUNT < cell_count {
                     continue;
                 }
                 break 'found Some((start, node));
@@ -206,9 +215,7 @@ pub(super) fn search<S: StateSampler>(
         node.id = new_node_id;
         node.max_level = level;
 
-        let grid_cell = to_cell(node.state);
-        let cell = grid_map.entry(grid_cell).or_insert_with(|| HashSet::new());
-        cell.insert(new_node_id);
+        insert_to_grid_map(grid_map, to_cell(node.state), new_node_id);
 
         let mut hist = vec![];
         for cell in grid_map.values() {

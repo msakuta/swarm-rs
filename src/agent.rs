@@ -226,14 +226,7 @@ impl Agent {
             self.orient,
         ));
         let (res, time) = measure_time(|| {
-            self.avoidance_search(
-                game,
-                entities,
-                |_, _| (),
-                cmd.back,
-                false,
-                game.avoidance_mode,
-            )
+            self.avoidance_search(game, entities, cmd.back, false, game.avoidance_mode)
         });
         // println!("Avoidance goal set to {:?}, returns {res:?}", self.goal);
         if let Ok(mut time_window) = TIME_WINDOW.lock() {

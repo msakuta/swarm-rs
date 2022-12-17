@@ -12,7 +12,7 @@ use cgmath::{MetricSpace, Vector2};
 pub(crate) use self::render::AvoidanceRenderParams;
 use self::{
     sampler::{ForwardKinematicSampler, RrtStarSampler, SpaceSampler, StateSampler},
-    search::{can_connect_goal, search},
+    search::{can_connect_goal, insert_to_grid_map, search, to_cell},
 };
 use super::{
     interpolation::interpolate, wrap_angle, Agent, GameEnv, AGENT_HALFLENGTH, AGENT_HALFWIDTH,
@@ -156,7 +156,7 @@ fn compare_distance(s1: &AgentState, s2: &AgentState, threshold: f64) -> bool {
 
 const MAX_STEER: f64 = std::f64::consts::PI / 3.;
 const CELL_SIZE: f64 = 10.;
-const CELL_COUNT: usize = 10;
+const MAX_CELL_COUNT: usize = 10;
 
 /// We use a grid of cells with fixed sizes to query nodes in a search tree.
 /// The benefit of grid over RTree is that RTree requires O(n log n) to build
@@ -252,7 +252,6 @@ impl Agent {
         &mut self,
         game: &Game,
         entities: &[RefCell<Entity>],
-        callback: impl Fn(&StateWithCost, &StateWithCost),
         backward: bool,
         switch_back: bool,
         avoidance_mode: AvoidanceMode,
@@ -268,13 +267,11 @@ impl Agent {
 
         match avoidance_mode {
             AvoidanceMode::Kinematic => {
-                self.avoidance_search_gen::<ForwardKinematicSampler>(&mut env, callback, backward)
+                self.avoidance_search_gen::<ForwardKinematicSampler>(&mut env, backward)
             }
-            AvoidanceMode::Rrt => {
-                self.avoidance_search_gen::<SpaceSampler>(&mut env, callback, backward)
-            }
+            AvoidanceMode::Rrt => self.avoidance_search_gen::<SpaceSampler>(&mut env, backward),
             AvoidanceMode::RrtStar => {
-                self.avoidance_search_gen::<RrtStarSampler>(&mut env, callback, backward)
+                self.avoidance_search_gen::<RrtStarSampler>(&mut env, backward)
             }
         }
     }
@@ -284,7 +281,6 @@ impl Agent {
     pub(super) fn avoidance_search_gen<Sampler: StateSampler>(
         &mut self,
         env: &mut SearchEnv,
-        callback: impl Fn(&StateWithCost, &StateWithCost),
         backward: bool,
     ) -> bool {
         // println!(
@@ -365,6 +361,9 @@ impl Agent {
                 if !nodes.is_empty() {
                     let root_set = (0..nodes.len()).collect();
                     let mut grid_map = HashMap::new();
+                    for (i, node) in nodes.iter().enumerate() {
+                        insert_to_grid_map(&mut grid_map, to_cell(node.state), i);
+                    }
                     let found_path =
                         search::<Sampler>(self, &root_set, env, &mut nodes, &mut grid_map);
 

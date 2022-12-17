@@ -5,7 +5,10 @@ use rand::{distributions::Uniform, prelude::Distribution};
 
 use crate::agent::{wrap_angle, Agent};
 
-use super::{compare_distance, AgentState, SearchEnv, StateWithCost, DIST_RADIUS, DIST_THRESHOLD};
+use super::{
+    compare_distance, AgentState, GridMap, SearchEnv, StateWithCost, CELL_SIZE, DIST_RADIUS,
+    DIST_THRESHOLD,
+};
 
 pub(in super::super) trait StateSampler {
     fn new(env: &SearchEnv) -> Self;
@@ -17,6 +20,7 @@ pub(in super::super) trait StateSampler {
         &mut self,
         nodes: &[StateWithCost],
         env: &SearchEnv,
+        grid_map: &GridMap,
         collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
     ) -> Option<(usize, StateWithCost)>;
 
@@ -91,6 +95,7 @@ impl StateSampler for ForwardKinematicSampler {
         &mut self,
         nodes: &[StateWithCost],
         env: &SearchEnv,
+        _grid_map: &GridMap,
         _collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
     ) -> Option<(usize, StateWithCost)> {
         let (start, start_node) = {
@@ -261,6 +266,7 @@ impl StateSampler for SpaceSampler {
         &mut self,
         nodes: &[StateWithCost],
         env: &SearchEnv,
+        grid_map: &GridMap,
         _collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
     ) -> Option<(usize, StateWithCost)> {
         let position = Vector2::new(
@@ -268,7 +274,7 @@ impl StateSampler for SpaceSampler {
             rand::random::<f64>() * env.game.ys as f64,
         );
 
-        let (i, closest_node) = find_closest_node(nodes, position)?;
+        let (i, closest_node) = find_closest_node(nodes, position, grid_map)?;
 
         self.0 = closest_node.cost;
         let closest_point = Vector2::from(closest_node.state);
@@ -286,28 +292,47 @@ impl StateSampler for SpaceSampler {
     }
 }
 
-fn find_closest_node(
-    nodes: &[StateWithCost],
+/// Use grid map to quickly find the closest node
+fn find_closest_node<'a, 'b>(
+    nodes: &'a [StateWithCost],
     position: Vector2<f64>,
-) -> Option<(usize, &StateWithCost)> {
-    let (i, closest_node) =
-        nodes
-            .iter()
-            .enumerate()
-            .fold(None, |acc: Option<(usize, &StateWithCost)>, (ib, b)| {
-                if let Some((ia, a)) = acc {
-                    let distance_a = Vector2::from(a.state).distance(position);
-                    let distance_b = Vector2::from(b.state).distance(position);
-                    if distance_a < distance_b {
-                        Some((ia, a))
-                    } else {
-                        Some((ib, b))
-                    }
-                } else {
-                    Some((ib, b))
-                }
-            })?;
-    Some((i, closest_node))
+    grid_map: &'b GridMap,
+) -> Option<(usize, &'a StateWithCost)> {
+    let center = (
+        (position.x / CELL_SIZE) as i32,
+        (position.y / CELL_SIZE) as i32,
+    );
+    const MAX_SEARCH_CELL_RADIUS: i32 = 10;
+    // Gradually expand cells to scan
+    for cell_radius in 0..MAX_SEARCH_CELL_RADIUS {
+        let mut closest = None;
+        for iy in -cell_radius..=cell_radius {
+            for ix in -cell_radius..=cell_radius {
+                let Some(cell_nodes) = grid_map.get(&[center.0 + ix, center.1 + iy]) else { continue };
+                closest =
+                    cell_nodes
+                        .iter()
+                        .fold(closest, |acc: Option<(usize, &StateWithCost)>, &ib| {
+                            let b = &nodes[ib];
+                            if let Some((ia, a)) = acc {
+                                let distance_a = Vector2::from(a.state).distance(position);
+                                let distance_b = Vector2::from(b.state).distance(position);
+                                if distance_a < distance_b {
+                                    Some((ia, a))
+                                } else {
+                                    Some((ib, b))
+                                }
+                            } else {
+                                Some((ib, b))
+                            }
+                        });
+            }
+        }
+        if let Some((i, closest_node)) = closest {
+            return Some((i, closest_node));
+        }
+    }
+    None
 }
 
 /// Rewiring distance has to be long enough to make RRT* effective
@@ -334,6 +359,7 @@ impl StateSampler for RrtStarSampler {
         &mut self,
         nodes: &[StateWithCost],
         env: &SearchEnv,
+        grid_map: &GridMap,
         mut collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
     ) -> Option<(usize, StateWithCost)> {
         let position = Vector2::new(
@@ -341,7 +367,7 @@ impl StateSampler for RrtStarSampler {
             rand::random::<f64>() * env.game.ys as f64,
         );
 
-        let (closest_id, closest_node) = find_closest_node(nodes, position)?;
+        let (closest_id, closest_node) = find_closest_node(nodes, position, grid_map)?;
 
         let closest_point = Vector2::from(nodes[closest_id].state);
         let distance = closest_point.distance(position).min(STEER_DISTANCE);
