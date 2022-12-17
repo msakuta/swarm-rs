@@ -1,12 +1,12 @@
 use crate::{agent::interpolation::lerp, paint_board::to_point};
 
-use super::{sampler::REWIRE_DISTANCE, SearchState, DIST_RADIUS};
+use super::{sampler::REWIRE_DISTANCE, SearchState, CELL_SIZE, DIST_RADIUS};
 use druid::{
-    kurbo::Circle,
+    kurbo::{Circle, Shape},
     piet::kurbo::BezPath,
     widget::{Checkbox, Flex},
-    Affine, Color, Data, Env, FontDescriptor, FontFamily, Lens, PaintCtx, Point, RenderContext,
-    TextLayout, Widget, WidgetExt,
+    Affine, Color, Data, Env, FontDescriptor, FontFamily, Lens, PaintCtx, Point, Rect,
+    RenderContext, TextLayout, Widget, WidgetExt,
 };
 
 #[derive(Clone, Lens, Data)]
@@ -15,6 +15,7 @@ pub(crate) struct AvoidanceRenderParams {
     pub circle_visible: bool,
     pub shape_visible: bool,
     pub cost_visible: bool,
+    pub grid_visible: bool,
 }
 
 impl AvoidanceRenderParams {
@@ -24,6 +25,7 @@ impl AvoidanceRenderParams {
             circle_visible: false,
             shape_visible: false,
             cost_visible: false,
+            grid_visible: false,
         }
     }
 
@@ -33,6 +35,7 @@ impl AvoidanceRenderParams {
             .with_child(Checkbox::new("Circle").lens(Self::circle_visible))
             .with_child(Checkbox::new("Shape").lens(Self::shape_visible))
             .with_child(Checkbox::new("Cost").lens(Self::cost_visible))
+            .with_child(Checkbox::new("Grid").lens(Self::grid_visible))
     }
 }
 
@@ -46,6 +49,20 @@ impl SearchState {
         _brush: &Color,
         scale: f64,
     ) {
+        if params.grid_visible {
+            for (cell, _count) in self.grid_map.iter() {
+                let (x, y) = (cell[0] as f64, cell[1] as f64);
+                let rect = Rect::new(
+                    x * CELL_SIZE,
+                    y * CELL_SIZE,
+                    (x + 1.) * CELL_SIZE,
+                    (y + 1.) * CELL_SIZE,
+                );
+                let rect = rect.to_path(0.);
+                ctx.stroke(*view_transform * rect, &Color::PURPLE, 1.);
+            }
+        }
+
         // let rgba = brush.as_rgba8();
         // let brush = Color::rgba8(rgba.0 / 2, rgba.1 / 2, rgba.2 / 2, rgba.3);
         for (direction, brush) in [Color::WHITE, Color::rgb8(255, 127, 127)]

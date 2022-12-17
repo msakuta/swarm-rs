@@ -158,6 +158,10 @@ const MAX_STEER: f64 = std::f64::consts::PI / 3.;
 const CELL_SIZE: f64 = 10.;
 const CELL_COUNT: usize = 10;
 
+/// We use a grid of cells with fixed sizes to query nodes in a search tree.
+/// The benefit of grid over RTree is that RTree requires O(n log n) to build
+/// the index, while grid is just O(n). We need to insert as many times as
+/// query, so the insertion time needs to be small.
 type GridMap = HashMap<[i32; 2], HashSet<usize>>;
 
 #[derive(Debug)]
