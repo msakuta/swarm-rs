@@ -7,15 +7,14 @@ mod motion;
 pub(crate) use self::avoidance::{AgentState, AvoidanceRenderParams, PathNode, SearchState};
 use self::{
     behavior_nodes::{
-        build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, DriveCommand,
-        FaceToTargetCommand, FindEnemyCommand, FindPathCommand, FollowPathCommand,
-        GetPathNextNodeCommand, GetStateCommand, HasPathNode, IsTargetVisibleCommand,
+        build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, ClearPathNode,
+        DriveCommand, FaceToTargetCommand, FindEnemyCommand, FindPathCommand, FollowPathCommand,
+        GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode, IsTargetVisibleCommand,
         MoveToCommand, ShootCommand, TargetPosCommand,
     },
     motion::MotionResult,
 };
 use crate::{
-    agent::behavior_nodes::ClearPathNode,
     collision::{CollisionShape, Obb},
     entity::Entity,
     game::{Game, Profiler},
@@ -66,8 +65,9 @@ pub(crate) struct Agent {
     blackboard: Blackboard,
 }
 
-pub(crate) const AGENT_HALFWIDTH: f64 = 0.3 * 4.;
-pub(crate) const AGENT_HALFLENGTH: f64 = 0.6 * 4.;
+const AGENT_SCALE: f64 = 1.;
+pub(crate) const AGENT_HALFWIDTH: f64 = 0.3 * AGENT_SCALE;
+pub(crate) const AGENT_HALFLENGTH: f64 = 0.6 * AGENT_SCALE;
 pub(crate) const AGENT_SPEED: f64 = 0.25;
 pub(crate) const AGENT_MAX_HEALTH: u32 = 3;
 const AGENT_VISIBLE_DISTANCE: f64 = 10.;
@@ -232,11 +232,11 @@ impl Agent {
         // println!("Avoidance goal set to {:?}, returns {res:?}", self.goal);
         if let Ok(mut time_window) = TIME_WINDOW.lock() {
             time_window.push_back(time);
-            while 10 < time_window.len() {
+            while 100 < time_window.len() {
                 time_window.pop_front();
             }
             let count = AVG_COUNT.fetch_add(1, Ordering::Relaxed);
-            if count % 10 == 0 && !time_window.is_empty() {
+            if count % 100 == 0 && !time_window.is_empty() {
                 let avg = time_window.iter().sum::<f64>() / time_window.len() as f64;
                 println!("Avoidance search ({count}): {avg:.06}s");
             }
@@ -267,6 +267,8 @@ impl Agent {
                 } else if let Some(com) = f.downcast_ref::<MoveToCommand>() {
                     command = Some(Command::MoveTo(*com));
                     return MotionResult::as_move_to(&self.last_motion_result);
+                } else if f.downcast_ref::<HasTargetNode>().is_some() {
+                    return Some(Box::new(self.target.is_some()));
                 } else if f.downcast_ref::<FindEnemyCommand>().is_some() {
                     // println!("FindEnemy process");
                     self.find_enemy(entities)

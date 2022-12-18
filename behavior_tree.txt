@@ -1,48 +1,37 @@
 tree main = Sequence {
-    Fallback {
-        HasTarget (target <- target)
+    if (!HasTarget) {
         FindEnemy
     }
     Fallback {
         Sequence {
             IsTargetVisible (target <- target)
-            Print (input <- "IsTargetVisible")
             FaceToTarget (target <- target)
             Shoot
-            Print (input <- "Shot at visible")
         }
         FollowPathAndAvoid
     }
 }
 
 tree FollowPathAndAvoid = Sequence {
-    Fallback {
-        HasPath
-        Sequence {
-            TargetPos (pos -> target)
-            FindPath (target <- target)
-        }
+    if (!HasPath) {
+        TargetPos (pos -> target)
+        FindPath (target <- target)
     }
-    Sequence {
-        HasPath
-        Fallback {
-            FollowPath
-            Sequence {
-                ReactiveSequence {
-                    Drive (direction <- "backward")
-                    Randomize (max <- "20", value -> timeoutValue)
-                    Timeout (time <- timeoutValue)
-                }
-                Sequence {
-                    PathNextNode (output -> pathNext)
-                    Randomize (min <- "20", max <- "100", value -> timeoutValue)
-                    ReactiveFallback {
-                        Avoidance (goal <- pathNext)
-                        ForceFailure {
-                            Timeout (time <- timeoutValue)
-                        }
-                        ClearAvoidance
+    if (HasPath) {
+        if (!FollowPath) {
+            ReactiveSequence {
+                Drive (direction <- "backward")
+                Randomize (max <- "20", value -> timeoutValue)
+                Timeout (time <- timeoutValue)
+            }
+            if (PathNextNode (output -> pathNext)) {
+                Randomize (min <- "20", max <- "100", value -> timeoutValue)
+                ReactiveFallback {
+                    Avoidance (goal <- pathNext)
+                    ForceFailure {
+                        Timeout (time <- timeoutValue)
                     }
+                    ClearAvoidance
                 }
             }
         }

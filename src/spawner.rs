@@ -48,7 +48,7 @@ impl Spawner {
                     .unwrap_or(false)
             })
             .count()
-            < 1
+            < 5
             && rng.next() < 0.1
         {
             ret.push(GameEvent::SpawnAgent {

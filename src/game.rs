@@ -173,16 +173,18 @@ impl Game {
         team: usize,
         entities: &[RefCell<Entity>],
         static_: bool,
+        randomness: f64,
     ) -> Option<Entity> {
         const STATIC_SOURCE_FILE: &str = include_str!("../test_obstacle.txt");
         let rng = Rc::make_mut(&mut self.rng);
         let id_gen = &mut self.id_gen;
         let triangle_labels = &self.mesh.triangle_labels;
         let largest_label = self.mesh.largest_label;
+
         for _ in 0..10 {
             let state_candidate = AgentState {
-                x: pos[0], // + rng.next() * 10. - 5.,
-                y: pos[1], // + rng.next() * 10. - 5.,
+                x: pos[0] + (rng.next() - 0.5) * randomness,
+                y: pos[1] + (rng.next() - 0.5) * randomness,
                 heading: rng.next() * std::f64::consts::PI * 2.,
             };
 
@@ -272,7 +274,7 @@ impl Game {
         for event in events {
             match event {
                 GameEvent::SpawnAgent { pos, team } => {
-                    if let Some(agent) = self.try_new_agent(pos, team, &entities, false) {
+                    if let Some(agent) = self.try_new_agent(pos, team, &entities, false, 10.) {
                         entities.push(RefCell::new(agent));
                     }
                 }
@@ -333,32 +335,32 @@ impl Game {
             .filter(|agent| agent.borrow().get_active())
             .collect();
 
-        if entities.is_empty() {
-            println!("Adding agents");
-            let pos = [self.xs as f64 * 2. / 8., self.ys as f64 * 9. / 16.];
-            if let Some(agent) = self.try_new_agent(pos, 0, &entities, false) {
-                entities.push(RefCell::new(agent));
-            }
-            // let pos = [self.xs as f64 / 2., self.ys as f64 / 2.];
-            // if let Some(agent) = self.try_new_agent(pos, 0, &entities, true) {
-            //     entities.push(RefCell::new(agent));
-            // }
-        }
-
-        // for team in 0..2 {
-        //     let rng = Rc::make_mut(&mut self.rng);
-        //     if entities
-        //         .iter()
-        //         .filter(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
-        //         .count()
-        //         < 1
-        //         && rng.next() < 0.1
-        //     {
-        //         if let Some(spawner) = self.try_new_spawner(team) {
-        //             entities.push(RefCell::new(spawner));
-        //         }
+        // if entities.is_empty() {
+        //     println!("Adding agents");
+        //     let pos = [self.xs as f64 * 2. / 8., self.ys as f64 * 9. / 16.];
+        //     if let Some(agent) = self.try_new_agent(pos, 0, &entities, false) {
+        //         entities.push(RefCell::new(agent));
+        //     }
+        //     let pos = [self.xs as f64 / 2., self.ys as f64 / 2.];
+        //     if let Some(agent) = self.try_new_agent(pos, 0, &entities, true) {
+        //         entities.push(RefCell::new(agent));
         //     }
         // }
+
+        for team in 0..2 {
+            let rng = Rc::make_mut(&mut self.rng);
+            if entities
+                .iter()
+                .filter(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
+                .count()
+                < 1
+                && rng.next() < 0.1
+            {
+                if let Some(spawner) = self.try_new_spawner(team) {
+                    entities.push(RefCell::new(spawner));
+                }
+            }
+        }
         *self.entities.borrow_mut() = entities;
     }
 

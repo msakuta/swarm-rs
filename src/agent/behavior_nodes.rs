@@ -26,7 +26,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     let mut registry = Registry::default();
     registry.register("SetBool", boxify(|| SetBool));
     registry.register("Print", boxify(|| PrintNode));
-    registry.register("HasTarget", boxify(|| HasTarget));
+    registry.register("HasTarget", boxify(|| HasTargetNode));
     registry.register("TargetPos", boxify(|| TargetPosNode));
     registry.register("FindEnemy", boxify(|| FindEnemy));
     registry.register("HasPath", boxify(|| HasPathNode));
@@ -94,24 +94,21 @@ impl BehaviorNode for PrintNode {
     }
 }
 
-pub(super) struct HasTarget;
+pub(super) struct HasTargetNode;
 
 static TARGET: Lazy<Symbol> = Lazy::new(|| "target".into());
 static TARGET_SPEC: Lazy<PortSpec> = Lazy::new(|| PortSpec::new_in(*TARGET));
 
-impl BehaviorNode for HasTarget {
-    fn provided_ports(&self) -> Vec<PortSpec> {
-        vec![*TARGET_SPEC]
-    }
-
+impl BehaviorNode for HasTargetNode {
     fn tick(
         &mut self,
-        _arg: BehaviorCallback,
-        ctx: &mut behavior_tree_lite::Context,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        let result = ctx.get::<Option<usize>>(*TARGET);
-        // println!("HasTarge node {result:?}");
-        if result.map(|a| a.is_some()).unwrap_or(false) {
+        let Some(result) = arg(&Self).and_then(|a| a.downcast_ref::<bool>().copied()) else {
+            return BehaviorResult::Fail;
+        };
+        if result {
             BehaviorResult::Success
         } else {
             BehaviorResult::Fail
@@ -207,7 +204,6 @@ impl BehaviorNode for FindPathNode {
         arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        println!("FindPath invoked");
         if let Some(target) = ctx.get::<[f64; 2]>("target") {
             arg(&FindPathCommand(*target));
             BehaviorResult::Success
@@ -443,11 +439,9 @@ impl BehaviorNode for ClearAvoidanceNode {
         arg: BehaviorCallback,
         _ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        println!("ClearAvoidance node ticked!");
         let res = arg(&ClearAvoidanceCommand)
             .and_then(|res| res.downcast_ref::<bool>().copied())
             .unwrap_or(false);
-        // println!("ClearAvoidance returns {res}");
         if res {
             BehaviorResult::Success
         } else {

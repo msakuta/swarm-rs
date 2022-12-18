@@ -225,7 +225,6 @@ pub(super) fn search<S: StateSampler>(
             }
             hist[bin] += 1;
         }
-        println!("grid_map hist: {hist:?}");
 
         nodes.push(node);
 

@@ -16,6 +16,7 @@ use self::{
 };
 use super::{
     interpolation::interpolate, wrap_angle, Agent, GameEnv, AGENT_HALFLENGTH, AGENT_HALFWIDTH,
+    AGENT_SCALE,
 };
 use crate::{
     collision::{CollisionShape, Obb},
@@ -139,7 +140,7 @@ impl StateWithCost {
     }
 }
 
-pub const DIST_RADIUS: f64 = 0.5 * 3.;
+pub const DIST_RADIUS: f64 = 0.5 * AGENT_SCALE;
 const DIST_THRESHOLD: f64 = DIST_RADIUS * DIST_RADIUS;
 
 fn compare_state(s1: &AgentState, s2: &AgentState) -> bool {
@@ -155,7 +156,7 @@ fn compare_distance(s1: &AgentState, s2: &AgentState, threshold: f64) -> bool {
 }
 
 const MAX_STEER: f64 = std::f64::consts::PI / 3.;
-const CELL_SIZE: f64 = 10.;
+const CELL_SIZE: f64 = 2.;
 const MAX_CELL_COUNT: usize = 10;
 
 /// We use a grid of cells with fixed sizes to query nodes in a search tree.
