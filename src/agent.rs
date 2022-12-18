@@ -9,8 +9,8 @@ use self::{
     behavior_nodes::{
         build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, ClearPathNode,
         DriveCommand, FaceToTargetCommand, FindEnemyCommand, FindPathCommand, FollowPathCommand,
-        GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode, IsTargetVisibleCommand,
-        MoveToCommand, ShootCommand, TargetPosCommand,
+        GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode,
+        IsTargetVisibleCommand, MoveToCommand, ShootCommand, TargetPosCommand,
     },
     motion::MotionResult,
 };

@@ -12,8 +12,7 @@ use crate::{
 };
 
 use super::{
-    compare_distance, sampler::StateSampler, AgentState, GridMap, SearchEnv, StateWithCost,
-    CELL_SIZE,
+    compare_distance, sampler::StateSampler, AgentState, GridMap, SearchEnv, SearchNode, CELL_SIZE,
 };
 
 pub(super) fn to_cell(state: AgentState) -> [i32; 2] {
@@ -34,7 +33,7 @@ pub(super) fn count_from_grid_map(grid_map: &mut GridMap, idx: [i32; 2]) -> usiz
 
 pub(super) fn can_connect_goal(
     start_set: &HashSet<usize>,
-    nodes: &[StateWithCost],
+    nodes: &[SearchNode],
     mut node: usize,
 ) -> Option<Vec<usize>> {
     let mut path = vec![];
@@ -56,7 +55,7 @@ fn check_goal(
     start_set: &HashSet<usize>,
     start: usize,
     goal: &Option<AgentState>,
-    nodes: &[StateWithCost],
+    nodes: &[SearchNode],
 ) -> Option<Vec<usize>> {
     if let Some(goal) = goal.as_ref() {
         if !compare_distance(&nodes[start].state, &goal, (DIST_RADIUS * 2.).powf(2.)) {
@@ -91,7 +90,7 @@ pub(super) fn search<S: StateSampler>(
     this: &Agent,
     start_set: &HashSet<usize>,
     env: &mut SearchEnv,
-    nodes: &mut Vec<StateWithCost>,
+    nodes: &mut Vec<SearchNode>,
     grid_map: &mut GridMap,
 ) -> Option<Vec<usize>> {
     'skip: for _i in 0..env.expand_states {

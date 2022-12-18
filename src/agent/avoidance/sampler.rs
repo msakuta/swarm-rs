@@ -6,23 +6,23 @@ use rand::{distributions::Uniform, prelude::Distribution};
 use crate::agent::{wrap_angle, Agent};
 
 use super::{
-    compare_distance, AgentState, GridMap, SearchEnv, StateWithCost, CELL_SIZE, DIST_RADIUS,
+    compare_distance, AgentState, GridMap, SearchEnv, SearchNode, CELL_SIZE, DIST_RADIUS,
     DIST_THRESHOLD,
 };
 
 pub(in super::super) trait StateSampler {
     fn new(env: &SearchEnv) -> Self;
     fn compare_state(s1: &AgentState, s2: &AgentState) -> bool;
-    fn initial_search(agent: &Agent, backward: bool) -> Vec<StateWithCost>;
+    fn initial_search(agent: &Agent, backward: bool) -> Vec<SearchNode>;
 
     /// Sample a new state. Shall return an index to the starting node and the new state as a tuple.
     fn sample(
         &mut self,
-        nodes: &[StateWithCost],
+        nodes: &[SearchNode],
         env: &SearchEnv,
         grid_map: &GridMap,
         collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
-    ) -> Option<(usize, StateWithCost)>;
+    ) -> Option<(usize, SearchNode)>;
 
     /// Attempt to merge a new candidate node to one of the existing ones and returns true if successful.
     ///
@@ -30,9 +30,9 @@ pub(in super::super) trait StateSampler {
     #[allow(unused_variables)]
     fn merge_same_nodes(
         &self,
-        node: &StateWithCost,
+        node: &SearchNode,
         start: usize,
-        nodes: &mut [StateWithCost],
+        nodes: &mut [SearchNode],
         env: &mut SearchEnv,
     ) -> bool {
         false
@@ -42,7 +42,7 @@ pub(in super::super) trait StateSampler {
     #[allow(unused_variables)]
     fn rewire(
         &self,
-        nodes: &mut [StateWithCost],
+        nodes: &mut [SearchNode],
         new_node: usize,
         start: usize,
         collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
@@ -78,14 +78,14 @@ impl StateSampler for ForwardKinematicSampler {
         compare_distance(s1, s2, DIST_THRESHOLD) && delta_angle.abs() < std::f64::consts::PI / 6.
     }
 
-    fn initial_search(agent: &Agent, backward: bool) -> Vec<StateWithCost> {
+    fn initial_search(agent: &Agent, backward: bool) -> Vec<SearchNode> {
         let mut nodes = vec![];
         if backward || -0.1 < agent.speed {
-            let root = StateWithCost::new(agent.to_state(), 0., 0., 1.);
+            let root = SearchNode::new(agent.to_state(), 0., 0., 1.);
             nodes.push(root.clone());
         };
         if backward || agent.speed < 0.1 {
-            let root = StateWithCost::new(agent.to_state(), 0., 0., -1.);
+            let root = SearchNode::new(agent.to_state(), 0., 0., -1.);
             nodes.push(root.clone());
         }
         nodes
@@ -93,11 +93,11 @@ impl StateSampler for ForwardKinematicSampler {
 
     fn sample(
         &mut self,
-        nodes: &[StateWithCost],
+        nodes: &[SearchNode],
         env: &SearchEnv,
         _grid_map: &GridMap,
         _collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
-    ) -> Option<(usize, StateWithCost)> {
+    ) -> Option<(usize, SearchNode)> {
         let (start, start_node) = {
             let total_passables = nodes.iter().filter(|node| node.is_passable()).count();
             if total_passables == 0 {
@@ -129,15 +129,15 @@ impl StateSampler for ForwardKinematicSampler {
 
         Some((
             start,
-            StateWithCost::new(next, self.calculate_cost(distance), steer, next_direction),
+            SearchNode::new(next, self.calculate_cost(distance), steer, next_direction),
         ))
     }
 
     fn merge_same_nodes(
         &self,
-        node: &StateWithCost,
+        node: &SearchNode,
         start: usize,
-        nodes: &mut [StateWithCost],
+        nodes: &mut [SearchNode],
         env: &mut SearchEnv,
     ) -> bool {
         // Check if there is already a "samey" node exists
@@ -164,7 +164,7 @@ impl StateSampler for ForwardKinematicSampler {
 
     fn rewire(
         &self,
-        nodes: &mut [StateWithCost],
+        nodes: &mut [SearchNode],
         new_node_id: usize,
         start: usize,
         mut collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
@@ -257,18 +257,18 @@ impl StateSampler for SpaceSampler {
         compare_distance(s1, s2, DIST_THRESHOLD)
     }
 
-    fn initial_search(agent: &Agent, _backward: bool) -> Vec<StateWithCost> {
-        let root = StateWithCost::new(agent.to_state(), 0., 0., 1.);
+    fn initial_search(agent: &Agent, _backward: bool) -> Vec<SearchNode> {
+        let root = SearchNode::new(agent.to_state(), 0., 0., 1.);
         vec![root]
     }
 
     fn sample(
         &mut self,
-        nodes: &[StateWithCost],
+        nodes: &[SearchNode],
         env: &SearchEnv,
         grid_map: &GridMap,
         _collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
-    ) -> Option<(usize, StateWithCost)> {
+    ) -> Option<(usize, SearchNode)> {
         let position = Vector2::new(
             rand::random::<f64>() * env.game.xs as f64,
             rand::random::<f64>() * env.game.ys as f64,
@@ -287,17 +287,17 @@ impl StateSampler for SpaceSampler {
 
         Some((
             i,
-            StateWithCost::new(state, self.calculate_cost(distance), 0., direction),
+            SearchNode::new(state, self.calculate_cost(distance), 0., direction),
         ))
     }
 }
 
 /// Use grid map to quickly find the closest node
 fn find_closest_node<'a, 'b>(
-    nodes: &'a [StateWithCost],
+    nodes: &'a [SearchNode],
     position: Vector2<f64>,
     grid_map: &'b GridMap,
-) -> Option<(usize, &'a StateWithCost)> {
+) -> Option<(usize, &'a SearchNode)> {
     let center = (
         (position.x / CELL_SIZE) as i32,
         (position.y / CELL_SIZE) as i32,
@@ -312,7 +312,7 @@ fn find_closest_node<'a, 'b>(
                 closest =
                     cell_nodes
                         .iter()
-                        .fold(closest, |acc: Option<(usize, &StateWithCost)>, &ib| {
+                        .fold(closest, |acc: Option<(usize, &SearchNode)>, &ib| {
                             let b = &nodes[ib];
                             if let Some((ia, a)) = acc {
                                 let distance_a = Vector2::from(a.state).distance(position);
@@ -350,18 +350,18 @@ impl StateSampler for RrtStarSampler {
         compare_distance(s1, s2, DIST_THRESHOLD)
     }
 
-    fn initial_search(agent: &Agent, _backward: bool) -> Vec<StateWithCost> {
-        let root = StateWithCost::new(agent.to_state(), 0., 0., 1.);
+    fn initial_search(agent: &Agent, _backward: bool) -> Vec<SearchNode> {
+        let root = SearchNode::new(agent.to_state(), 0., 0., 1.);
         vec![root]
     }
 
     fn sample(
         &mut self,
-        nodes: &[StateWithCost],
+        nodes: &[SearchNode],
         env: &SearchEnv,
         grid_map: &GridMap,
         collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
-    ) -> Option<(usize, StateWithCost)> {
+    ) -> Option<(usize, SearchNode)> {
         let position = Vector2::new(
             rand::random::<f64>() * env.game.xs as f64,
             rand::random::<f64>() * env.game.ys as f64,
@@ -395,7 +395,7 @@ impl StateSampler for RrtStarSampler {
         // If this is a "shortcut", i.e. has a lower cost than existing node, "graft" the branch
         if let Some((i, lowest_cost, delta)) = lowest_cost {
             state.heading = heading_from_delta(&delta, next_direction);
-            Some((i, StateWithCost::new(state, lowest_cost, 0., direction)))
+            Some((i, SearchNode::new(state, lowest_cost, 0., direction)))
         } else {
             None
         }
@@ -403,7 +403,7 @@ impl StateSampler for RrtStarSampler {
 
     fn rewire(
         &self,
-        nodes: &mut [StateWithCost],
+        nodes: &mut [SearchNode],
         new_node: usize,
         _start: usize,
         mut collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
@@ -470,7 +470,7 @@ impl StateSampler for RrtStarSampler {
 }
 
 fn find_lowest_cost(
-    nodes: &[StateWithCost],
+    nodes: &[SearchNode],
     state: AgentState,
     mut collision_check: impl FnMut(AgentState, AgentState, f64, f64, f64) -> (bool, usize),
     start_state: AgentState,
@@ -522,7 +522,7 @@ fn find_lowest_cost(
     None
 }
 
-fn update_cost(nodes: &mut [StateWithCost], cur: usize) {
+fn update_cost(nodes: &mut [SearchNode], cur: usize) {
     let parent_cost = nodes[cur].cost;
     let parent_state = nodes[cur].state;
     // Work around borrow checker by temporarily taking the children

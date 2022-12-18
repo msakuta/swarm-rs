@@ -88,8 +88,8 @@ impl From<PathNode> for [f64; 2] {
     }
 }
 
-impl From<&StateWithCost> for PathNode {
-    fn from(node: &StateWithCost) -> Self {
+impl From<&SearchNode> for PathNode {
+    fn from(node: &SearchNode) -> Self {
         PathNode {
             x: node.state.x,
             y: node.state.y,
@@ -105,7 +105,7 @@ impl From<PathNode> for Vector2<f64> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct StateWithCost {
+pub(crate) struct SearchNode {
     state: AgentState,
     cost: f64,
     speed: f64,
@@ -119,7 +119,7 @@ pub(crate) struct StateWithCost {
     blocked: bool,
 }
 
-impl StateWithCost {
+impl SearchNode {
     pub(crate) fn new(state: AgentState, cost: f64, steer: f64, speed: f64) -> Self {
         Self {
             state,
@@ -167,7 +167,7 @@ type GridMap = HashMap<[i32; 2], HashSet<usize>>;
 
 #[derive(Debug)]
 pub struct SearchState {
-    search_tree: Vec<StateWithCost>,
+    search_tree: Vec<SearchNode>,
     start_set: HashSet<usize>,
     goal: AgentState,
     last_solution: Option<usize>,
@@ -357,7 +357,7 @@ impl Agent {
         if !searched_path {
             if let Some(goal) = self.goal {
                 // println!("Rebuilding tree with {} nodes should be 0", nodes.len());
-                let mut nodes: Vec<StateWithCost> = Sampler::initial_search(self, backward);
+                let mut nodes: Vec<SearchNode> = Sampler::initial_search(self, backward);
 
                 if !nodes.is_empty() {
                     let root_set = (0..nodes.len()).collect();
