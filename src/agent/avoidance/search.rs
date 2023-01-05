@@ -55,7 +55,7 @@ fn check_goal(
     start_set: &HashSet<usize>,
     start: usize,
     goal: &Option<AgentState>,
-    nodes: &[SearchNode],
+    nodes: &mut [SearchNode],
 ) -> Option<Vec<usize>> {
     if let Some(goal) = goal.as_ref() {
         if !compare_distance(&nodes[start].state, &goal, (DIST_RADIUS * 2.).powf(2.)) {
@@ -63,7 +63,14 @@ fn check_goal(
         }
         let mut node = start;
         let mut path = vec![];
+        let mut cycle_check = HashSet::new();
         while let Some(next_node) = nodes[node].from {
+            if cycle_check.contains(&next_node) {
+                println!("Cycle detected in check_goal! {cycle_check:?}");
+                mark_cycles(nodes, start);
+                return None;
+            }
+            cycle_check.insert(next_node);
             if !nodes[next_node].is_passable() {
                 return None;
             }
@@ -82,6 +89,19 @@ fn check_goal(
         return Some(path);
     }
     None
+}
+
+pub(super) fn mark_cycles(nodes: &mut [SearchNode], start: usize) {
+    let mut node = start;
+    let mut cycle_check = HashSet::new();
+    while let Some(next_node) = nodes[node].from {
+        if cycle_check.contains(&next_node) {
+            return;
+        }
+        cycle_check.insert(next_node);
+        nodes[node].cycle = true;
+        node = next_node;
+    }
 }
 
 /// Perform the search using sampling strategy given by `S`.
@@ -229,7 +249,7 @@ pub(super) fn search<S: StateSampler>(
 
         sampler.rewire(nodes, new_node_id, start, collision_check);
 
-        if let Some(path) = check_goal(start_set, new_node_id, &this.goal, &nodes) {
+        if let Some(path) = check_goal(start_set, new_node_id, &this.goal, nodes) {
             return Some(path);
         }
 

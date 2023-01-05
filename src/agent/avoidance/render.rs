@@ -69,12 +69,19 @@ impl SearchState {
             .iter()
             .enumerate()
         {
-            for pruned in [false, true] {
-                let brush = if pruned {
-                    let rgba = brush.as_rgba8();
-                    Color::rgba8(rgba.0, rgba.1, rgba.2, rgba.3 / 4)
-                } else {
-                    brush.clone()
+            for mode in 0..=2 {
+                let (brush, pruned, cycle) = match mode {
+                    0 => (brush.clone(), false, false),
+                    1 => {
+                        let rgba = brush.as_rgba8();
+                        (
+                            Color::rgba8(rgba.0, rgba.1, rgba.2, rgba.3 / 4),
+                            true,
+                            false,
+                        )
+                    }
+                    2 => (Color::rgb8(255, 0, 255), false, true),
+                    _ => unreachable!(),
                 };
                 for level in 0..=3 {
                     let level_width = level as f64 * 0.5;
@@ -86,8 +93,13 @@ impl SearchState {
                         if 0. < (direction as f64 * 2. - 1.) * state.speed {
                             continue;
                         }
-                        if (state.pruned || state.blocked) ^ pruned {
+                        if state.cycle ^ cycle {
                             continue;
+                        }
+                        if !cycle {
+                            if (state.pruned || state.blocked) ^ pruned {
+                                continue;
+                            }
                         }
                         let point = Point::new(state.state.x, state.state.y);
                         if let Some(from) = state.from {
@@ -136,18 +148,23 @@ impl SearchState {
                                     }
                                 }
                             }
-                            if 20. < scale * DIST_RADIUS && params.cost_visible {
-                                let mut layout =
-                                    TextLayout::<String>::from_text(format!("{:.01}", state.cost));
-                                layout.set_font(
-                                    FontDescriptor::new(FontFamily::SANS_SERIF).with_size(16.0),
-                                );
-                                layout.set_text_color(brush.clone());
-                                layout.rebuild_if_needed(ctx.text(), env);
-                                layout.draw(ctx, *view_transform * to_point(state.state.into()));
-                            }
                         }
-                        if params.circle_visible {
+                        if 20. < scale * DIST_RADIUS && params.cost_visible {
+                            let mut layout = TextLayout::<String>::from_text(format!(
+                                "{}: {:.01}",
+                                state.id, state.cost
+                            ));
+                            layout.set_font(
+                                FontDescriptor::new(FontFamily::SANS_SERIF).with_size(10.0),
+                            );
+                            layout.set_text_color(brush.clone());
+                            layout.rebuild_if_needed(ctx.text(), env);
+                            layout.draw(ctx, *view_transform * to_point(state.state.into()));
+                        }
+                        if state.from.is_none() {
+                            let circle = Circle::new(*view_transform * point, 2.);
+                            ctx.fill(circle, &brush);
+                        } else if params.circle_visible {
                             let circle = Circle::new(*view_transform * point, 2. + level_width);
                             ctx.fill(circle, &brush);
                             let circle = Circle::new(point, DIST_RADIUS);

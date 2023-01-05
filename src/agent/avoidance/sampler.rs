@@ -1,13 +1,16 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    collections::HashSet,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use cgmath::{InnerSpace, MetricSpace, Vector2};
 use rand::{distributions::Uniform, prelude::Distribution};
 
-use crate::agent::{wrap_angle, Agent};
+use crate::agent::{avoidance::search::mark_cycles, wrap_angle, Agent};
 
 use super::{
-    compare_distance, AgentState, GridMap, SearchEnv, SearchNode, CELL_SIZE, DIST_RADIUS,
-    DIST_THRESHOLD,
+    compare_distance, detach_from, AgentState, GridMap, SearchEnv, SearchNode, CELL_SIZE,
+    DIST_RADIUS, DIST_THRESHOLD,
 };
 
 pub(in super::super) trait StateSampler {
@@ -416,6 +419,27 @@ impl StateSampler for RrtStarSampler {
 
         let invokes = TOTAL_INVOKES.fetch_add(1, Ordering::Relaxed);
 
+        fn cycle_check(nodes: &mut [SearchNode], start: usize) -> bool {
+            let Some(mut node) = nodes[start].from else { return false };
+            let mut cycle_check = HashSet::new();
+            while let Some(next_node) = nodes[node].from {
+                if cycle_check.contains(&next_node) {
+                    println!("Cycle detected in rewire! {:?}", cycle_check.iter().fold("".to_string(), |acc, cur| {
+                        let state = &nodes[*cur as usize].state;
+                        acc + &format!("({}:{},{}),", cur, state.x, state.y)
+                    }));
+                    for c in cycle_check {
+                        let c: usize = c;
+                        nodes[c].cycle = true;
+                    }
+                    return true;
+                }
+                cycle_check.insert(next_node);
+                node = next_node;
+            }
+            false
+        }
+
         for i in 0..nodes.len() {
             if i == new_node || !nodes[i].is_passable() {
                 continue;
@@ -426,7 +450,6 @@ impl StateSampler for RrtStarSampler {
             if REWIRE_DISTANCE.powf(2.) < dist2 {
                 continue;
             }
-            let Some(existing_from) = existing_node.from else { continue };
             let distance = dist2.sqrt();
             let (hit, _level) = collision_check(
                 new_node_state,
@@ -440,15 +463,7 @@ impl StateSampler for RrtStarSampler {
             }
             let new_cost = new_node_cost + distance;
             if new_cost < existing_node.cost {
-                if let Some((to_index, _)) = nodes[existing_from]
-                    .to
-                    .iter()
-                    .copied()
-                    .enumerate()
-                    .find(|(_, j)| *j == i)
-                {
-                    nodes[existing_from].to.remove(to_index);
-                };
+                detach_from(nodes, i);
                 let existing_node = &mut nodes[i];
                 let existing_cost = existing_node.cost;
                 existing_node.cost = new_cost;
@@ -456,7 +471,14 @@ impl StateSampler for RrtStarSampler {
                 existing_node.from = Some(new_node);
 
                 // Changing a cost of a middle node will cause cascading effect to the nodes.
-                update_cost(nodes, i);
+                // println!(
+                //     "Calling update_cost, FISHY_COUNT: {}",
+                //     FISHY_COUNT.load(Ordering::Relaxed)
+                // );
+                if cycle_check(nodes, i) {
+                    return;
+                }
+                update_cost(nodes, i, 0);
 
                 let rewire_count = REWIRE_COUNT.fetch_add(1, Ordering::Relaxed);
                 if rewire_count % 100 == 0 {
@@ -522,7 +544,14 @@ fn find_lowest_cost(
     None
 }
 
-fn update_cost(nodes: &mut [SearchNode], cur: usize) {
+static FISHY_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+fn update_cost(nodes: &mut [SearchNode], cur: usize, recurse: usize) {
+    if 100 < recurse {
+        println!("update_cost: Something is fishy");
+        FISHY_COUNT.fetch_add(1, Ordering::Relaxed);
+        return;
+    }
     let parent_cost = nodes[cur].cost;
     let parent_state = nodes[cur].state;
     // Work around borrow checker by temporarily taking the children
@@ -530,7 +559,7 @@ fn update_cost(nodes: &mut [SearchNode], cur: usize) {
     for node in &children {
         let child = &mut nodes[*node];
         child.cost = parent_cost + Vector2::from(child.state).distance(parent_state.into());
-        update_cost(nodes, *node);
+        update_cost(nodes, *node, recurse + 1);
     }
     nodes[cur].to = children;
 }

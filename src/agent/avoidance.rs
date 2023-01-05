@@ -114,6 +114,7 @@ pub(crate) struct SearchNode {
     /// The maximum recursion level to determine collision. Used for debugging
     max_level: usize,
     from: Option<usize>,
+    cycle: bool,
     to: Vec<usize>,
     pruned: bool,
     blocked: bool,
@@ -132,6 +133,7 @@ impl SearchNode {
             to: vec![],
             pruned: false,
             blocked: false,
+            cycle: false,
         }
     }
 
@@ -156,7 +158,7 @@ fn compare_distance(s1: &AgentState, s2: &AgentState, threshold: f64) -> bool {
 }
 
 const MAX_STEER: f64 = std::f64::consts::PI / 3.;
-const CELL_SIZE: f64 = 2.;
+const CELL_SIZE: f64 = 2. * AGENT_SCALE;
 const MAX_CELL_COUNT: usize = 10;
 
 /// We use a grid of cells with fixed sizes to query nodes in a search tree.
@@ -464,18 +466,37 @@ impl Agent {
         let collision_checker =
             |state: AgentState| Agent::collision_check(Some(self.id), state, env.entities, true);
 
+        /// Assign infinite cost to node i and its subtree, assuming there are no cycles
+        fn infinite_cost(ss: &mut SearchState, i: usize, recurse: usize) {
+            if 100 < recurse {
+                println!("infinite_cost: Something fishy");
+                return;
+            }
+            ss.search_tree[i].cost = 1e6;
+            // Temporarily move away from SearchState to avoid borrow checker
+            let to = std::mem::take(&mut ss.search_tree[i].to);
+            for j in &to {
+                infinite_cost(ss, *j, recurse + 1);
+            }
+            // println!("[{recurse}] infinite {} nodes", to.len());
+            ss.search_tree[i].to = to;
+        }
+
         for i in 0..ss.search_tree.len() {
             let Some(from) = ss.search_tree[i].from else { continue };
             let start_state = ss.search_tree[from].state;
             let next_state = ss.search_tree[i].state;
             ss.search_tree[i].blocked = false;
-            if interpolate(
+            let blocked = interpolate(
                 start_state,
                 next_state,
                 DIST_RADIUS * 0.5,
                 collision_checker,
-            ) {
+            );
+            if blocked {
                 ss.search_tree[i].blocked = true;
+                detach_from(&mut ss.search_tree, i); // Detach from valid nodes to prevent infinite recursion
+                infinite_cost(ss, i, 0);
                 if ss
                     .found_path
                     .as_ref()
@@ -524,5 +545,20 @@ impl Agent {
         // );
 
         Some(())
+    }
+}
+
+fn detach_from(nodes: &mut [SearchNode], i: usize) {
+    if let Some(from) = nodes[i].from {
+        if let Some((to_index, _)) = nodes[from]
+            .to
+            .iter()
+            .copied()
+            .enumerate()
+            .find(|(_, j)| *j == i)
+        {
+            nodes[from].to.remove(to_index);
+        };
+        nodes[i].from = None;
     }
 }
