@@ -1,11 +1,13 @@
 use crate::{
-    agent::{Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS, BULLET_SPEED},
+    agent::{wrap_angle, Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS, BULLET_SPEED},
     app_data::{AppData, LineMode},
+    entity::Entity,
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
     temp_ents::MAX_TTL,
     triangle_utils::center_of_triangle_obj,
 };
+use cgmath::Vector2;
 use druid::{
     kurbo::Shape,
     piet::kurbo::{BezPath, Circle, Line},
@@ -317,6 +319,16 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                     brush,
                     data.scale,
                 );
+            }
+
+            if let Entity::Agent(agent) = &*agent {
+                if let Some(avoidance_plan) = &agent.avoidance_plan {
+                    for &(drive, steer) in avoidance_plan {
+                        let target = agent.get_avoidance_state((drive, steer));
+                        let circle = Circle::new(to_point(target.into()), AGENT_HALFWIDTH);
+                        ctx.fill(*view_transform * circle, &Color::rgba8(255, 255, 255, 127));
+                    }
+                }
             }
         }
 

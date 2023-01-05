@@ -10,9 +10,10 @@ use self::{
         build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, ClearPathNode,
         DriveCommand, FaceToTargetCommand, FindEnemyCommand, FindPathCommand, FollowPathCommand,
         GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode,
-        IsTargetVisibleCommand, MoveToCommand, ShootCommand, TargetPosCommand,
+        IsTargetVisibleCommand, MoveToCommand, ShootCommand, SimpleAvoidanceCommand,
+        TargetPosCommand,
     },
-    motion::MotionResult,
+    motion::{MotionResult, OrientToResult},
 };
 use crate::{
     collision::{CollisionShape, Obb},
@@ -58,6 +59,7 @@ pub(crate) struct Agent {
     pub health: u32,
     pub goal: Option<AgentState>,
     pub search_state: Option<SearchState>,
+    pub avoidance_plan: Option<Vec<(f64, f64)>>,
     pub path: Vec<[f64; 2]>,
     pub trace: VecDeque<[f64; 2]>,
     last_motion_result: Option<MotionResult>,
@@ -65,7 +67,7 @@ pub(crate) struct Agent {
     blackboard: Blackboard,
 }
 
-const AGENT_SCALE: f64 = 4.;
+const AGENT_SCALE: f64 = 1.;
 pub(crate) const AGENT_HALFWIDTH: f64 = 0.3 * AGENT_SCALE;
 pub(crate) const AGENT_HALFLENGTH: f64 = 0.6 * AGENT_SCALE;
 pub(crate) const AGENT_SPEED: f64 = 0.25;
@@ -107,6 +109,7 @@ impl Agent {
             health: AGENT_MAX_HEALTH,
             goal: None,
             search_state: None,
+            avoidance_plan: None,
             path: vec![],
             trace: VecDeque::new(),
             last_motion_result: None,
@@ -213,9 +216,44 @@ impl Agent {
         true
     }
 
+    pub(super) fn get_avoidance_state(&self, (drive, steer): (f64, f64)) -> Vector2<f64> {
+        let desired_angle = wrap_angle(self.orient + steer);
+        drive * Vector2::new(desired_angle.cos(), desired_angle.sin()) + Vector2::from(self.pos)
+    }
+
+    pub(super) fn get_avoidance_agent_state(&self, (drive, steer): (f64, f64)) -> AgentState {
+        let desired_angle = wrap_angle(self.orient + steer);
+        let pos = drive * Vector2::new(desired_angle.cos(), desired_angle.sin())
+            + Vector2::from(self.pos);
+        AgentState {
+            x: pos.x,
+            y: pos.y,
+            heading: desired_angle,
+        }
+    }
+
+    fn do_simple_avoidance(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) -> bool {
+        let Some(steer) = &self.avoidance_plan else {
+            return false
+        };
+        let min_steer = steer
+            .iter()
+            .min_by(|a, b| a.1.abs().partial_cmp(&b.1.abs()).unwrap());
+        let Some(&(drive, steer)) = min_steer else {
+            return false
+        };
+        if steer != 0. {
+            let target = self.get_avoidance_state((drive, steer));
+            let res = self.orient_to(target.into(), false, entities);
+            matches!(res, OrientToResult::Approaching)
+        } else {
+            false
+        }
+    }
+
     fn do_avoidance(
         &mut self,
-        game: &Game,
+        game: &mut Game,
         entities: &[RefCell<Entity>],
         cmd: &AvoidanceCommand,
     ) -> Box<dyn std::any::Any> {
@@ -300,8 +338,13 @@ impl Agent {
                     self.shoot_bullet(bullets, (Vector2::from(self.pos) + forward).into());
                 } else if let Some(goal) = f.downcast_ref::<AvoidanceCommand>() {
                     return Some(self.do_avoidance(game, entities, goal));
+                } else if let Some(cmd) = f.downcast_ref::<SimpleAvoidanceCommand>() {
+                    let routes = self.plan_simple_avoidance(cmd.0, entities);
+                    self.avoidance_plan = Some(routes);
+                    return Some(Box::new(true));
                 } else if f.downcast_ref::<ClearAvoidanceCommand>().is_some() {
                     self.search_state = None;
+                    self.avoidance_plan = None;
                 } else if f.downcast_ref::<GetPathNextNodeCommand>().is_some() {
                     if let Some(path) = self.path.last() {
                         return Some(Box::new(*path));
@@ -432,7 +475,11 @@ impl Agent {
         } else if let Some(target) = self.path.last() {
             if 5. < Vector2::from(*target).distance(Vector2::from(self.pos)) {
                 let target_pos = *target;
-                self.move_to(game, target_pos, false, entities).into()
+                if self.do_simple_avoidance(game, entities) {
+                    FollowPathResult::Following
+                } else {
+                    self.move_to(game, target_pos, false, entities).into()
+                }
             } else {
                 self.path.pop();
                 FollowPathResult::Following
@@ -458,7 +505,7 @@ impl Agent {
 }
 
 /// Wrap the angle value in [-pi, pi)
-fn wrap_angle(x: f64) -> f64 {
+pub(crate) fn wrap_angle(x: f64) -> f64 {
     use std::f64::consts::PI;
     const TWOPI: f64 = PI * 2.;
     // ((x + PI) - ((x + PI) / TWOPI).floor() * TWOPI) - PI

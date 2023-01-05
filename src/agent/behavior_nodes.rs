@@ -39,6 +39,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("Timeout", boxify(|| TimeoutNode(None)));
     registry.register("Randomize", boxify(|| RandomizeNode));
     registry.register("Avoidance", boxify(|| AvoidanceNode));
+    registry.register("SimpleAvoidance", boxify(|| SimpleAvoidanceNode));
     registry.register("ClearAvoidance", boxify(|| ClearAvoidanceNode));
     registry.register("PathNextNode", boxify(|| PathNextNode));
     registry.register("PredictForward", boxify(|| PredictForwardNode));
@@ -402,6 +403,32 @@ impl BehaviorNode for AvoidanceNode {
             }
         } else {
             println!("Avoidance could not get goal!");
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct SimpleAvoidanceCommand(pub bool);
+
+struct SimpleAvoidanceNode;
+
+impl BehaviorNode for SimpleAvoidanceNode {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("back")]
+    }
+
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let back = ctx.get_parse::<bool>("back").unwrap_or(false);
+        let res = arg(&SimpleAvoidanceCommand(back))
+            .and_then(|res| res.downcast_ref::<bool>().copied())
+            .unwrap_or(false);
+        if res {
+            BehaviorResult::Success
+        } else {
             BehaviorResult::Fail
         }
     }

@@ -347,20 +347,20 @@ impl Game {
             }
         }
 
-        // for team in 0..2 {
-        //     let rng = Rc::make_mut(&mut self.rng);
-        //     if entities
-        //         .iter()
-        //         .filter(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
-        //         .count()
-        //         < 1
-        //         && rng.next() < 0.1
-        //     {
-        //         if let Some(spawner) = self.try_new_spawner(team) {
-        //             entities.push(RefCell::new(spawner));
-        //         }
-        //     }
-        // }
+        for team in 0..2 {
+            let rng = Rc::make_mut(&mut self.rng);
+            if entities
+                .iter()
+                .filter(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
+                .count()
+                < 1
+                && rng.next() < 0.1
+            {
+                if let Some(spawner) = self.try_new_spawner(team) {
+                    entities.push(RefCell::new(spawner));
+                }
+            }
+        }
         *self.entities.borrow_mut() = entities;
     }
 

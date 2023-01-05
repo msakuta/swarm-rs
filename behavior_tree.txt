@@ -18,6 +18,7 @@ tree FollowPathAndAvoid = Sequence {
         FindPath (target <- target)
     }
     if (HasPath) {
+        SimpleAvoidance
         if (!FollowPath) {
             ReactiveSequence {
                 Drive (direction <- "backward")

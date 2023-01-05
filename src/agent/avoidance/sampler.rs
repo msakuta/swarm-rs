@@ -424,10 +424,13 @@ impl StateSampler for RrtStarSampler {
             let mut cycle_check = HashSet::new();
             while let Some(next_node) = nodes[node].from {
                 if cycle_check.contains(&next_node) {
-                    println!("Cycle detected in rewire! {:?}", cycle_check.iter().fold("".to_string(), |acc, cur| {
-                        let state = &nodes[*cur as usize].state;
-                        acc + &format!("({}:{},{}),", cur, state.x, state.y)
-                    }));
+                    println!(
+                        "Cycle detected in rewire! {:?}",
+                        cycle_check.iter().fold("".to_string(), |acc, cur| {
+                            let state = &nodes[*cur as usize].state;
+                            acc + &format!("({}:{},{}),", cur, state.x, state.y)
+                        })
+                    );
                     for c in cycle_check {
                         let c: usize = c;
                         nodes[c].cycle = true;

@@ -546,6 +546,46 @@ impl Agent {
 
         Some(())
     }
+
+    pub(crate) fn plan_simple_avoidance(
+        &mut self,
+        back: bool,
+        entities: &[RefCell<Entity>],
+    ) -> Vec<(f64, f64)> {
+        let collision_checker =
+            |state: AgentState| Agent::collision_check(Some(self.id), state, entities, true);
+        let drive = DIST_RADIUS * 2.5 * if back { -1. } else { 1. };
+        let mut all_routes = vec![];
+
+        let center_state = self.get_avoidance_agent_state((drive, 0.));
+        let center_collision = collision_checker(center_state);
+        if !center_collision {
+            // We could return early if the center is available, but we search side options for visualization
+            // return vec![(drive, 0.)];
+            all_routes.push((drive, 0.));
+        }
+
+        for limit in 1..3 {
+            let to_steer = |i| limit as f64 * std::f64::consts::PI / 6. * ((i as f64 * 2.) - 1.);
+            let routes = (0..=1)
+                .filter_map(|i| {
+                    let f = to_steer(i);
+                    let state = self.get_avoidance_agent_state((drive, f));
+                    let hit = collision_checker(state);
+                    if !hit {
+                        Some((drive, f))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            if !routes.is_empty() {
+                all_routes.extend_from_slice(&routes);
+            }
+        }
+
+        all_routes
+    }
 }
 
 fn detach_from(nodes: &mut [SearchNode], i: usize) {

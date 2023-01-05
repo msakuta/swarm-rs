@@ -7,10 +7,10 @@ tree main = Sequence {
 
 tree TestAvoidance(in pos) = Sequence {
     #Retry (n <- "10") {
-        Avoidance (goal <- pos, back <- "true")
+        #Avoidance (goal <- pos, back <- "true")
     #}
-    var arrived = false
-    Retry (n <- "10") {
+    if (FindPath (target <- pos) ) {
+        var arrived = false
         if (!arrived) {
             ForceFailure {
                 Repeat (n <- "100") {
