@@ -70,7 +70,7 @@ pub(crate) struct Agent {
 const AGENT_SCALE: f64 = 1.;
 pub(crate) const AGENT_HALFWIDTH: f64 = 0.3 * AGENT_SCALE;
 pub(crate) const AGENT_HALFLENGTH: f64 = 0.6 * AGENT_SCALE;
-pub(crate) const AGENT_SPEED: f64 = 0.25;
+pub(crate) const AGENT_SPEED: f64 = 0.125;
 pub(crate) const AGENT_MAX_HEALTH: u32 = 3;
 const AGENT_VISIBLE_DISTANCE: f64 = 10.;
 pub(crate) const BULLET_RADIUS: f64 = 0.15;

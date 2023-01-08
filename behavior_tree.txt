@@ -25,17 +25,21 @@ tree FollowPathAndAvoid = Sequence {
                 Randomize (max <- "20", value -> timeoutValue)
                 Timeout (time <- timeoutValue)
             }
-            if (PathNextNode (output -> pathNext)) {
-                Randomize (min <- "20", max <- "100", value -> timeoutValue)
-                ReactiveFallback {
-                    Avoidance (goal <- pathNext)
-                    ForceFailure {
-                        Timeout (time <- timeoutValue)
-                    }
-                    ClearAvoidance
-                }
-            }
+            #AvoidancePlan
         }
         Shoot
+    }
+}
+
+tree AvoidancePlan = Sequence {
+    if (PathNextNode (output -> pathNext)) {
+        Randomize (min <- "20", max <- "100", value -> timeoutValue)
+        ReactiveFallback {
+            Avoidance (goal <- pathNext)
+            ForceFailure {
+                Timeout (time <- timeoutValue)
+            }
+            ClearAvoidance
+        }
     }
 }
