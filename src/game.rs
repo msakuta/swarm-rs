@@ -1,15 +1,21 @@
 use cgmath::{InnerSpace, Vector2};
 
 use druid::Data;
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use crate::{
     agent::{Agent, AgentState, Bullet},
+    app_data::is_passable_at,
     collision::CollisionShape,
     entity::{Entity, GameEvent},
     measure_time,
     mesh::{create_mesh, Mesh, MeshResult},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
+    qtree::{CellState, QTree, Rect},
     spawner::Spawner,
     temp_ents::TempEnt,
     triangle_utils::{check_shape_in_mesh, find_triangle_at},
@@ -75,6 +81,7 @@ pub(crate) struct Game {
     pub(crate) triangle_profiler: Rc<RefCell<Profiler>>,
     pub(crate) pixel_profiler: Rc<RefCell<Profiler>>,
     pub(crate) source: Rc<String>,
+    pub(crate) qtree: Rc<QTree>,
 }
 
 impl Game {
@@ -88,6 +95,35 @@ impl Game {
         let MeshResult { board, mesh } = Self::create_perlin_board((xs, ys), seed, simplify);
 
         let id_gen = 0;
+
+        let shape = (xs, ys);
+        let mut qtree = QTree::new();
+        let calls: AtomicUsize = AtomicUsize::new(0);
+        let unpassables: AtomicUsize = AtomicUsize::new(0);
+        qtree.update(shape, &|rect: Rect| {
+            let mut has_passable = false;
+            let mut has_unpassable = false;
+            for x in rect[0]..rect[2] {
+                for y in rect[1]..rect[3] {
+                    calls.fetch_add(1, Ordering::Relaxed);
+                    if !is_passable_at(&board, shape, [x as f64, y as f64]) {
+                        unpassables.fetch_add(1, Ordering::Relaxed);
+                        has_unpassable = true;
+                    } else {
+                        has_passable = true;
+                    }
+                    if has_passable && has_unpassable {
+                        return CellState::Mixed;
+                    }
+                }
+            }
+            if has_passable {
+                CellState::Free
+            } else {
+                CellState::Occupied
+            }
+        });
+        println!("calls: {:?} unpassables: {unpassables:?}", calls);
 
         Self {
             xs,
@@ -107,6 +143,7 @@ impl Game {
             triangle_profiler: Rc::new(RefCell::new(Profiler::new())),
             pixel_profiler: Rc::new(RefCell::new(Profiler::new())),
             source: Rc::new(String::new()),
+            qtree: Rc::new(qtree),
         }
     }
 

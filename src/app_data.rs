@@ -35,6 +35,8 @@ pub(crate) struct AppData {
     pub(crate) render_stats: Rc<RefCell<String>>,
     pub(crate) path_visible: bool,
     pub(crate) avoidance_render_params: AvoidanceRenderParams,
+    pub qtree_visible: bool,
+    pub qtree_search_visible: bool,
     pub(crate) target_visible: bool,
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
@@ -42,6 +44,7 @@ pub(crate) struct AppData {
     pub(crate) source_file: String,
     /// This buffer is not yet applied to the game.
     pub(crate) source_buffer: Rc<String>,
+    pub(crate) global_render_time: f64,
 }
 
 impl AppData {
@@ -76,17 +79,21 @@ impl AppData {
             render_stats: Rc::new(RefCell::new("".to_string())),
             path_visible: true,
             avoidance_render_params: AvoidanceRenderParams::new(),
+            qtree_visible: true,
+            qtree_search_visible: true,
             target_visible: false,
             entity_label_visible: true,
             entity_trace_visible: false,
             source_visible: false,
             source_file: SOURCE_FILE.to_string(),
             source_buffer,
+            global_render_time: 0.,
         }
     }
 
-    pub(crate) fn update(&mut self) {
+    pub(crate) fn update(&mut self, delta_time: f64) {
         self.game.update();
+        self.global_render_time += delta_time;
     }
 }
 

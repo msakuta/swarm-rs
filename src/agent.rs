@@ -21,6 +21,7 @@ use crate::{
     game::{Game, Profiler},
     measure_time,
     mesh::Mesh,
+    qtree::SearchTree,
     triangle_utils::find_triangle_at,
 };
 use ::behavior_tree_lite::Context;
@@ -59,6 +60,7 @@ pub(crate) struct Agent {
     pub health: u32,
     pub goal: Option<AgentState>,
     pub search_state: Option<SearchState>,
+    pub search_tree: Option<SearchTree>,
     pub avoidance_plan: Option<Vec<(f64, f64)>>,
     pub path: Vec<[f64; 2]>,
     pub trace: VecDeque<[f64; 2]>,
@@ -94,7 +96,7 @@ impl Agent {
 
         let (tree, build_time) = measure_time(|| build_tree(behavior_source));
         let tree = tree?;
-        println!("tree build: {}", build_time);
+        // println!("tree build: {}", build_time);
 
         Ok(Self {
             target: None,
@@ -109,6 +111,7 @@ impl Agent {
             health: AGENT_MAX_HEALTH,
             goal: None,
             search_state: None,
+            search_tree: None,
             avoidance_plan: None,
             path: vec![],
             trace: VecDeque::new(),

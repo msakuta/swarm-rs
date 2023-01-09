@@ -108,14 +108,30 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     ),
             )
             .with_child(
-                Checkbox::new("Target line")
-                    .lens(AppData::target_visible)
-                    .padding(5.),
+                Flex::row()
+                    .with_child(
+                        Checkbox::new("QTree")
+                            .lens(AppData::qtree_visible)
+                            .padding(5.),
+                    )
+                    .with_child(
+                        Checkbox::new("QTree search")
+                            .lens(AppData::qtree_search_visible)
+                            .padding(5.),
+                    ),
             )
             .with_child(
-                Checkbox::new("Entity label")
-                    .lens(AppData::entity_label_visible)
-                    .padding(5.),
+                Flex::row()
+                    .with_child(
+                        Checkbox::new("Target line")
+                            .lens(AppData::target_visible)
+                            .padding(5.),
+                    )
+                    .with_child(
+                        Checkbox::new("Entity label")
+                            .lens(AppData::entity_label_visible)
+                            .padding(5.),
+                    ),
             )
             .with_child(
                 Checkbox::new("Entity trace")

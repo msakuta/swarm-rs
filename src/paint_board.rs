@@ -4,6 +4,7 @@ use crate::{
     entity::Entity,
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
+    qtree::render::paint_qtree,
     temp_ents::MAX_TTL,
     triangle_utils::center_of_triangle_obj,
 };
@@ -23,6 +24,10 @@ pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     let view_transform = data.view_transform();
 
     let contours = paint_board(ctx, data, env, &view_transform);
+
+    if data.qtree_visible {
+        paint_qtree(ctx, data, &view_transform);
+    }
 
     paint_agents(ctx, data, env, &view_transform);
 
@@ -329,6 +334,12 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                         ctx.fill(*view_transform * circle, &Color::rgba8(255, 255, 255, 127));
                     }
                 }
+            }
+        }
+
+        if data.qtree_search_visible {
+            if let Some(search_tree) = agent.get_search_tree() {
+                search_tree.render(ctx, env, view_transform, brush, data.scale);
             }
         }
 

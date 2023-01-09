@@ -14,6 +14,19 @@ fn delaunator_to_vector(p: delaunator::Point) -> Vector2<f64> {
 
 impl Agent {
     pub fn find_path(&mut self, target: [f64; 2], game: &mut Game) -> Result<(), ()> {
+        println!("Agent::find_path");
+        let (found_path, search_tree) = game.qtree.path_find(self.pos, target);
+        self.search_tree = Some(search_tree);
+        if let Some(path) = found_path {
+            self.path = path
+                .into_iter()
+                .map(|pos| [pos[0] as f64, pos[1] as f64])
+                .collect();
+        }
+        Ok(())
+    }
+
+    pub fn find_path_tri(&mut self, target: [f64; 2], game: &mut Game) -> Result<(), ()> {
         let triangulation = &game.mesh.triangulation;
         let points = &game.mesh.points;
         let mut profiler = game.triangle_profiler.borrow_mut();

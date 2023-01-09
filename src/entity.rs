@@ -135,6 +135,13 @@ impl Entity {
         }
     }
 
+    pub(crate) fn get_search_tree(&self) -> Option<&crate::qtree::SearchTree> {
+        match self {
+            Entity::Agent(agent) => agent.search_tree.as_ref(),
+            _ => None,
+        }
+    }
+
     pub(crate) fn get_speed(&self) -> f64 {
         match self {
             Entity::Agent(agent) => agent.speed,

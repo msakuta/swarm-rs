@@ -38,7 +38,7 @@ impl Widget<AppData> for BoardWidget {
             Event::Timer(id) => {
                 if *id == self.timer_id {
                     if !data.game.paused {
-                        data.update();
+                        data.update(data.game.interval);
                         ctx.request_paint();
                     }
                     let deadline = Duration::from_millis(data.game.interval as u64);

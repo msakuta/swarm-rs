@@ -13,6 +13,7 @@ mod collision;
 mod entity;
 mod game;
 mod mesh;
+mod qtree;
 mod spawner;
 mod temp_ents;
 mod triangle_utils;
