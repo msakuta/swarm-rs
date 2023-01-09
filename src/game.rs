@@ -97,33 +97,7 @@ impl Game {
         let id_gen = 0;
 
         let shape = (xs, ys);
-        let mut qtree = QTree::new();
-        let calls: AtomicUsize = AtomicUsize::new(0);
-        let unpassables: AtomicUsize = AtomicUsize::new(0);
-        qtree.update(shape, &|rect: Rect| {
-            let mut has_passable = false;
-            let mut has_unpassable = false;
-            for x in rect[0]..rect[2] {
-                for y in rect[1]..rect[3] {
-                    calls.fetch_add(1, Ordering::Relaxed);
-                    if !is_passable_at(&board, shape, [x as f64, y as f64]) {
-                        unpassables.fetch_add(1, Ordering::Relaxed);
-                        has_unpassable = true;
-                    } else {
-                        has_passable = true;
-                    }
-                    if has_passable && has_unpassable {
-                        return CellState::Mixed;
-                    }
-                }
-            }
-            if has_passable {
-                CellState::Free
-            } else {
-                CellState::Occupied
-            }
-        });
-        println!("calls: {:?} unpassables: {unpassables:?}", calls);
+        let qtree = Self::new_qtree(shape, &board);
 
         Self {
             xs,
@@ -198,10 +172,42 @@ impl Game {
         self.ys = shape.0;
         let MeshResult { board, mesh } = Self::create_crank_board(shape, seed, simplify);
 
+        self.qtree = Rc::new(Self::new_qtree(shape, &board));
         self.board = Rc::new(board);
         self.mesh = Rc::new(mesh);
         self.entities = Rc::new(RefCell::new(vec![]));
         self.bullets = Rc::new(vec![]);
+    }
+
+    fn new_qtree(shape: (usize, usize), board: &Board) -> QTree {
+        let mut qtree = QTree::new();
+        let calls: AtomicUsize = AtomicUsize::new(0);
+        let unpassables: AtomicUsize = AtomicUsize::new(0);
+        qtree.update(shape, &|rect: Rect| {
+            let mut has_passable = false;
+            let mut has_unpassable = false;
+            for x in rect[0]..rect[2] {
+                for y in rect[1]..rect[3] {
+                    calls.fetch_add(1, Ordering::Relaxed);
+                    if !is_passable_at(board, shape, [x as f64, y as f64]) {
+                        unpassables.fetch_add(1, Ordering::Relaxed);
+                        has_unpassable = true;
+                    } else {
+                        has_passable = true;
+                    }
+                    if has_passable && has_unpassable {
+                        return CellState::Mixed;
+                    }
+                }
+            }
+            if has_passable {
+                CellState::Free
+            } else {
+                CellState::Occupied
+            }
+        });
+        println!("calls: {:?} unpassables: {unpassables:?}", calls);
+        qtree
     }
 
     pub(crate) fn try_new_agent(
