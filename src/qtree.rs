@@ -133,6 +133,15 @@ struct ClosedState {
 }
 
 impl QTree {
+    /// Convert a tree index into coordinates of the center of the cell
+    fn idx_to_center(&self, idx: QTreeIdx) -> [f64; 2] {
+        let width = self.width(idx.0) as f64;
+        [
+            (idx.1[0] as f64 + 0.5) * width,
+            (idx.1[1] as f64 + 0.5) * width,
+        ]
+    }
+
     fn recurse_find(&self, level: usize, idx: [i32; 2], side: Side) -> Vec<(usize, [i32; 2])> {
         if self.levels.len() <= level {
             return vec![];
@@ -193,7 +202,7 @@ impl QTree {
         ret
     }
 
-    pub fn path_find(&self, start: [f64; 2], end: [f64; 2]) -> (Option<Vec<[i32; 2]>>, SearchTree) {
+    pub fn path_find(&self, start: [f64; 2], end: [f64; 2]) -> (Option<Vec<[f64; 2]>>, SearchTree) {
         let Some(start_found) = self.find(start) else {
             return (None, SearchTree::new())
         };
@@ -208,10 +217,13 @@ impl QTree {
             println!("End position {start:?} was occupied!");
             return (None, SearchTree::new());
         }
-        let end_bottom = [
-            end[0] as i32 / self.width(end_found.0) as i32,
-            end[1] as i32 / self.width(end_found.0) as i32,
-        ];
+        let end_idx = (
+            end_found.0,
+            [
+                end[0] as i32 / self.width(end_found.0) as i32,
+                end[1] as i32 / self.width(end_found.0) as i32,
+            ],
+        );
 
         #[derive(Debug, Clone, Copy)]
         struct OpenState {
@@ -279,14 +291,15 @@ impl QTree {
                 let nei_width = self.width(nei_level) as i32;
                 let nei_bottom = [nei_idx[0] * nei_width, nei_idx[1] * nei_width];
 
-                if nei_bottom == end_bottom {
-                    return (
-                        Some(vec![
-                            [start[0] as i32, start[1] as i32],
-                            [end[0] as i32, end[1] as i32],
-                        ]),
-                        self.build_search_tree(closed_set),
-                    );
+                if (nei_level, nei_idx) == end_idx {
+                    let mut path = vec![];
+                    path.push(self.idx_to_center(end_idx));
+                    let mut node = Some((state.level, state.idx));
+                    while let Some(anode) = node {
+                        path.push(self.idx_to_center(anode));
+                        node = closed_set.get(&anode).and_then(|bnode| bnode.came_from);
+                    }
+                    return (Some(path), self.build_search_tree(closed_set));
                 }
                 let new_cost = state.cost + self.width(state.level) as f64;
                 let cell = self.levels[nei_level].get(&nei_idx);
@@ -436,10 +449,10 @@ pub mod render {
         pub(crate) fn render(
             &self,
             ctx: &mut PaintCtx,
-            env: &Env,
+            _env: &Env,
             view_transform: &Affine,
             _brush: &Color,
-            scale: f64,
+            _scale: f64,
         ) {
             let brush = Color::WHITE;
             let mut path = BezPath::new();

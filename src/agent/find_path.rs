@@ -19,9 +19,6 @@ impl Agent {
         self.search_tree = Some(search_tree);
         if let Some(path) = found_path {
             self.path = path
-                .into_iter()
-                .map(|pos| [pos[0] as f64, pos[1] as f64])
-                .collect();
         }
         Ok(())
     }
