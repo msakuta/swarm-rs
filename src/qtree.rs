@@ -1,9 +1,7 @@
 use std::{
-    collections::{BinaryHeap, HashMap, HashSet},
+    collections::{BinaryHeap, HashMap},
     fmt::Display,
 };
-
-use druid::platform_menus::win::file::open;
 
 pub(crate) type Rect = [i32; 4];
 
@@ -127,6 +125,13 @@ enum Side {
     Bottom,
 }
 
+type QTreeIdx = (usize, [i32; 2]);
+
+struct ClosedState {
+    cost: f64,
+    came_from: Option<QTreeIdx>,
+}
+
 impl QTree {
     fn recurse_find(&self, level: usize, idx: [i32; 2], side: Side) -> Vec<(usize, [i32; 2])> {
         if self.levels.len() <= level {
@@ -189,24 +194,19 @@ impl QTree {
     }
 
     pub fn path_find(&self, start: [f64; 2], end: [f64; 2]) -> (Option<Vec<[i32; 2]>>, SearchTree) {
-        let mut search_tree = SearchTree {
-            nodes: vec![],
-            edges: vec![],
-        };
-
         let Some(start_found) = self.find(start) else {
-            return (None, search_tree)
+            return (None, SearchTree::new())
         };
         if matches!(start_found.1, CellState::Occupied) {
             println!("Start position {start:?} was occupied!");
-            return (None, search_tree);
+            return (None, SearchTree::new());
         }
         let Some(end_found) = self.find(end) else {
-            return (None, search_tree)
+            return (None, SearchTree::new())
         };
         if matches!(end_found.1, CellState::Occupied) {
             println!("End position {start:?} was occupied!");
-            return (None, search_tree);
+            return (None, SearchTree::new());
         }
         let end_bottom = [
             end[0] as i32 / self.width(end_found.0) as i32,
@@ -262,14 +262,18 @@ impl QTree {
         open_set.push(start_state);
 
         let mut closed_set = HashMap::new();
-        closed_set.insert((start_found.0, start_idx), 0.);
+        closed_set.insert(
+            (start_found.0, start_idx),
+            ClosedState {
+                cost: 0.,
+                came_from: None,
+            },
+        );
 
         while let Some(state) = open_set.pop() {
             if state.cost < 10. {
                 println!("  Searching from {state} of {}", open_set.len());
             }
-            let neighbors = [[-1, 0], [0, -1], [1, 0], [0, 1]];
-            let width = self.width(state.level) as i32;
             for (nei_level, nei_idx) in self.find_neighbors(state.level, state.idx) {
                 // let nei_idx = [state.idx[0] + neighbor[0], state.idx[1] + neighbor[1]];
                 let nei_width = self.width(nei_level) as i32;
@@ -281,7 +285,7 @@ impl QTree {
                             [start[0] as i32, start[1] as i32],
                             [end[0] as i32, end[1] as i32],
                         ]),
-                        search_tree,
+                        self.build_search_tree(closed_set),
                     );
                 }
                 let new_cost = state.cost + self.width(state.level) as f64;
@@ -299,21 +303,9 @@ impl QTree {
                 }
                 let cell_idx = [nei_bottom[0] / nei_width, nei_bottom[1] / nei_width];
 
-                let start_node = search_tree.nodes.len();
-                search_tree.nodes.push([
-                    (state.idx[0] as f64 + 0.5) * width as f64,
-                    (state.idx[1] as f64 + 0.5) * width as f64,
-                ]);
-                let end_node = search_tree.nodes.len();
-                search_tree.nodes.push([
-                    (cell_idx[0] as f64 + 0.5) * nei_width as f64,
-                    (cell_idx[1] as f64 + 0.5) * nei_width as f64,
-                ]);
-                search_tree.edges.push([start_node, end_node]);
-
                 if closed_set
                     .get(&(nei_level, cell_idx))
-                    .map(|cost| *cost <= new_cost)
+                    .map(|state| state.cost <= new_cost)
                     .unwrap_or(false)
                 {
                     continue;
@@ -323,7 +315,13 @@ impl QTree {
                     idx: cell_idx,
                     cost: new_cost,
                 });
-                closed_set.insert((nei_level, cell_idx), new_cost);
+                closed_set.insert(
+                    (nei_level, cell_idx),
+                    ClosedState {
+                        cost: new_cost,
+                        came_from: Some((state.level, state.idx)),
+                    },
+                );
                 // } else if 0 < state.level {
                 //     let sup_idx = [nei_idx[0] / 2, nei_idx[1] / 2];
                 //     let new_cost = state.cost + self.width(state.level - 1) as f64;
@@ -344,7 +342,29 @@ impl QTree {
             }
         }
 
-        (Some(vec![]), search_tree)
+        (Some(vec![]), self.build_search_tree(closed_set))
+    }
+
+    fn build_search_tree(&self, closed_set: HashMap<QTreeIdx, ClosedState>) -> SearchTree {
+        let mut search_tree = SearchTree::new();
+        for closed_state in &closed_set {
+            if let Some(start) = closed_state.1.came_from {
+                let start_node = search_tree.nodes.len();
+                let start_width = self.width(start.0);
+                search_tree.nodes.push([
+                    (start.1[0] as f64 + 0.5) * start_width as f64,
+                    (start.1[1] as f64 + 0.5) * start_width as f64,
+                ]);
+                let end_node = search_tree.nodes.len();
+                let end_width = self.width(closed_state.0 .0);
+                search_tree.nodes.push([
+                    (closed_state.0 .1[0] as f64 + 0.5) * end_width as f64,
+                    (closed_state.0 .1[1] as f64 + 0.5) * end_width as f64,
+                ]);
+                search_tree.edges.push([start_node, end_node]);
+            }
+        }
+        search_tree
     }
 }
 
@@ -352,6 +372,15 @@ impl QTree {
 pub(crate) struct SearchTree {
     nodes: Vec<[f64; 2]>,
     edges: Vec<[usize; 2]>,
+}
+
+impl SearchTree {
+    fn new() -> Self {
+        Self {
+            nodes: vec![],
+            edges: vec![],
+        }
+    }
 }
 
 pub mod render {
