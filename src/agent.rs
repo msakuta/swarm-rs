@@ -10,7 +10,7 @@ use self::{
         build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, ClearPathNode,
         DriveCommand, FaceToTargetCommand, FindEnemyCommand, FindPathCommand, FollowPathCommand,
         GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode,
-        IsTargetVisibleCommand, MoveToCommand, ShootCommand, SimpleAvoidanceCommand,
+        IsTargetVisibleCommand, MoveToCommand, ShootCommand, SimpleAvoidanceCommand, TargetIdNode,
         TargetPosCommand,
     },
     motion::{MotionResult, OrientToResult},
@@ -310,6 +310,8 @@ impl Agent {
                     return MotionResult::as_move_to(&self.last_motion_result);
                 } else if f.downcast_ref::<HasTargetNode>().is_some() {
                     return Some(Box::new(self.target.is_some()));
+                } else if f.downcast_ref::<TargetIdNode>().is_some() {
+                    return Some(Box::new(self.target));
                 } else if f.downcast_ref::<FindEnemyCommand>().is_some() {
                     // println!("FindEnemy process");
                     self.find_enemy(entities)
@@ -377,11 +379,8 @@ impl Agent {
                         )));
                     }
                 } else if let Some(com) = f.downcast_ref::<FaceToTargetCommand>() {
-                    if let Some(target) = entities.get(com.0).and_then(|e| e.try_borrow().ok()) {
-                        let target_pos = target.get_pos();
-                        let res = self.orient_to(target_pos, false, entities);
-                        return Some(Box::new(res));
-                    }
+                    let res = self.orient_to(com.0, false, entities);
+                    return Some(Box::new(res));
                 }
                 None
                 // if let Some(f) = f.downcast_ref::<dyn Fn(&Agent)>() {
@@ -501,9 +500,13 @@ impl Agent {
         if AGENT_VISIBLE_DISTANCE < distance {
             return false;
         }
-        interpolation::interpolate(self_pos, target, INTERPOLATE_INTERVAL, |point| {
-            find_triangle_at(mesh, point, profiler).is_some()
-        })
+        let r = !interpolation::interpolate(self_pos, target, INTERPOLATE_INTERVAL, |point| {
+            find_triangle_at(mesh, point, profiler)
+                .map(|tri| !mesh.triangle_passable[tri])
+                .unwrap_or(true)
+        });
+        println!("visible? {self_pos:?} -> {target:?}: {r}");
+        r
     }
 }
 

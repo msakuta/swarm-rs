@@ -76,8 +76,8 @@ pub(crate) fn paint_board(
                 ctx.draw_image(
                     &res,
                     (
-                        Point::new(-1., -1.),
-                        Point::new(xs as f64 - 1., ys as f64 - 1.),
+                        Point::new(0., 0.),
+                        Point::new(xs as f64 - 0., ys as f64 - 0.),
                     ),
                     InterpolationMode::NearestNeighbor,
                 );

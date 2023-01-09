@@ -273,6 +273,13 @@ impl QTree {
         };
         open_set.push(start_state);
 
+        if (start_found.0, start_idx) == end_idx {
+            let mut path = vec![];
+            path.push(self.idx_to_center(end_idx));
+            path.push(self.idx_to_center((start_found.0, start_idx)));
+            return (Some(path), SearchTree::new());
+        }
+
         let mut closed_set = HashMap::new();
         closed_set.insert(
             (start_found.0, start_idx),

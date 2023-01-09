@@ -189,7 +189,7 @@ impl Game {
             for x in rect[0]..rect[2] {
                 for y in rect[1]..rect[3] {
                     calls.fetch_add(1, Ordering::Relaxed);
-                    if !is_passable_at(board, shape, [x as f64, y as f64]) {
+                    if !is_passable_at(board, shape, [x as f64 + 0.5, y as f64 + 0.5]) {
                         unpassables.fetch_add(1, Ordering::Relaxed);
                         has_unpassable = true;
                     } else {
@@ -378,17 +378,17 @@ impl Game {
             .filter(|agent| agent.borrow().get_active())
             .collect();
 
-        if entities.is_empty() {
-            println!("Adding agents");
-            let pos = [self.xs as f64 * 2. / 8., self.ys as f64 * 9. / 16.];
-            if let Some(agent) = self.try_new_agent(pos, 0, &entities, false, 0.) {
-                entities.push(RefCell::new(agent));
-            }
-            let pos = [self.xs as f64 / 2., self.ys as f64 / 2.];
-            if let Some(agent) = self.try_new_agent(pos, 0, &entities, true, 0.) {
-                entities.push(RefCell::new(agent));
-            }
-        }
+        // if entities.is_empty() {
+        //     println!("Adding agents");
+        //     let pos = [self.xs as f64 * 2. / 8., self.ys as f64 * 9. / 16.];
+        //     if let Some(agent) = self.try_new_agent(pos, 0, &entities, false, 0.) {
+        //         entities.push(RefCell::new(agent));
+        //     }
+        //     let pos = [self.xs as f64 / 2., self.ys as f64 / 2.];
+        //     if let Some(agent) = self.try_new_agent(pos, 0, &entities, true, 0.) {
+        //         entities.push(RefCell::new(agent));
+        //     }
+        // }
 
         for team in 0..2 {
             let rng = Rc::make_mut(&mut self.rng);

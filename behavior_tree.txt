@@ -13,9 +13,14 @@ tree main = Sequence {
 }
 
 tree FollowPathAndAvoid = Sequence {
+    TargetPos (pos -> target)
     if (!HasPath) {
-        TargetPos (pos -> target)
         FindPath (target <- target)
+    }
+    if (IsTargetVisible (target)) {
+        TargetPos (target -> target_pos)
+        FaceToTarget (target <- target_pos)
+        Shoot
     }
     if (HasPath) {
         SimpleAvoidance

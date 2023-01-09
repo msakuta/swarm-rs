@@ -27,6 +27,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("SetBool", boxify(|| SetBool));
     registry.register("Print", boxify(|| PrintNode));
     registry.register("HasTarget", boxify(|| HasTargetNode));
+    registry.register("TargetId", boxify(|| TargetIdNode));
     registry.register("TargetPos", boxify(|| TargetPosNode));
     registry.register("FindEnemy", boxify(|| FindEnemy));
     registry.register("HasPath", boxify(|| HasPathNode));
@@ -110,6 +111,23 @@ impl BehaviorNode for HasTargetNode {
             return BehaviorResult::Fail;
         };
         if result {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct TargetIdNode;
+
+impl BehaviorNode for TargetIdNode {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![*TARGET_SPEC]
+    }
+
+    fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
+        if let Some(target) = arg(self).map(|res| res.downcast_ref::<usize>().copied()) {
+            ctx.set(*TARGET, target);
             BehaviorResult::Success
         } else {
             BehaviorResult::Fail
@@ -568,7 +586,7 @@ impl BehaviorNode for IsTargetVisibleNode {
     }
 }
 
-pub(super) struct FaceToTargetCommand(pub usize);
+pub(super) struct FaceToTargetCommand(pub [f64; 2]);
 
 pub(super) struct FaceToTargetNode;
 
@@ -578,8 +596,8 @@ impl BehaviorNode for FaceToTargetNode {
     }
 
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
-        if let Some(target) = ctx.get::<Option<usize>>(*TARGET).copied().flatten() {
-            let Some(val) = arg(&FaceToTargetCommand(target))
+        if let Some(target) = ctx.get::<[f64; 2]>(*TARGET) {
+            let Some(val) = arg(&FaceToTargetCommand(*target))
                 .and_then(|val| val.downcast_ref::<OrientToResult>().copied()) else {
                     return BehaviorResult::Fail;
                 };
