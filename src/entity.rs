@@ -5,6 +5,7 @@ use crate::{
     agent::{Bullet, PathNode},
     collision::{CollisionShape, Obb},
     game::Game,
+    qtree::QTreePathNode,
     spawner::Spawner,
 };
 use std::{cell::RefCell, collections::VecDeque};
@@ -79,7 +80,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_path(&self) -> Option<&[[f64; 2]]> {
+    pub(crate) fn get_path(&self) -> Option<&[QTreePathNode]> {
         match self {
             Entity::Agent(agent) => Some(&agent.path),
             Entity::Spawner(_) => None,

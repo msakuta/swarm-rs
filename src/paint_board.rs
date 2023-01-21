@@ -1,5 +1,5 @@
 use crate::{
-    agent::{wrap_angle, Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS, BULLET_SPEED},
+    agent::{Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS, BULLET_SPEED},
     app_data::{AppData, LineMode},
     entity::Entity,
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
@@ -8,7 +8,7 @@ use crate::{
     temp_ents::MAX_TTL,
     triangle_utils::center_of_triangle_obj,
 };
-use cgmath::Vector2;
+
 use druid::{
     kurbo::Shape,
     piet::kurbo::{BezPath, Circle, Line},
@@ -375,10 +375,12 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                 if let Some(first) = avoidance_drawn {
                     bez_path.move_to(to_point(first));
                 } else {
-                    bez_path.move_to(to_point(*first));
+                    bez_path.move_to(to_point(first.pos));
                 }
                 for point in rest {
-                    bez_path.line_to(to_point(*point));
+                    let circle = Circle::new(to_point(point.pos), point.radius);
+                    ctx.stroke(*view_transform * circle, brush, 1.);
+                    bez_path.line_to(to_point(point.pos));
                 }
                 bez_path.line_to(to_point(agent.get_pos()));
                 ctx.stroke(*view_transform * bez_path, brush, 1.);

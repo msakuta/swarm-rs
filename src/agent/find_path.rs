@@ -2,6 +2,7 @@ use super::Agent;
 use crate::{
     entity::Entity,
     game::Game,
+    qtree::QTreePathNode,
     triangle_utils::{center_of_triangle_obj, find_triangle_at},
 };
 use ::cgmath::{InnerSpace, Vector2};
@@ -76,14 +77,14 @@ impl Agent {
         }
         if let Some(came_from) = came_from_map[target_triangle] {
             let first = center_of_triangle_obj(triangulation, points, target_triangle);
-            self.path = vec![[first.x, first.y]];
+            self.path = vec![QTreePathNode::new([first.x, first.y], 5.)];
             let mut traverser = Some(came_from);
             while let Some(next) = traverser {
                 if next == this_triangle {
                     break;
                 }
                 let p = center_of_triangle_obj(triangulation, points, next);
-                self.path.push([p.x, p.y]);
+                self.path.push(QTreePathNode::new([p.x, p.y], 5.));
                 traverser = came_from_map[next];
             }
 
@@ -93,9 +94,9 @@ impl Agent {
         }
     }
 
-    pub fn find_path_to_enemy(
+    pub fn _find_path_to_enemy(
         &mut self,
-        target: usize,
+        _target: usize,
         game: &mut Game,
         entities: &[RefCell<Entity>],
     ) -> Result<(), ()> {

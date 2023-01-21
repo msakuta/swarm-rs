@@ -201,8 +201,31 @@ impl QTree {
         }
         ret
     }
+}
 
-    pub fn path_find(&self, start: [f64; 2], end: [f64; 2]) -> (Option<Vec<[f64; 2]>>, SearchTree) {
+#[derive(Debug)]
+pub(crate) struct QTreePathNode {
+    pub pos: [f64; 2],
+    pub radius: f64,
+}
+
+impl QTreePathNode {
+    pub fn new(pos: [f64; 2], radius: f64) -> Self {
+        Self { pos, radius }
+    }
+
+    fn new_with_qtree(idx: (usize, [i32; 2]), qtree: &QTree) -> Self {
+        Self {
+            pos: qtree.idx_to_center(idx),
+            radius: qtree.width(idx.0) as f64 / 2.,
+        }
+    }
+}
+
+pub(crate) type QTreePath = Vec<QTreePathNode>;
+
+impl QTree {
+    pub fn path_find(&self, start: [f64; 2], end: [f64; 2]) -> (Option<QTreePath>, SearchTree) {
         let Some(start_found) = self.find(start) else {
             return (None, SearchTree::new())
         };
@@ -273,16 +296,18 @@ impl QTree {
         };
         open_set.push(start_state);
 
-        if (start_found.0, start_idx) == end_idx {
+        let start_idx = (start_found.0, start_idx);
+
+        if start_idx == end_idx {
             let mut path = vec![];
-            path.push(self.idx_to_center(end_idx));
-            path.push(self.idx_to_center((start_found.0, start_idx)));
+            path.push(QTreePathNode::new_with_qtree(end_idx, self));
+            path.push(QTreePathNode::new_with_qtree(start_idx, self));
             return (Some(path), SearchTree::new());
         }
 
         let mut closed_set = HashMap::new();
         closed_set.insert(
-            (start_found.0, start_idx),
+            start_idx,
             ClosedState {
                 cost: 0.,
                 came_from: None,
@@ -300,10 +325,10 @@ impl QTree {
 
                 if (nei_level, nei_idx) == end_idx {
                     let mut path = vec![];
-                    path.push(self.idx_to_center(end_idx));
+                    path.push(QTreePathNode::new_with_qtree(end_idx, self));
                     let mut node = Some((state.level, state.idx));
                     while let Some(anode) = node {
-                        path.push(self.idx_to_center(anode));
+                        path.push(QTreePathNode::new_with_qtree(anode, self));
                         node = closed_set.get(&anode).and_then(|bnode| bnode.came_from);
                     }
                     return (Some(path), self.build_search_tree(closed_set));

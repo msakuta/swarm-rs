@@ -21,9 +21,7 @@ use crate::{
     entity::Entity,
     game::{Board, Game, Profiler},
     measure_time,
-    mesh::Mesh,
-    qtree::SearchTree,
-    shape::Shape,
+    qtree::{QTreePath, SearchTree},
     triangle_utils::find_triangle_at,
 };
 use ::behavior_tree_lite::Context;
@@ -64,7 +62,7 @@ pub(crate) struct Agent {
     pub search_state: Option<SearchState>,
     pub search_tree: Option<SearchTree>,
     pub avoidance_plan: Option<Vec<(f64, f64)>>,
-    pub path: Vec<[f64; 2]>,
+    pub path: QTreePath,
     pub trace: VecDeque<[f64; 2]>,
     last_motion_result: Option<MotionResult>,
     behavior_tree: Option<BehaviorTree>,
@@ -357,7 +355,7 @@ impl Agent {
                     self.avoidance_plan = None;
                 } else if f.downcast_ref::<GetPathNextNodeCommand>().is_some() {
                     if let Some(path) = self.path.last() {
-                        return Some(Box::new(*path));
+                        return Some(Box::new(path.pos));
                     }
                 } else if f.downcast_ref::<GetStateCommand>().is_some() {
                     return Some(Box::new(self.to_state()));
@@ -484,8 +482,8 @@ impl Agent {
         if self.follow_avoidance_path(game, entities) {
             FollowPathResult::Following
         } else if let Some(target) = self.path.last() {
-            if 5. < Vector2::from(*target).distance(Vector2::from(self.pos)) {
-                let target_pos = *target;
+            if target.radius < Vector2::from(target.pos).distance(Vector2::from(self.pos)) {
+                let target_pos = target.pos;
                 if self.do_simple_avoidance(game, entities) {
                     FollowPathResult::Following
                 } else {

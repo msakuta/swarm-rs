@@ -6,7 +6,7 @@ use std::{
 use cgmath::{InnerSpace, MetricSpace, Vector2};
 use rand::{distributions::Uniform, prelude::Distribution};
 
-use crate::agent::{avoidance::search::mark_cycles, wrap_angle, Agent};
+use crate::agent::{wrap_angle, Agent};
 
 use super::{
     compare_distance, detach_from, AgentState, GridMap, SearchEnv, SearchNode, CELL_SIZE,
