@@ -1,4 +1,8 @@
-use crate::{agent::AvoidanceRenderParams, game::Game, WINDOW_HEIGHT};
+use crate::{
+    agent::AvoidanceRenderParams,
+    game::{BoardType, Game},
+    WINDOW_HEIGHT,
+};
 
 use druid::{Data, Lens, Point, Vec2};
 use std::{
@@ -18,6 +22,7 @@ pub(crate) struct AppData {
     pub(crate) rows_text: String,
     pub(crate) columns_text: String,
     pub(crate) seed_text: String,
+    pub(crate) board_type: BoardType,
     pub(crate) game: Game,
     pub(crate) simplify_text: String,
     pub(crate) line_mode: LineMode,
@@ -63,6 +68,7 @@ impl AppData {
             rows_text: game.xs.to_string(),
             columns_text: game.ys.to_string(),
             seed_text: seed.to_string(),
+            board_type: BoardType::Perlin,
             simplify_text: game.simplify.to_string(),
             game,
             line_mode: LineMode::None,

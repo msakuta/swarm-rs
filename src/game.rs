@@ -23,6 +23,13 @@ use crate::{
 
 pub(crate) type Board = Vec<bool>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Data)]
+pub(crate) enum BoardType {
+    Rect,
+    Crank,
+    Perlin,
+}
+
 #[derive(Debug, Clone, Data)]
 pub(crate) struct Profiler {
     total: f64,
@@ -167,10 +174,20 @@ impl Game {
         })
     }
 
-    pub(crate) fn new_board(&mut self, shape: (usize, usize), seed: u32, simplify: f64) {
+    pub(crate) fn new_board(
+        &mut self,
+        board_type: BoardType,
+        shape: (usize, usize),
+        seed: u32,
+        simplify: f64,
+    ) {
         self.xs = shape.0;
         self.ys = shape.0;
-        let MeshResult { board, mesh } = Self::create_crank_board(shape, seed, simplify);
+        let MeshResult { board, mesh } = match board_type {
+            BoardType::Rect => Self::create_rect_board(shape, seed, simplify),
+            BoardType::Crank => Self::create_crank_board(shape, seed, simplify),
+            BoardType::Perlin => Self::create_perlin_board(shape, seed, simplify),
+        };
 
         self.qtree = Rc::new(Self::new_qtree(shape, &board));
         self.board = Rc::new(board);
