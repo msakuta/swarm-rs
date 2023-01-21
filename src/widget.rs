@@ -52,15 +52,11 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             .with_child(
                 Flex::row()
                     .with_child(Label::new("Border line mode:").padding(3.0))
-                    .with_child(
-                        RadioGroup::new([
-                            ("none", LineMode::None),
-                            ("line", LineMode::Line),
-                            ("polygon", LineMode::Polygon),
-                        ])
-                        .lens(AppData::line_mode)
-                        .padding(5.),
-                    ),
+                    .with_child(Radio::new("none", LineMode::None))
+                    .with_child(Radio::new("line", LineMode::Line))
+                    .with_child(Radio::new("polygon", LineMode::Polygon))
+                    .lens(AppData::line_mode)
+                    .padding(5.),
             )
             .with_child(
                 Checkbox::new("Simplified border")
