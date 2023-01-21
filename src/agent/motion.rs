@@ -14,6 +14,7 @@ pub(super) enum MotionResult {
     Drive(bool),
     MoveTo(bool),
     FollowPath(FollowPathResult),
+    FaceToTarget(OrientToResult),
 }
 
 macro_rules! impl_as_result {
@@ -41,6 +42,14 @@ impl MotionResult {
             Some(Box::new(*r) as Box<dyn std::any::Any>)
         } else {
             Some(Box::new(FollowPathResult::Following) as Box<dyn std::any::Any>)
+        }
+    }
+
+    pub(super) fn as_face_to_target(this: &Option<Self>) -> Option<Box<dyn std::any::Any>> {
+        if let Some(Self::FaceToTarget(r)) = this {
+            Some(Box::new(*r) as Box<dyn std::any::Any>)
+        } else {
+            None
         }
     }
 }

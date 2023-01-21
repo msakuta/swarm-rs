@@ -235,6 +235,14 @@ impl Game {
                 continue;
             }
 
+            if !is_passable_at(
+                &self.board,
+                (self.xs, self.ys),
+                [state_candidate.x, state_candidate.y],
+            ) {
+                continue;
+            }
+
             if let Some(tri) = find_triangle_at(
                 &self.mesh,
                 state_candidate.into(),

@@ -602,25 +602,3 @@ fn detach_from(nodes: &mut [SearchNode], i: usize) {
         nodes[i].from = None;
     }
 }
-
-pub struct Qtree {
-    levels: Vec<HashSet<[i32; 2]>>,
-}
-
-impl Qtree {
-    pub fn new() -> Self {
-        Self { levels: vec![] }
-    }
-
-    pub fn find(&self, pos: [f64; 2]) -> bool {
-        let scale = |f, level| (f / (1 << level) as f64) as i32;
-        for (level, cells) in self.levels.iter().enumerate().rev() {
-            let cell_pos = [scale(pos[0], level), scale(pos[1], level)];
-            let cell = cells.contains(&cell_pos);
-            if !cell {
-                return false;
-            }
-        }
-        return true;
-    }
-}

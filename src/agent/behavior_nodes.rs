@@ -562,7 +562,7 @@ impl BehaviorNode for NewPositionNode {
     }
 }
 
-pub(super) struct IsTargetVisibleCommand(pub usize);
+pub(super) struct IsTargetVisibleCommand(pub [f64; 2]);
 pub(crate) struct IsTargetVisibleNode;
 
 impl BehaviorNode for IsTargetVisibleNode {
@@ -571,7 +571,7 @@ impl BehaviorNode for IsTargetVisibleNode {
     }
 
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
-        if let Some(target) = ctx.get::<Option<usize>>(*TARGET).copied().flatten() {
+        if let Some(target) = ctx.get::<[f64; 2]>(*TARGET).copied() {
             let res = arg(&IsTargetVisibleCommand(target))
                 .and_then(|res| res.downcast_ref::<bool>().copied())
                 .unwrap_or(false);
@@ -586,6 +586,7 @@ impl BehaviorNode for IsTargetVisibleNode {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(super) struct FaceToTargetCommand(pub [f64; 2]);
 
 pub(super) struct FaceToTargetNode;

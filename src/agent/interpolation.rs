@@ -47,7 +47,8 @@ impl LerpPoint for AgentState {
 }
 
 /// Collision checking with linear interpolation. A closure to check the collision must be provided.
-/// The closure will be called multiple times to interpolate the range.
+/// The closure shall return true if it has collision, and will be called multiple times to interpolate the range.
+/// The function will return early if the closure returns true.
 pub(crate) fn interpolate<P: LerpPoint>(
     start: P,
     target: P,

@@ -3,22 +3,24 @@ tree main = Sequence {
         FindEnemy
     }
     Fallback {
-        Sequence {
-            IsTargetVisible (target <- target)
-            FaceToTarget (target <- target)
-            Shoot
+        ForceFailure {
+            TargetPos (pos -> targetPos)
         }
-        FollowPathAndAvoid
+        if (IsTargetVisible (target <- targetPos)) {
+            FaceToTarget (target <- targetPos)
+            Shoot
+        } else {
+            FollowPathAndAvoid
+        }
     }
 }
 
 tree FollowPathAndAvoid = Sequence {
-    TargetPos (pos -> target)
+    TargetPos (pos -> target_pos)
     if (!HasPath) {
-        FindPath (target <- target)
+        FindPath (target <- target_pos)
     }
-    if (IsTargetVisible (target)) {
-        TargetPos (target -> target_pos)
+    if (IsTargetVisible (target <- target_pos)) {
         FaceToTarget (target <- target_pos)
         Shoot
     }

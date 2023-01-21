@@ -16,12 +16,14 @@ use self::{
     motion::{MotionResult, OrientToResult},
 };
 use crate::{
+    app_data::is_passable_at,
     collision::{CollisionShape, Obb},
     entity::Entity,
-    game::{Game, Profiler},
+    game::{Board, Game, Profiler},
     measure_time,
     mesh::Mesh,
     qtree::SearchTree,
+    shape::Shape,
     triangle_utils::find_triangle_at,
 };
 use ::behavior_tree_lite::Context;
@@ -74,7 +76,7 @@ pub(crate) const AGENT_HALFWIDTH: f64 = 0.3 * AGENT_SCALE;
 pub(crate) const AGENT_HALFLENGTH: f64 = 0.6 * AGENT_SCALE;
 pub(crate) const AGENT_SPEED: f64 = 0.125;
 pub(crate) const AGENT_MAX_HEALTH: u32 = 3;
-const AGENT_VISIBLE_DISTANCE: f64 = 10.;
+const AGENT_VISIBLE_DISTANCE: f64 = 30.;
 pub(crate) const BULLET_RADIUS: f64 = 0.15;
 pub(crate) const BULLET_SPEED: f64 = 2.;
 
@@ -296,6 +298,7 @@ impl Agent {
                 Drive(DriveCommand),
                 MoveTo(MoveToCommand),
                 FollowPath(FollowPathCommand),
+                FaceToTarget(FaceToTargetCommand),
             }
             let mut command = None;
             let mut ctx = Context::new(std::mem::take(&mut self.blackboard));
@@ -331,6 +334,8 @@ impl Agent {
                     }) {
                         let target = target.borrow_mut();
                         return Some(Box::new(target.get_pos()));
+                    } else {
+                        println!("Target could not be found!");
                     }
                 } else if let Some(com) = f.downcast_ref::<FindPathCommand>() {
                     let found_path = self.find_path(com.0, game).is_ok();
@@ -357,30 +362,30 @@ impl Agent {
                 } else if f.downcast_ref::<GetStateCommand>().is_some() {
                     return Some(Box::new(self.to_state()));
                 } else if let Some(com) = f.downcast_ref::<IsTargetVisibleCommand>() {
-                    if let Some(target) = entities.get(com.0).and_then(|e| e.try_borrow().ok()) {
-                        let target_pos = target.get_pos();
-                        let target_triangle = find_triangle_at(
-                            &game.mesh,
-                            target_pos,
-                            &mut *game.triangle_profiler.borrow_mut(),
-                        );
-                        let self_triangle = find_triangle_at(
-                            &game.mesh,
-                            self.pos,
-                            &mut *game.triangle_profiler.borrow_mut(),
-                        );
-                        if target_triangle == self_triangle {
-                            return Some(Box::new(true));
-                        }
-                        return Some(Box::new(self.is_position_visible(
-                            target_pos,
-                            &game.mesh,
-                            &mut *game.triangle_profiler.borrow_mut(),
-                        )));
+                    let target_pos = com.0;
+                    let target_triangle = find_triangle_at(
+                        &game.mesh,
+                        target_pos,
+                        &mut *game.triangle_profiler.borrow_mut(),
+                    );
+                    let self_triangle = find_triangle_at(
+                        &game.mesh,
+                        self.pos,
+                        &mut *game.triangle_profiler.borrow_mut(),
+                    );
+                    if target_triangle == self_triangle {
+                        return Some(Box::new(true));
                     }
+                    let ret = Box::new(self.is_position_visible(
+                        target_pos,
+                        &game.board,
+                        (game.xs, game.ys),
+                        &mut *game.triangle_profiler.borrow_mut(),
+                    ));
+                    return Some(ret);
                 } else if let Some(com) = f.downcast_ref::<FaceToTargetCommand>() {
-                    let res = self.orient_to(com.0, false, entities);
-                    return Some(Box::new(res));
+                    command = Some(Command::FaceToTarget(*com));
+                    return MotionResult::as_face_to_target(&self.last_motion_result);
                 }
                 None
                 // if let Some(f) = f.downcast_ref::<dyn Fn(&Agent)>() {
@@ -404,6 +409,10 @@ impl Agent {
                 Some(Command::FollowPath(_com)) => {
                     let res = self.follow_path(game, entities);
                     self.last_motion_result = Some(MotionResult::FollowPath(res));
+                }
+                Some(Command::FaceToTarget(com)) => {
+                    let res = self.orient_to(com.0, false, entities);
+                    self.last_motion_result = Some(MotionResult::FaceToTarget(res));
                 }
                 _ => {
                     self.last_motion_result = None;
@@ -491,7 +500,13 @@ impl Agent {
         }
     }
 
-    fn is_position_visible(&self, target: [f64; 2], mesh: &Mesh, profiler: &mut Profiler) -> bool {
+    fn is_position_visible(
+        &self,
+        target: [f64; 2],
+        board: &Board,
+        shape: (usize, usize),
+        _profiler: &mut Profiler,
+    ) -> bool {
         const INTERPOLATE_INTERVAL: f64 = AGENT_HALFLENGTH;
 
         let self_pos = self.pos;
@@ -500,13 +515,9 @@ impl Agent {
         if AGENT_VISIBLE_DISTANCE < distance {
             return false;
         }
-        let r = !interpolation::interpolate(self_pos, target, INTERPOLATE_INTERVAL, |point| {
-            find_triangle_at(mesh, point, profiler)
-                .map(|tri| !mesh.triangle_passable[tri])
-                .unwrap_or(true)
-        });
-        println!("visible? {self_pos:?} -> {target:?}: {r}");
-        r
+        !interpolation::interpolate(self_pos, target, INTERPOLATE_INTERVAL, |point| {
+            !is_passable_at(board, shape, point)
+        })
     }
 }
 
