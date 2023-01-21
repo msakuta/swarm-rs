@@ -3,6 +3,21 @@ use std::{
     fmt::Display,
 };
 
+const DEBUG: bool = false;
+
+macro_rules! dbg_println {
+    ($fmt:literal) => {
+        if DEBUG {
+            println!($fmt);
+        }
+    };
+    ($fmt:literal, $($args:expr),*) => {
+        if DEBUG {
+            println!($fmt, $($args)*);
+        }
+    };
+}
+
 pub(crate) type Rect = [i32; 4];
 
 #[derive(Debug)]
@@ -36,11 +51,11 @@ impl QTree {
             toplevel & (1 << bit) != 0
         }) else { return };
         self.toplevel = topbit;
-        println!("maxlevel: {topbit}");
+        dbg_println!("maxlevel: {topbit}");
         self.recurse_update(0, topbit, [0, 0], f);
 
         for (i, cell) in self.levels.iter().enumerate() {
-            println!("level {i}: {}", cell.len());
+            dbg_println!("level {i}: {}", cell.len());
         }
     }
 
@@ -59,7 +74,7 @@ impl QTree {
             (parent[1] + 1) * width,
         ];
         if level <= 2 {
-            println!("level: {level}, rect: {rect:?}");
+            dbg_println!("level: {level}, rect: {rect:?}");
         }
         let cell_state = f(rect);
         if maxlevel <= level || matches!(cell_state, CellState::Occupied | CellState::Free) {
@@ -164,7 +179,7 @@ impl QTree {
             }
             ret
         } else if same_level.is_some() {
-            // println!("    Same level: {level}, {idx:?}, {side:?}");
+            // dbg_println!("    Same level: {level}, {idx:?}, {side:?}");
             vec![(level, idx)]
         } else {
             vec![]
@@ -194,7 +209,7 @@ impl QTree {
                     parent = (level - 1, [idx[0] / 2, idx[1] / 2]);
                 }
                 if let Some(ancestor) = ancestor {
-                    // println!("    Searching up: {level}, {idx:?}, {side:?}");
+                    // dbg_println!("    Searching up: {level}, {idx:?}, {side:?}");
                     ret.extend_from_slice(&self.recurse_find(ancestor.0, ancestor.1, side));
                 }
             }
@@ -230,14 +245,14 @@ impl QTree {
             return (None, SearchTree::new())
         };
         if matches!(start_found.1, CellState::Occupied) {
-            println!("Start position {start:?} was occupied!");
+            dbg_println!("Start position {start:?} was occupied!");
             return (None, SearchTree::new());
         }
         let Some(end_found) = self.find(end) else {
             return (None, SearchTree::new())
         };
         if matches!(end_found.1, CellState::Occupied) {
-            println!("End position {start:?} was occupied!");
+            dbg_println!("End position {start:?} was occupied!");
             return (None, SearchTree::new());
         }
         let end_idx = (
@@ -284,7 +299,7 @@ impl QTree {
             }
         }
 
-        println!("Start Searching from {start:?}");
+        dbg_println!("Start Searching from {start:?}");
 
         let mut open_set = BinaryHeap::new();
 
@@ -316,7 +331,7 @@ impl QTree {
 
         while let Some(state) = open_set.pop() {
             if state.cost < 10. {
-                println!("  Searching from {state} of {}", open_set.len());
+                dbg_println!("  Searching from {state} of {}", open_set.len());
             }
             for (nei_level, nei_idx) in self.find_neighbors(state.level, state.idx) {
                 // let nei_idx = [state.idx[0] + neighbor[0], state.idx[1] + neighbor[1]];
@@ -336,7 +351,7 @@ impl QTree {
                 let new_cost = state.cost + self.width(state.level) as f64;
                 let cell = self.levels[nei_level].get(&nei_idx);
                 if state.cost < 10. {
-                    println!(
+                    dbg_println!(
                         "    Neighbor: [{nei_level}]{nei_idx:?}: {cell:?}, new_cost: {new_cost}"
                     );
                 }
