@@ -2,7 +2,9 @@ use std::cell::RefCell;
 
 use cgmath::{InnerSpace, Vector2};
 
-use crate::{entity::Entity, game::Game, triangle_utils::check_shape_in_mesh};
+use crate::{
+    app_data::is_passable_at, entity::Entity, game::Game, triangle_utils::check_shape_in_mesh,
+};
 
 use super::{wrap_angle, Agent, AgentState, FollowPathResult, AGENT_SPEED};
 
@@ -143,11 +145,12 @@ impl Agent {
             return false;
         }
 
-        if check_shape_in_mesh(
-            &game.mesh,
-            &target_state.collision_shape(),
-            &mut *game.triangle_profiler.borrow_mut(),
-        ) {
+        if is_passable_at(&game.board, (game.xs, game.ys), target_state.into()) {
+            // if check_shape_in_mesh(
+            //     &game.mesh,
+            //     &target_state.collision_shape(),
+            //     &mut *game.triangle_profiler.borrow_mut(),
+            // ) {
             // if game.mesh.triangle_passable[next_triangle] {
             if 100 < self.trace.len() {
                 self.trace.pop_front();

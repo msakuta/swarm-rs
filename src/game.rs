@@ -104,7 +104,9 @@ impl Game {
         let id_gen = 0;
 
         let shape = (xs, ys);
-        let qtree = Self::new_qtree(shape, &board);
+        let (qtree, timer) = measure_time(|| Self::new_qtree(shape, &board, &[]));
+
+        println!("qtree time: {timer:?}");
 
         Self {
             xs,
@@ -189,38 +191,70 @@ impl Game {
             BoardType::Perlin => Self::create_perlin_board(shape, seed, simplify),
         };
 
-        self.qtree = Rc::new(Self::new_qtree(shape, &board));
+        self.qtree = Rc::new(Self::new_qtree(shape, &board, &[]));
         self.board = Rc::new(board);
         self.mesh = Rc::new(mesh);
         self.entities = Rc::new(RefCell::new(vec![]));
         self.bullets = Rc::new(vec![]);
     }
 
-    fn new_qtree(shape: (usize, usize), board: &Board) -> QTree {
+    fn new_qtree(shape: (usize, usize), board: &Board, entities: &[RefCell<Entity>]) -> QTree {
         let mut qtree = QTree::new();
         let calls: AtomicUsize = AtomicUsize::new(0);
         let unpassables: AtomicUsize = AtomicUsize::new(0);
+        let shapes: Vec<_> = entities
+            .iter()
+            .map(|entity| {
+                let entity = entity.borrow();
+                (entity.get_id(), entity.get_shape().buffer(1.))
+            })
+            .collect();
         qtree.update(shape, &|rect: Rect| {
             let mut has_passable = false;
-            let mut has_unpassable = false;
+            let mut has_unpassable = None;
             for x in rect[0]..rect[2] {
                 for y in rect[1]..rect[3] {
                     calls.fetch_add(1, Ordering::Relaxed);
+                    let mut has_unpassable_local = None;
                     if !is_passable_at(board, shape, [x as f64 + 0.5, y as f64 + 0.5]) {
                         unpassables.fetch_add(1, Ordering::Relaxed);
-                        has_unpassable = true;
+                        has_unpassable_local = Some(CellState::Obstacle);
                     } else {
+                        let (fx, fy) = (x as f64, y as f64);
+                        for (id, shape) in &shapes {
+                            let CollisionShape::BBox(bbox) = shape;
+                            if bbox.center.x - bbox.xs <= fx
+                                && fx <= bbox.center.x + bbox.xs
+                                && bbox.center.y - bbox.ys <= fy
+                                && fy <= bbox.center.y + bbox.ys
+                            {
+                                has_unpassable_local = Some(CellState::Occupied(*id));
+                                break;
+                            }
+                            // for y in bbox.center.y - bbox.ys..bbox.center.y + bbox.ys {
+                            //     for x in bbox.center.y - bbox.xs..bbox.center.x + bbox.xs {
+
+                            //     }
+                            // }
+                        }
+                    }
+                    if has_unpassable_local.is_none() {
                         has_passable = true;
                     }
-                    if has_passable && has_unpassable {
+                    if has_unpassable.is_none() {
+                        has_unpassable = has_unpassable_local;
+                    }
+                    if has_passable && has_unpassable.is_some() {
                         return CellState::Mixed;
                     }
                 }
             }
             if has_passable {
                 CellState::Free
+            } else if let Some(state) = has_unpassable {
+                state
             } else {
-                CellState::Occupied
+                CellState::Obstacle
             }
         });
         println!("calls: {:?} unpassables: {unpassables:?}", calls);
@@ -348,6 +382,12 @@ impl Game {
                 }
             }
         }
+
+        let (qtree, timer) =
+            measure_time(|| Rc::new(Self::new_qtree((self.xs, self.ys), &self.board, &entities)));
+        self.qtree = qtree;
+
+        println!("qtree: {}", timer);
 
         *self.entities.borrow_mut() = entities;
         self.bullets = Rc::new(bullets);

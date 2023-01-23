@@ -2,6 +2,7 @@ use super::Agent;
 use crate::{
     entity::Entity,
     game::Game,
+    measure_time,
     qtree::QTreePathNode,
     triangle_utils::{center_of_triangle_obj, find_triangle_at},
 };
@@ -15,8 +16,14 @@ fn delaunator_to_vector(p: delaunator::Point) -> Vector2<f64> {
 
 impl Agent {
     pub fn find_path(&mut self, target: [f64; 2], game: &mut Game) -> Result<(), ()> {
-        println!("Agent::find_path");
-        let (found_path, search_tree) = game.qtree.path_find(self.pos, target);
+        let ((found_path, search_tree), time) = measure_time(|| {
+            if let Some(tgt_id) = self.target {
+                game.qtree.path_find(&[self.id, tgt_id], self.pos, target)
+            } else {
+                game.qtree.path_find(&[self.id], self.pos, target)
+            }
+        });
+        println!("Agent::find_path: {:.03} ms", time * 1e3);
         self.search_tree = Some(search_tree);
         if let Some(path) = found_path {
             self.path = path

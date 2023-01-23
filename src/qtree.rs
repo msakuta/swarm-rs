@@ -28,7 +28,8 @@ pub(crate) struct QTree {
 
 #[derive(Debug, Clone)]
 pub(crate) enum CellState {
-    Occupied,
+    Obstacle,
+    Occupied(usize),
     Free,
     Mixed,
 }
@@ -77,7 +78,7 @@ impl QTree {
             dbg_println!("level: {level}, rect: {rect:?}");
         }
         let cell_state = f(rect);
-        if maxlevel <= level || matches!(cell_state, CellState::Occupied | CellState::Free) {
+        if maxlevel <= level || !matches!(cell_state, CellState::Mixed) {
             self.insert(level, parent, cell_state);
             return;
         }
@@ -123,8 +124,9 @@ impl QTree {
             let cell = cells.get(&cell_pos);
             // println!("find({cell_pos:?}): {cell:?}");
             match cell {
+                Some(CellState::Obstacle) => return Some((level, CellState::Obstacle)),
                 Some(CellState::Free) => return Some((level, CellState::Free)),
-                Some(CellState::Occupied) => return Some((level, CellState::Occupied)),
+                Some(CellState::Occupied(id)) => return Some((level, CellState::Occupied(*id))),
                 _ => continue,
             }
         }
@@ -240,18 +242,28 @@ impl QTreePathNode {
 pub(crate) type QTreePath = Vec<QTreePathNode>;
 
 impl QTree {
-    pub fn path_find(&self, start: [f64; 2], end: [f64; 2]) -> (Option<QTreePath>, SearchTree) {
+    pub fn path_find(
+        &self,
+        ignore_id: &[usize],
+        start: [f64; 2],
+        end: [f64; 2],
+    ) -> (Option<QTreePath>, SearchTree) {
         let Some(start_found) = self.find(start) else {
             return (None, SearchTree::new())
         };
-        if matches!(start_found.1, CellState::Occupied) {
+        let blocked = |state| match state {
+            CellState::Obstacle => true,
+            CellState::Occupied(id) => !ignore_id.iter().any(|i| *i == id),
+            _ => false,
+        };
+        if blocked(start_found.1) {
             dbg_println!("Start position {start:?} was occupied!");
             return (None, SearchTree::new());
         }
         let Some(end_found) = self.find(end) else {
             return (None, SearchTree::new())
         };
-        if matches!(end_found.1, CellState::Occupied) {
+        if blocked(end_found.1) {
             dbg_println!("End position {start:?} was occupied!");
             return (None, SearchTree::new());
         }
@@ -473,16 +485,17 @@ pub mod render {
                     cell[1] << (qtree.toplevel - level),
                 );
                 let rect = Rect::new(
-                    x as f64,
-                    y as f64,
-                    x as f64 + width as f64,
-                    y as f64 + width as f64,
+                    x as f64 + 0.1,
+                    y as f64 + 0.1,
+                    x as f64 + width as f64 - 0.1,
+                    y as f64 + width as f64 - 0.1,
                 );
                 let rect = rect.to_path(1.);
                 ctx.stroke(
                     *view_transform * rect,
                     &match state {
-                        CellState::Occupied => Color::rgb8(255, 127, 127),
+                        CellState::Obstacle => Color::rgb8(255, 127, 127),
+                        CellState::Occupied(_) => Color::rgb8(255, 127, 255),
                         CellState::Free => Color::rgb8(0, 255, 127),
                         _ => Color::rgb8(255, 0, 255),
                     },
