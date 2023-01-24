@@ -20,6 +20,9 @@ macro_rules! dbg_println {
 
 pub(crate) type Rect = [i32; 4];
 
+/// A quad tree to divide space for navigation.
+///
+/// It is not actually a quad tree data structure. The algorithm is.
 #[derive(Debug)]
 pub(crate) struct QTree {
     toplevel: usize,

@@ -21,13 +21,13 @@ tree FollowPathAndAvoid = Sequence {
         SimpleAvoidance
         if (!FollowPath) {
             Print (input <- "Blocked, finding path")
-            # Find path again if blocked
-            FindPath (target <- target_pos)
             ReactiveSequence {
                 Drive (direction <- "backward")
                 Randomize (max <- "20", value -> timeoutValue)
                 Timeout (time <- timeoutValue)
             }
+            # Find path again if blocked
+            FindPath (target <- target_pos)
             #AvoidancePlan
         }
     }

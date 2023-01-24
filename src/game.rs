@@ -206,7 +206,7 @@ impl Game {
             .iter()
             .map(|entity| {
                 let entity = entity.borrow();
-                (entity.get_id(), entity.get_shape().buffer(1.))
+                (entity.get_id(), entity.get_shape().buffer(0.).to_aabb())
             })
             .collect();
         qtree.update(shape, &|rect: Rect| {
@@ -221,12 +221,11 @@ impl Game {
                         has_unpassable_local = Some(CellState::Obstacle);
                     } else {
                         let (fx, fy) = (x as f64, y as f64);
-                        for (id, shape) in &shapes {
-                            let CollisionShape::BBox(bbox) = shape;
-                            if bbox.center.x - bbox.xs <= fx
-                                && fx <= bbox.center.x + bbox.xs
-                                && bbox.center.y - bbox.ys <= fy
-                                && fy <= bbox.center.y + bbox.ys
+                        for (id, aabb) in &shapes {
+                            if aabb[0].floor() <= fx
+                                && fx <= aabb[2].ceil()
+                                && aabb[1].floor() <= fy
+                                && fy <= aabb[3].ceil()
                             {
                                 has_unpassable_local = Some(CellState::Occupied(*id));
                                 break;

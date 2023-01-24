@@ -11,6 +11,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use behavior_tree_lite::Lazy;
 use cgmath::{InnerSpace, Matrix2, Rad, Vector2};
 
+pub(crate) type Aabb = [f64; 4];
+
 /// Oriented bounding box
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Obb {
@@ -48,6 +50,21 @@ impl CollisionShape {
             center: obb.center,
             radius: (obb.xs.powf(2.) + obb.ys.powf(2.)).sqrt(),
         }
+    }
+
+    pub(crate) fn to_aabb(&self) -> Aabb {
+        let bbox = self.to_vertices().unwrap();
+        bbox.iter().fold(
+            [bbox[0][0], bbox[0][1], bbox[0][0], bbox[0][1]],
+            |acc, cur| {
+                [
+                    acc[0].min(cur[0]),
+                    acc[1].min(cur[1]),
+                    acc[2].max(cur[0]),
+                    acc[3].max(cur[1]),
+                ]
+            },
+        )
     }
 
     pub(crate) fn buffer(&self, size: f64) -> Self {
