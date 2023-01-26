@@ -1,9 +1,10 @@
 use std::{
     collections::{BinaryHeap, HashMap},
     fmt::Display,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 macro_rules! dbg_println {
     ($fmt:literal) => {
@@ -13,28 +14,217 @@ macro_rules! dbg_println {
     };
     ($fmt:literal, $($args:expr),*) => {
         if DEBUG {
-            println!($fmt, $($args)*);
+            println!($fmt, $($args),*);
         }
     };
 }
 
 pub(crate) type Rect = [i32; 4];
 
-/// A quad tree to divide space for navigation.
+/// A navigation mesh that can find a path and update quickly using quad tree.
 ///
-/// It is not actually a quad tree data structure. The algorithm is.
+/// It consists of two parts; actual quad tree and bitmap cache to allow updating
+/// existing quad tree quickly.
 #[derive(Debug)]
-pub(crate) struct QTree {
-    toplevel: usize,
-    pub levels: Vec<HashMap<[i32; 2], CellState>>,
+pub(crate) struct QTreeSearcher {
+    qtree: QTree,
+    cache_map: CacheMap,
 }
 
-#[derive(Debug, Clone)]
+impl QTreeSearcher {
+    pub(crate) fn new() -> Self {
+        Self {
+            qtree: QTree::new(),
+            cache_map: CacheMap::new(),
+        }
+    }
+
+    pub fn initialize(&mut self, shape: (usize, usize), f: &impl Fn(Rect) -> CellState) {
+        let toplevel = shape.0.max(shape.1);
+        let Some(topbit) = (0..64).rev().find(|bit| {
+            toplevel & (1 << bit) != 0
+        }) else { return };
+        self.qtree.toplevel = topbit;
+
+        self.cache_map.cache(topbit, shape, f);
+
+        dbg_println!("maxlevel: {topbit}");
+
+        self.qtree
+            .recurse_update(0, [0, 0], &|rect| self.cache_map.query(rect));
+
+        for (i, cell) in self.qtree.levels.iter().enumerate() {
+            dbg_println!("level {i}: {}", cell.len());
+        }
+    }
+
+    pub fn update(&mut self, pos: [i32; 2], pix: CellState) -> Result<(), String> {
+        let res = self.cache_map.update(pos, pix)?;
+        if res {
+            let mut level = self.qtree.toplevel;
+            let mut cell_pos = pos;
+            loop {
+                if let Some(tile) = self
+                    .qtree
+                    .levels
+                    .get_mut(level)
+                    .and_then(|level| level.get_mut(&cell_pos))
+                {
+                    if !matches!(tile, CellState::Mixed) {
+                        if level == self.qtree.toplevel {
+                            *tile = pix;
+                        } else {
+                            *tile = CellState::Mixed;
+                            self.qtree.recurse_update(level, cell_pos, &|rect| {
+                                let res = self.cache_map.query(rect);
+                                dbg_println!("Updating query({level}): {rect:?} -> {res:?}");
+                                res
+                            });
+                        }
+                        return Ok(());
+                    }
+                }
+                if level == 0 {
+                    return Err("Could not find a cell to update".to_string());
+                }
+                level -= 1;
+                cell_pos = [cell_pos[0] / 2, cell_pos[1] / 2];
+            }
+        }
+        Ok(())
+    }
+
+    pub fn path_find(
+        &self,
+        ignore_id: &[usize],
+        start: [f64; 2],
+        end: [f64; 2],
+    ) -> (Option<QTreePath>, SearchTree) {
+        self.qtree.path_find(ignore_id, start, end)
+    }
+}
+
+/// A bitmap to update quad tree using only changed parts of the map.
+///
+/// It has array index indirection to reduce the map size, since CellState tends to be
+/// much larger than u32.
+#[derive(Debug)]
+struct CacheMap {
+    /// An internal map having the size (2 ^ toplevel) ^ 2, indicating index into [`cache_buf`]
+    map: Vec<u32>,
+    /// An array of actual values in [`cache_map`], extracted to reduce the pixel size.
+    buf: Vec<CellState>,
+    topbit: usize,
+    size: usize,
+}
+
+static QUERY_CALLS: AtomicUsize = AtomicUsize::new(0);
+static UNPASSABLES: AtomicUsize = AtomicUsize::new(0);
+
+impl CacheMap {
+    fn new() -> Self {
+        Self {
+            map: vec![],
+            buf: vec![],
+            topbit: 0,
+            size: 0,
+        }
+    }
+
+    fn cache(&mut self, topbit: usize, shape: (usize, usize), f: &impl Fn(Rect) -> CellState) {
+        self.topbit = topbit;
+        self.size = 1 << topbit;
+        self.map = vec![0; self.size * self.size];
+        for y in 0..shape.0 {
+            for x in 0..shape.1 {
+                let pix = f([x as i32, y as i32, x as i32 + 1, y as i32 + 1]);
+                if let Some((idx, _)) = self.buf.iter().enumerate().find(|(_, b)| **b == pix) {
+                    self.map[x + y * self.size] = idx as u32;
+                } else {
+                    self.map[x + y * self.size] = self.buf.len() as u32;
+                    self.buf.push(pix);
+                }
+            }
+        }
+        dbg_println!(
+            "cache_map size: {}, cache_buf: {:?}",
+            std::mem::size_of::<u32>() * self.map.len(),
+            self.buf
+        );
+    }
+
+    fn update(&mut self, pos: [i32; 2], pix: CellState) -> Result<bool, String> {
+        if pos[0] < 0 || self.size as i32 <= pos[0] || pos[1] < 0 || self.size as i32 <= pos[1] {
+            return Err("Out of bounds!".to_string());
+        }
+
+        let existing = &mut self.map[pos[0] as usize + pos[1] as usize * self.size];
+
+        if self.buf[*existing as usize] != pix {
+            dbg_println!("Updating cache_map {pos:?}: {:?} -> {:?}", *existing, pix);
+
+            if let Some((idx, _)) = self.buf.iter().enumerate().find(|(_, buf)| **buf == pix) {
+                *existing = idx as u32;
+            } else {
+                let idx = self.buf.len();
+                self.buf.push(pix);
+                *existing = idx as u32;
+            }
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn query(&self, rect: Rect) -> CellState {
+        let mut has_passable = false;
+        let mut has_unpassable = None;
+        for x in rect[0]..rect[2] {
+            for y in rect[1]..rect[3] {
+                QUERY_CALLS.fetch_add(1, Ordering::Relaxed);
+                let mut has_unpassable_local = None;
+                let pix = &self.buf[self.map[x as usize + y as usize * self.size] as usize];
+                if !matches!(pix, CellState::Free) {
+                    UNPASSABLES.fetch_add(1, Ordering::Relaxed);
+                    has_unpassable_local = Some(*pix);
+                }
+                if has_unpassable_local.is_none() {
+                    has_passable = true;
+                }
+                if has_unpassable.is_none() {
+                    has_unpassable = has_unpassable_local;
+                }
+                if has_passable && has_unpassable.is_some() {
+                    return CellState::Mixed;
+                }
+            }
+        }
+        if has_passable {
+            CellState::Free
+        } else if let Some(state) = has_unpassable {
+            state
+        } else {
+            CellState::Obstacle
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CellState {
     Obstacle,
     Occupied(usize),
     Free,
     Mixed,
+}
+
+/// A quad tree to divide space for navigation.
+///
+/// It is not actually a quad tree data structure. The algorithm is.
+#[derive(Debug)]
+struct QTree {
+    toplevel: usize,
+    pub levels: Vec<HashMap<[i32; 2], CellState>>,
 }
 
 impl QTree {
@@ -49,27 +239,7 @@ impl QTree {
         1 << (self.toplevel - level)
     }
 
-    pub fn update(&mut self, shape: (usize, usize), f: &impl Fn(Rect) -> CellState) {
-        let toplevel = shape.0.max(shape.1);
-        let Some(topbit) = (0..64).rev().find(|bit| {
-            toplevel & (1 << bit) != 0
-        }) else { return };
-        self.toplevel = topbit;
-        dbg_println!("maxlevel: {topbit}");
-        self.recurse_update(0, topbit, [0, 0], f);
-
-        for (i, cell) in self.levels.iter().enumerate() {
-            dbg_println!("level {i}: {}", cell.len());
-        }
-    }
-
-    fn recurse_update(
-        &mut self,
-        level: usize,
-        maxlevel: usize,
-        parent: [i32; 2],
-        f: &impl Fn(Rect) -> CellState,
-    ) {
+    fn recurse_update(&mut self, level: usize, parent: [i32; 2], f: &impl Fn(Rect) -> CellState) {
         let width = self.width(level) as i32;
         let rect = [
             parent[0] * width,
@@ -81,19 +251,14 @@ impl QTree {
             dbg_println!("level: {level}, rect: {rect:?}");
         }
         let cell_state = f(rect);
-        if maxlevel <= level || !matches!(cell_state, CellState::Mixed) {
+        if self.toplevel <= level || !matches!(cell_state, CellState::Mixed) {
             self.insert(level, parent, cell_state);
             return;
         }
+        self.insert(level, parent, CellState::Mixed);
         for x in 0..2i32 {
             for y in 0..2i32 {
-                self.insert(level, parent, CellState::Mixed);
-                self.recurse_update(
-                    level + 1,
-                    maxlevel,
-                    [parent[0] * 2 + x, parent[1] * 2 + y],
-                    f,
-                );
+                self.recurse_update(level + 1, [parent[0] * 2 + x, parent[1] * 2 + y], f);
             }
         }
     }
@@ -473,6 +638,8 @@ pub mod render {
 
         // dbg!(data.global_render_time);
         // let cur = (data.global_render_time / 1000.).rem_euclid(8.) as usize;
+
+        let qtree = &qtree.borrow().qtree;
 
         for (level, cells) in qtree.levels.iter().enumerate().take(8) {
             // let level = cur;

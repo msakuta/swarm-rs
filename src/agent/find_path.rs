@@ -17,10 +17,11 @@ fn delaunator_to_vector(p: delaunator::Point) -> Vector2<f64> {
 impl Agent {
     pub fn find_path(&mut self, target: [f64; 2], game: &mut Game) -> Result<(), ()> {
         let ((found_path, search_tree), time) = measure_time(|| {
+            let qtree = game.qtree.borrow();
             if let Some(tgt_id) = self.target {
-                game.qtree.path_find(&[self.id, tgt_id], self.pos, target)
+                qtree.path_find(&[self.id, tgt_id], self.pos, target)
             } else {
-                game.qtree.path_find(&[self.id], self.pos, target)
+                qtree.path_find(&[self.id], self.pos, target)
             }
         });
         println!("Agent::find_path: {:.03} ms", time * 1e3);

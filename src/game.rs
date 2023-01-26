@@ -15,7 +15,7 @@ use crate::{
     measure_time,
     mesh::{create_mesh, Mesh, MeshResult},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
-    qtree::{CellState, QTree, Rect},
+    qtree::{CellState, QTreeSearcher, Rect},
     spawner::Spawner,
     temp_ents::TempEnt,
     triangle_utils::{check_shape_in_mesh, find_triangle_at},
@@ -88,7 +88,7 @@ pub(crate) struct Game {
     pub(crate) triangle_profiler: Rc<RefCell<Profiler>>,
     pub(crate) pixel_profiler: Rc<RefCell<Profiler>>,
     pub(crate) source: Rc<String>,
-    pub(crate) qtree: Rc<QTree>,
+    pub(crate) qtree: Rc<RefCell<QTreeSearcher>>,
 }
 
 impl Game {
@@ -126,7 +126,7 @@ impl Game {
             triangle_profiler: Rc::new(RefCell::new(Profiler::new())),
             pixel_profiler: Rc::new(RefCell::new(Profiler::new())),
             source: Rc::new(String::new()),
-            qtree: Rc::new(qtree),
+            qtree: Rc::new(RefCell::new(qtree)),
         }
     }
 
@@ -191,15 +191,19 @@ impl Game {
             BoardType::Perlin => Self::create_perlin_board(shape, seed, simplify),
         };
 
-        self.qtree = Rc::new(Self::new_qtree(shape, &board, &[]));
+        self.qtree = Rc::new(RefCell::new(Self::new_qtree(shape, &board, &[])));
         self.board = Rc::new(board);
         self.mesh = Rc::new(mesh);
         self.entities = Rc::new(RefCell::new(vec![]));
         self.bullets = Rc::new(vec![]);
     }
 
-    fn new_qtree(shape: (usize, usize), board: &Board, entities: &[RefCell<Entity>]) -> QTree {
-        let mut qtree = QTree::new();
+    fn new_qtree(
+        shape: (usize, usize),
+        board: &Board,
+        entities: &[RefCell<Entity>],
+    ) -> QTreeSearcher {
+        let mut qtree = QTreeSearcher::new();
         let calls: AtomicUsize = AtomicUsize::new(0);
         let unpassables: AtomicUsize = AtomicUsize::new(0);
         let shapes: Vec<_> = entities
@@ -209,7 +213,7 @@ impl Game {
                 (entity.get_id(), entity.get_shape().buffer(0.).to_aabb())
             })
             .collect();
-        qtree.update(shape, &|rect: Rect| {
+        qtree.initialize(shape, &|rect: Rect| {
             let mut has_passable = false;
             let mut has_unpassable = None;
             for x in rect[0]..rect[2] {
@@ -382,11 +386,27 @@ impl Game {
             }
         }
 
-        let (qtree, timer) =
-            measure_time(|| Rc::new(Self::new_qtree((self.xs, self.ys), &self.board, &entities)));
-        self.qtree = qtree;
+        // let (qtree, timer) =
+        //     measure_time(|| Rc::new(Self::new_qtree((self.xs, self.ys), &self.board, &entities)));
+        // self.qtree = qtree;
 
-        println!("qtree: {}", timer);
+        let (_, timer) = measure_time(|| {
+            let mut qtree = self.qtree.borrow_mut();
+            for entity in &entities {
+                let entity = entity.borrow();
+                let id = entity.get_id();
+                let aabb = entity.get_shape().to_aabb();
+                for y in aabb[1].floor() as i32..aabb[3].ceil() as i32 {
+                    for x in aabb[0].floor() as i32..aabb[2].ceil() as i32 {
+                        if let Err(e) = qtree.update([x, y], CellState::Occupied(id)) {
+                            println!("qtree.update error: {e}");
+                        }
+                    }
+                }
+            }
+        });
+
+        println!("qtree update: {}", timer);
 
         *self.entities.borrow_mut() = entities;
         self.bullets = Rc::new(bullets);
