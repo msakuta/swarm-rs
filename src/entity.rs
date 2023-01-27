@@ -59,6 +59,13 @@ impl Entity {
         }
     }
 
+    pub(crate) fn get_last_state(&self) -> Option<CollisionShape> {
+        match self {
+            Entity::Agent(agent) => agent.get_last_state().map(|state| state.collision_shape()),
+            Entity::Spawner(spawner) => None,
+        }
+    }
+
     pub(crate) fn get_active(&self) -> bool {
         match self {
             Entity::Agent(agent) => agent.active,

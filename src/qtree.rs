@@ -1,10 +1,11 @@
 use std::{
+    cell,
     collections::{BinaryHeap, HashMap},
     fmt::Display,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-const DEBUG: bool = true;
+const DEBUG: bool = false;
 
 macro_rules! dbg_println {
     ($fmt:literal) => {
@@ -77,10 +78,11 @@ impl QTreeSearcher {
                             *tile = CellState::Mixed;
                             self.qtree.recurse_update(level, cell_pos, &|rect| {
                                 let res = self.cache_map.query(rect);
-                                dbg_println!("Updating query({level}): {rect:?} -> {res:?}");
+                                // dbg_println!("Updating query({level}): {rect:?} -> {res:?}");
                                 res
                             });
                         }
+                        self.qtree.try_merge(self.qtree.toplevel, pos);
                         return Ok(());
                     }
                 }
@@ -161,7 +163,7 @@ impl CacheMap {
         let existing = &mut self.map[pos[0] as usize + pos[1] as usize * self.size];
 
         if self.buf[*existing as usize] != pix {
-            dbg_println!("Updating cache_map {pos:?}: {:?} -> {:?}", *existing, pix);
+            // dbg_println!("Updating cache_map {pos:?}: {:?} -> {:?}", *existing, pix);
 
             if let Some((idx, _)) = self.buf.iter().enumerate().find(|(_, buf)| **buf == pix) {
                 *existing = idx as u32;
@@ -259,6 +261,66 @@ impl QTree {
         for x in 0..2i32 {
             for y in 0..2i32 {
                 self.recurse_update(level + 1, [parent[0] * 2 + x, parent[1] * 2 + y], f);
+            }
+        }
+    }
+
+    fn try_merge(&mut self, level: usize, cell_pos: [i32; 2]) {
+        if 1 <= level {
+            let super_pixels = || {
+                (cell_pos[0] / 2 * 2..=cell_pos[0] / 2 * 2 + 1)
+                    .map(|ix| {
+                        (cell_pos[1] / 2 * 2..=cell_pos[1] / 2 * 2 + 1).map(move |iy| [ix, iy])
+                    })
+                    .flatten()
+            };
+
+            #[derive(Debug, PartialEq, Eq)]
+            enum Homogeneity {
+                Homogeneous(CellState),
+                Heterogeneous,
+            }
+
+            let homogeneous = self.levels.get(level).and_then(|level| {
+                super_pixels()
+                    .map(|pos| {
+                        level
+                            .get(&pos)
+                            .map(|state| Homogeneity::Homogeneous(*state))
+                    })
+                    .reduce(|acc, cur| {
+                        if let Some((acc, cur)) = acc.zip(cur) {
+                            if acc == cur {
+                                Some(acc)
+                            } else {
+                                Some(Homogeneity::Heterogeneous)
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten()
+            });
+            dbg_println!(
+                "homogeneous? {homogeneous:?} for {:?}: {:?}",
+                super_pixels().collect::<Vec<_>>(),
+                super_pixels()
+                    .map(|pos| self.levels.get(level).and_then(|level| level.get(&pos)))
+                    .collect::<Vec<_>>()
+            );
+            match homogeneous {
+                Some(Homogeneity::Homogeneous(pix)) => {
+                    for pos in super_pixels() {
+                        if let Some(level) = self.levels.get_mut(level) {
+                            level.remove(&pos);
+                        }
+                    }
+                    self.levels
+                        .get_mut(level - 1)
+                        .and_then(|level| level.insert([cell_pos[0] / 2, cell_pos[1] / 2], pix));
+                }
+                Some(Homogeneity::Heterogeneous) => (),
+                None => self.try_merge(level - 1, [cell_pos[0] / 2, cell_pos[1] / 2]),
             }
         }
     }
@@ -511,7 +573,7 @@ impl QTree {
 
         while let Some(state) = open_set.pop() {
             if state.cost < 10. {
-                dbg_println!("  Searching from {state} of {}", open_set.len());
+                // dbg_println!("  Searching from {state} of {}", open_set.len());
             }
             for (nei_level, nei_idx) in self.find_neighbors(state.level, state.idx) {
                 // let nei_idx = [state.idx[0] + neighbor[0], state.idx[1] + neighbor[1]];
@@ -531,9 +593,9 @@ impl QTree {
                 let new_cost = state.cost + self.width(state.level) as f64;
                 let cell = self.levels[nei_level].get(&nei_idx);
                 if state.cost < 10. {
-                    dbg_println!(
-                        "    Neighbor: [{nei_level}]{nei_idx:?}: {cell:?}, new_cost: {new_cost}"
-                    );
+                    // dbg_println!(
+                    //     "    Neighbor: [{nei_level}]{nei_idx:?}: {cell:?}, new_cost: {new_cost}"
+                    // );
                 }
                 let Some(cell) = cell else {
                     continue

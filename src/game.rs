@@ -392,17 +392,28 @@ impl Game {
 
         let (_, timer) = measure_time(|| {
             let mut qtree = self.qtree.borrow_mut();
-            for entity in &entities {
-                let entity = entity.borrow();
-                let id = entity.get_id();
-                let aabb = entity.get_shape().to_aabb();
+
+            let mut update_aabb = |aabb: [f64; 4], cell_state: CellState| {
                 for y in aabb[1].floor() as i32..aabb[3].ceil() as i32 {
                     for x in aabb[0].floor() as i32..aabb[2].ceil() as i32 {
-                        if let Err(e) = qtree.update([x, y], CellState::Occupied(id)) {
+                        if let Err(e) = qtree.update([x, y], cell_state) {
                             println!("qtree.update error: {e}");
                         }
                     }
                 }
+            };
+
+            for shape in entities
+                .iter()
+                .filter_map(|entity| entity.borrow().get_last_state())
+            {
+                update_aabb(shape.to_aabb(), CellState::Free);
+            }
+
+            for entity in &entities {
+                let entity = entity.borrow();
+                let id = entity.get_id();
+                update_aabb(entity.get_shape().to_aabb(), CellState::Occupied(id));
             }
         });
 

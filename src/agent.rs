@@ -65,6 +65,7 @@ pub(crate) struct Agent {
     pub path: QTreePath,
     pub trace: VecDeque<[f64; 2]>,
     last_motion_result: Option<MotionResult>,
+    last_state: Option<AgentState>,
     behavior_tree: Option<BehaviorTree>,
     blackboard: Blackboard,
 }
@@ -116,6 +117,7 @@ impl Agent {
             path: vec![],
             trace: VecDeque::new(),
             last_motion_result: None,
+            last_state: None,
             behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
         })
@@ -128,6 +130,10 @@ impl Agent {
             ys: AGENT_HALFWIDTH,
             orient: self.orient,
         })
+    }
+
+    pub(crate) fn get_last_state(&self) -> Option<AgentState> {
+        self.last_state
     }
 
     pub(crate) fn get_health_rate(&self) -> f64 {
@@ -394,6 +400,12 @@ impl Agent {
             // eprintln!("[{}] BehaviorTree ticked! {:?}", self.id, res);
             self.behavior_tree = Some(tree);
             self.blackboard = ctx.take_blackboard();
+
+            if command.is_some() {
+                self.last_state = Some(self.to_state());
+            } else {
+                self.last_state = None;
+            }
 
             match command {
                 Some(Command::Drive(com)) => {
