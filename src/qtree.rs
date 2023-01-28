@@ -318,6 +318,7 @@ impl QTree {
                     self.levels
                         .get_mut(level - 1)
                         .and_then(|level| level.insert([cell_pos[0] / 2, cell_pos[1] / 2], pix));
+                    self.try_merge(level - 1, [cell_pos[0] / 2, cell_pos[1] / 2])
                 }
                 Some(Homogeneity::Heterogeneous) => (),
                 None => self.try_merge(level - 1, [cell_pos[0] / 2, cell_pos[1] / 2]),
