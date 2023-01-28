@@ -58,6 +58,10 @@ impl QTreeSearcher {
         }
     }
 
+    pub fn start_update(&mut self) {
+        self.cache_map.start_update();
+    }
+
     pub fn update(&mut self, pos: [i32; 2], pix: CellState) -> Result<(), String> {
         let res = self.cache_map.update(pos, pix)?;
         if res {
@@ -95,8 +99,8 @@ impl QTreeSearcher {
         Ok(())
     }
 
-    pub fn tick(&mut self) {
-        self.cache_map.tick();
+    pub fn finish_update(&mut self) {
+        self.cache_map.finish_update();
     }
 
     pub fn path_find(
@@ -123,6 +127,7 @@ struct CacheMap {
     size: usize,
     /// A history of recently updated cells for visualization
     fresh_cells: HashMap<[i32; 2], usize>,
+    prev_map: Option<Vec<u32>>,
 }
 
 const FRESH_TICKS: usize = 8;
@@ -138,6 +143,7 @@ impl CacheMap {
             topbit: 0,
             size: 0,
             fresh_cells: HashMap::new(),
+            prev_map: None,
         }
     }
 
@@ -167,6 +173,10 @@ impl CacheMap {
         );
     }
 
+    fn start_update(&mut self) {
+        self.prev_map = Some(self.map.clone());
+    }
+
     fn update(&mut self, pos: [i32; 2], pix: CellState) -> Result<bool, String> {
         if pos[0] < 0 || self.size as i32 <= pos[0] || pos[1] < 0 || self.size as i32 <= pos[1] {
             return Err("Out of bounds!".to_string());
@@ -185,15 +195,35 @@ impl CacheMap {
                 *existing = idx as u32;
             }
 
-            self.fresh_cells.insert(pos, FRESH_TICKS);
-
             Ok(true)
         } else {
             Ok(false)
         }
     }
 
-    fn tick(&mut self) {
+    fn finish_update(&mut self) {
+        if let Some(prev_map) = &self.prev_map {
+            for i in
+                self.map
+                    .iter()
+                    .zip(prev_map.iter())
+                    .enumerate()
+                    .filter_map(
+                        |(i, (cur, prev))| {
+                            if *cur != *prev {
+                                Some(i)
+                            } else {
+                                None
+                            }
+                        },
+                    )
+            {
+                self.fresh_cells.insert(
+                    [(i % self.size) as i32, (i / self.size) as i32],
+                    FRESH_TICKS,
+                );
+            }
+        }
         let mut to_delete = vec![];
         for fresh_cell in &mut self.fresh_cells {
             if 1 < *fresh_cell.1 {

@@ -445,6 +445,8 @@ impl Game {
             let mut qtree = self.qtree.borrow_mut();
             let entities = self.entities.borrow();
 
+            qtree.start_update();
+
             fn update_aabb(
                 qtree: &mut QTreeSearcher,
                 aabb: [f64; 4],
@@ -495,7 +497,7 @@ impl Game {
                 });
             }
 
-            qtree.tick();
+            qtree.finish_update();
         });
 
         self.qtree_profiler.borrow_mut().add(timer);
