@@ -443,34 +443,54 @@ impl Game {
             let mut qtree = self.qtree.borrow_mut();
             let entities = self.entities.borrow();
 
-            let mut update_aabb = |aabb: [f64; 4], cell_state: CellState| {
+            fn update_aabb(
+                qtree: &mut QTreeSearcher,
+                aabb: [f64; 4],
+                cell_state: impl Fn([i32; 2]) -> CellState,
+            ) {
                 for y in aabb[1].floor() as i32..aabb[3].ceil() as i32 {
                     for x in aabb[0].floor() as i32..aabb[2].ceil() as i32 {
-                        if let Err(e) = qtree.update([x, y], cell_state) {
+                        if let Err(e) = qtree.update([x, y], cell_state([x, y])) {
                             println!("qtree.update error: {e}");
                         }
                     }
                 }
+            }
+
+            let get_background = |pos: [i32; 2]| {
+                if is_passable_at(
+                    &self.board,
+                    (self.xs, self.ys),
+                    [pos[0] as f64 + 0.5, pos[1] as f64 + 0.5],
+                ) {
+                    CellState::Free
+                } else {
+                    CellState::Obstacle
+                }
             };
 
+            // Clear the previous cells
             for shape in entities
                 .iter()
                 .filter_map(|entity| entity.borrow().get_last_state())
             {
-                update_aabb(shape.to_aabb(), CellState::Free);
+                update_aabb(&mut qtree, shape.to_aabb(), get_background);
             }
 
+            // Update cells of live entities and clear the cells of dead ones
             for entity in entities.iter() {
                 let entity = entity.borrow();
                 let id = entity.get_id();
-                update_aabb(
-                    entity.get_shape().to_aabb(),
-                    if entity.get_active() {
+                let aabb = entity.get_shape().to_aabb();
+                update_aabb(&mut qtree, aabb, |pos| {
+                    if let CellState::Obstacle = get_background(pos) {
+                        CellState::Obstacle
+                    } else if entity.get_active() {
                         CellState::Occupied(id)
                     } else {
-                        CellState::Free
-                    },
-                );
+                        get_background(pos)
+                    }
+                });
             }
         });
 
