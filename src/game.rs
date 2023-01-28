@@ -87,6 +87,7 @@ pub(crate) struct Game {
     pub(crate) temp_ents: Rc<RefCell<Vec<TempEnt>>>,
     pub(crate) triangle_profiler: Rc<RefCell<Profiler>>,
     pub(crate) pixel_profiler: Rc<RefCell<Profiler>>,
+    pub(crate) qtree_profiler: Rc<RefCell<Profiler>>,
     pub(crate) source: Rc<String>,
     pub(crate) qtree: Rc<RefCell<QTreeSearcher>>,
 }
@@ -125,6 +126,7 @@ impl Game {
             temp_ents: Rc::new(RefCell::new(vec![])),
             triangle_profiler: Rc::new(RefCell::new(Profiler::new())),
             pixel_profiler: Rc::new(RefCell::new(Profiler::new())),
+            qtree_profiler: Rc::new(RefCell::new(Profiler::new())),
             source: Rc::new(String::new()),
             qtree: Rc::new(RefCell::new(qtree)),
         }
@@ -494,7 +496,7 @@ impl Game {
             }
         });
 
-        println!("qtree update: {}", timer);
+        self.qtree_profiler.borrow_mut().add(timer);
 
         let mut entities: Vec<_> = std::mem::take(&mut *self.entities.borrow_mut())
             .into_iter()

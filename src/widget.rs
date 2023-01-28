@@ -173,8 +173,8 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 Label::new(|data: &AppData, _: &_| {
                     let profiler = data.game.triangle_profiler.borrow();
                     format!(
-                        "Triangle time: {:.09}s, calls: {} size: {}, refs: {}",
-                        profiler.get_average(),
+                        "Triangle time: {:.06}ms, calls: {} size: {}, refs: {}",
+                        profiler.get_average() * 1e3,
                         profiler.get_count(),
                         std::mem::size_of::<AppData>(),
                         Rc::strong_count(&data.game.mesh)
@@ -185,9 +185,19 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             .with_child(Flex::row().with_flex_child(
                 Label::new(|data: &AppData, _: &_| {
                     format!(
-                        "Pixel time: {:.09}s, calls: {}",
-                        data.game.pixel_profiler.borrow().get_average(),
+                        "Pixel time: {:.06}ms, calls: {}",
+                        data.game.pixel_profiler.borrow().get_average() * 1e3,
                         data.game.pixel_profiler.borrow().get_count()
+                    )
+                }),
+                1.,
+            ))
+            .with_child(Flex::row().with_flex_child(
+                Label::new(|data: &AppData, _: &_| {
+                    format!(
+                        "QTree time: {:.06}ms, calls: {}",
+                        data.game.qtree_profiler.borrow().get_average() * 1e3,
+                        data.game.qtree_profiler.borrow().get_count()
                     )
                 }),
                 1.,
