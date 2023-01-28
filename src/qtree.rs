@@ -174,7 +174,14 @@ impl CacheMap {
     }
 
     fn start_update(&mut self) {
-        self.prev_map = Some(self.map.clone());
+        if self
+            .prev_map
+            .as_ref()
+            .map(|prev_map| prev_map.len() != self.map.len())
+            .unwrap_or(true)
+        {
+            self.prev_map = Some(self.map.clone());
+        }
     }
 
     fn update(&mut self, pos: [i32; 2], pix: CellState) -> Result<bool, String> {
@@ -202,28 +209,28 @@ impl CacheMap {
     }
 
     fn finish_update(&mut self) {
-        if let Some(prev_map) = &self.prev_map {
-            for i in
-                self.map
-                    .iter()
-                    .zip(prev_map.iter())
-                    .enumerate()
-                    .filter_map(
-                        |(i, (cur, prev))| {
-                            if *cur != *prev {
-                                Some(i)
-                            } else {
-                                None
-                            }
-                        },
-                    )
-            {
-                self.fresh_cells.insert(
-                    [(i % self.size) as i32, (i / self.size) as i32],
-                    FRESH_TICKS,
-                );
-            }
+        let Some(prev_map) = &mut self.prev_map else { return };
+
+        for i in self
+            .map
+            .iter()
+            .zip(prev_map.iter_mut())
+            .enumerate()
+            .filter_map(|(i, (cur, prev))| {
+                if *cur != *prev {
+                    *prev = *cur;
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+        {
+            self.fresh_cells.insert(
+                [(i % self.size) as i32, (i / self.size) as i32],
+                FRESH_TICKS,
+            );
         }
+
         let mut to_delete = vec![];
         for fresh_cell in &mut self.fresh_cells {
             if 1 < *fresh_cell.1 {
