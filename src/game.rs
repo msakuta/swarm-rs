@@ -494,6 +494,8 @@ impl Game {
                     }
                 });
             }
+
+            qtree.tick();
         });
 
         self.qtree_profiler.borrow_mut().add(timer);

@@ -95,6 +95,10 @@ impl QTreeSearcher {
         Ok(())
     }
 
+    pub fn tick(&mut self) {
+        self.cache_map.tick();
+    }
+
     pub fn path_find(
         &self,
         ignore_id: &[usize],
@@ -117,7 +121,11 @@ struct CacheMap {
     buf: Vec<CellState>,
     topbit: usize,
     size: usize,
+    /// A history of recently updated cells for visualization
+    fresh_cells: HashMap<[i32; 2], usize>,
 }
+
+const FRESH_TICKS: usize = 8;
 
 static QUERY_CALLS: AtomicUsize = AtomicUsize::new(0);
 static UNPASSABLES: AtomicUsize = AtomicUsize::new(0);
@@ -129,7 +137,12 @@ impl CacheMap {
             buf: vec![],
             topbit: 0,
             size: 0,
+            fresh_cells: HashMap::new(),
         }
+    }
+
+    fn get(&self, pos: [i32; 2]) -> CellState {
+        self.buf[self.map[pos[0] as usize + pos[1] as usize * self.size] as usize]
     }
 
     fn cache(&mut self, topbit: usize, shape: (usize, usize), f: &impl Fn(Rect) -> CellState) {
@@ -172,9 +185,26 @@ impl CacheMap {
                 *existing = idx as u32;
             }
 
+            self.fresh_cells.insert(pos, FRESH_TICKS);
+
             Ok(true)
         } else {
             Ok(false)
+        }
+    }
+
+    fn tick(&mut self) {
+        let mut to_delete = vec![];
+        for fresh_cell in &mut self.fresh_cells {
+            if 1 < *fresh_cell.1 {
+                *fresh_cell.1 -= 1;
+            } else {
+                to_delete.push(*fresh_cell.0);
+            }
+        }
+
+        for to_delete in to_delete {
+            self.fresh_cells.remove(&to_delete);
         }
     }
 
@@ -693,7 +723,7 @@ pub mod render {
 
     use crate::{app_data::AppData, paint_board::to_point};
 
-    use super::{CellState, SearchTree};
+    use super::{CellState, SearchTree, FRESH_TICKS};
 
     pub(crate) fn paint_qtree(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
         let qtree = &data.game.qtree;
@@ -701,7 +731,34 @@ pub mod render {
         // dbg!(data.global_render_time);
         // let cur = (data.global_render_time / 1000.).rem_euclid(8.) as usize;
 
-        let qtree = &qtree.borrow().qtree;
+        let qtree_searcher = qtree.borrow();
+        let width = 1;
+        const CELL_MARGIN: f64 = 0.1;
+
+        for (&[x, y], &freshness) in &qtree_searcher.cache_map.fresh_cells {
+            let rect = Rect::new(
+                x as f64 + CELL_MARGIN,
+                y as f64 + CELL_MARGIN,
+                x as f64 + width as f64 - CELL_MARGIN,
+                y as f64 + width as f64 - CELL_MARGIN,
+            );
+            let rect = rect.to_path(1.);
+            let color = match qtree_searcher.cache_map.get([x, y]) {
+                CellState::Obstacle => (255, 127, 127),
+                CellState::Occupied(_) => (255, 127, 255),
+                CellState::Free => (0, 255, 127),
+                _ => (255, 0, 255),
+            };
+            let brush = Color::rgba8(
+                color.0,
+                color.1,
+                color.2,
+                (freshness * 127 / FRESH_TICKS) as u8,
+            );
+            ctx.fill(*view_transform * rect, &brush);
+        }
+
+        let qtree = &qtree_searcher.qtree;
 
         for (level, cells) in qtree.levels.iter().enumerate().take(8) {
             // let level = cur;
@@ -717,10 +774,10 @@ pub mod render {
                     cell[1] << (qtree.toplevel - level),
                 );
                 let rect = Rect::new(
-                    x as f64 + 0.1,
-                    y as f64 + 0.1,
-                    x as f64 + width as f64 - 0.1,
-                    y as f64 + width as f64 - 0.1,
+                    x as f64 + CELL_MARGIN,
+                    y as f64 + CELL_MARGIN,
+                    x as f64 + width as f64 - CELL_MARGIN,
+                    y as f64 + width as f64 - CELL_MARGIN,
                 );
                 let rect = rect.to_path(1.);
                 ctx.stroke(
