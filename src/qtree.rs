@@ -42,7 +42,7 @@ impl QTreeSearcher {
 
     pub fn initialize(&mut self, shape: (usize, usize), f: &impl Fn(Rect) -> CellState) {
         let toplevel = shape.0.max(shape.1);
-        let Some(topbit) = (0..64).rev().find(|bit| {
+        let Some(topbit) = (0..std::mem::size_of::<usize>() * 8).rev().find(|bit| {
             toplevel & (1 << bit) != 0
         }) else { return };
         self.qtree.toplevel = topbit;
