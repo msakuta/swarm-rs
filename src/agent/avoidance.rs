@@ -69,7 +69,7 @@ impl From<AgentState> for Vector2<f64> {
 pub(crate) struct PathNode {
     pub x: f64,
     pub y: f64,
-    pub backward: bool,
+    pub _backward: bool,
 }
 
 impl From<[f64; 2]> for PathNode {
@@ -77,7 +77,7 @@ impl From<[f64; 2]> for PathNode {
         Self {
             x: a[0],
             y: a[1],
-            backward: false,
+            _backward: false,
         }
     }
 }
@@ -93,7 +93,7 @@ impl From<&SearchNode> for PathNode {
         PathNode {
             x: node.state.x,
             y: node.state.y,
-            backward: node.speed < 0.,
+            _backward: node.speed < 0.,
         }
     }
 }

@@ -80,7 +80,7 @@ pub(crate) const BULLET_RADIUS: f64 = 0.15;
 pub(crate) const BULLET_SPEED: f64 = 2.;
 
 struct GameEnv<'a> {
-    game: &'a mut Game,
+    _game: &'a mut Game,
     entities: &'a [RefCell<Entity>],
 }
 
@@ -95,7 +95,7 @@ impl Agent {
         let id = *id_gen;
         *id_gen += 1;
 
-        let (tree, build_time) = measure_time(|| build_tree(behavior_source));
+        let (tree, _build_time) = measure_time(|| build_tree(behavior_source));
         let tree = tree?;
         // println!("tree build: {}", build_time);
 
@@ -241,7 +241,7 @@ impl Agent {
         }
     }
 
-    fn do_simple_avoidance(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) -> bool {
+    fn do_simple_avoidance(&mut self, _game: &mut Game, entities: &[RefCell<Entity>]) -> bool {
         let Some(steer) = &self.avoidance_plan else {
             return false
         };
@@ -431,9 +431,12 @@ impl Agent {
             }
         }
 
-        if let (Some(_), _time) =
-            measure_time(|| self.check_avoidance_collision(&GameEnv { game, entities }))
-        {
+        if let (Some(_), _time) = measure_time(|| {
+            self.check_avoidance_collision(&GameEnv {
+                _game: game,
+                entities,
+            })
+        }) {
             // println!("check_avoidance_collision time: {time:.06}");
         }
 

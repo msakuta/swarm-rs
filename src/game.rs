@@ -396,7 +396,7 @@ impl Game {
         self.bullets = Rc::new(bullets);
 
         {
-            let agents = self.entities.as_ref().borrow();
+            let agents = self.entities.borrow();
             let mut temp_ents = std::mem::take(&mut *self.temp_ents.borrow_mut());
             self.bullets = Rc::new(
                 self.bullets

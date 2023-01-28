@@ -1,5 +1,4 @@
 use std::{
-    cell,
     collections::{BinaryHeap, HashMap},
     fmt::Display,
     sync::atomic::{AtomicUsize, Ordering},
@@ -458,7 +457,7 @@ pub(crate) struct QTreePathNode {
 }
 
 impl QTreePathNode {
-    pub fn new(pos: [f64; 2], radius: f64) -> Self {
+    pub fn _new(pos: [f64; 2], radius: f64) -> Self {
         Self { pos, radius }
     }
 

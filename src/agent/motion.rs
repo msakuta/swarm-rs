@@ -2,9 +2,7 @@ use std::cell::RefCell;
 
 use cgmath::{InnerSpace, Vector2};
 
-use crate::{
-    app_data::is_passable_at, entity::Entity, game::Game, triangle_utils::check_shape_in_mesh,
-};
+use crate::{app_data::is_passable_at, entity::Entity, game::Game};
 
 use super::{wrap_angle, Agent, AgentState, FollowPathResult, AGENT_SPEED};
 
