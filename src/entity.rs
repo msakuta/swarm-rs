@@ -86,7 +86,7 @@ impl Entity {
 
     pub(crate) fn get_target(&self) -> Option<usize> {
         match self {
-            Entity::Agent(agent) => agent.target,
+            Entity::Agent(agent) => agent.get_target(),
             Entity::Spawner(_) => None,
         }
     }
@@ -163,15 +163,15 @@ impl Entity {
 
     pub(crate) fn resource(&self) -> i32 {
         match self {
+            Entity::Agent(agent) => agent.resource,
             Entity::Spawner(spawner) => spawner.resource,
-            _ => 0,
         }
     }
 
     pub(crate) fn remove_resource(&mut self, resource: i32) {
         match self {
+            Entity::Agent(agent) => agent.resource = (agent.resource - resource).max(0),
             Entity::Spawner(spawner) => spawner.resource = (spawner.resource - resource).max(0),
-            _ => (),
         }
     }
 
@@ -197,7 +197,6 @@ impl Entity {
         let mut ret = vec![];
         match self {
             Entity::Agent(ref mut agent) => {
-                agent.find_enemy(entities);
                 agent.update(app_data, entities, bullets);
             }
             Entity::Spawner(ref mut spawner) => {

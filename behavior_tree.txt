@@ -1,4 +1,8 @@
 tree main = Sequence {
+    GatherResource
+}
+
+tree Fight = Sequence {
     if (!HasTarget) {
         FindEnemy
     }
@@ -9,6 +13,20 @@ tree main = Sequence {
         } else {
             FollowPathAndAvoid
         }
+    }
+}
+
+tree GatherResource = Sequence {
+    if (IsResourceFull) {
+        FindSpawner
+        FollowPathAndAvoid
+        DepositResource
+    } else {
+        if (!HasTarget) {
+            FindResource
+        }
+        FollowPathAndAvoid
+        CollectResource
     }
 }
 

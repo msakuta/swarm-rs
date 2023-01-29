@@ -398,6 +398,10 @@ impl Game {
     }
 
     fn try_new_resource(&mut self) {
+        self.resources = std::mem::take(&mut self.resources)
+            .into_iter()
+            .filter(|res| 0 < res.amount)
+            .collect();
         if 10 < self.resources.len() {
             return;
         }

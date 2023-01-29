@@ -30,6 +30,11 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("TargetId", boxify(|| TargetIdNode));
     registry.register("TargetPos", boxify(|| TargetPosNode));
     registry.register("FindEnemy", boxify(|| FindEnemy));
+    registry.register("FindSpawner", boxify(|| FindSpawner));
+    registry.register("FindResource", boxify(|| FindResource));
+    registry.register("CollectResource", boxify(|| CollectResource));
+    registry.register("DepositResource", boxify(|| DepositResource));
+    registry.register("IsResourceFull", boxify(|| IsResourceFull));
     registry.register("HasPath", boxify(|| HasPathNode));
     registry.register("ClearPath", boxify(|| ClearPathNode));
     registry.register("FindPath", boxify(|| FindPathNode));
@@ -145,9 +150,99 @@ impl BehaviorNode for FindEnemy {
         arg: BehaviorCallback,
         _ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        // println!("FindEnemy node");
         arg(&FindEnemyCommand);
         BehaviorResult::Success
+    }
+}
+
+pub(super) struct FindSpawner;
+
+impl BehaviorNode for FindSpawner {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        arg(self);
+        BehaviorResult::Success
+    }
+}
+
+pub(super) struct FindResource;
+
+impl BehaviorNode for FindResource {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if arg(&Self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap_or(false)
+        {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct CollectResource;
+
+impl BehaviorNode for CollectResource {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if arg(&Self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap_or(false)
+        {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct DepositResource;
+
+impl BehaviorNode for DepositResource {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if arg(self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap_or(false)
+        {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct IsResourceFull;
+
+impl BehaviorNode for IsResourceFull {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if arg(self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap_or(false)
+        {
+            // println!("IsResourceFull? yes");
+            BehaviorResult::Success
+        } else {
+            // println!("IsResourceFull? no");
+            BehaviorResult::Fail
+        }
     }
 }
 
