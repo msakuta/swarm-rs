@@ -24,6 +24,12 @@ use crate::{
     triangle_utils::{check_shape_in_mesh, find_triangle_at},
 };
 
+#[derive(Clone, Debug)]
+pub(crate) struct Resource {
+    pub pos: [f64; 2],
+    pub amount: i32,
+}
+
 pub(crate) type Board = Vec<bool>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Data)]
@@ -108,6 +114,7 @@ pub(crate) struct Game {
     pub(crate) mesh: Mesh,
     pub(crate) entities: Vec<RefCell<Entity>>,
     pub(crate) bullets: Vec<Bullet>,
+    pub(crate) resources: Vec<Resource>,
     pub(crate) interval: f64,
     pub(crate) rng: Xor128,
     pub(crate) id_gen: usize,
@@ -151,6 +158,7 @@ impl Game {
             mesh,
             entities: vec![],
             bullets: vec![],
+            resources: vec![],
             interval: 32.,
             rng: Xor128::new(9318245),
             id_gen,
@@ -389,6 +397,22 @@ impl Game {
         None
     }
 
+    fn try_new_resource(&mut self) {
+        if 10 < self.resources.len() {
+            return;
+        }
+        for _ in 0..10 {
+            let rng = &mut self.rng;
+            let pos_candidate = [rng.next() * self.xs as f64, rng.next() * self.ys as f64];
+            if is_passable_at(&self.board, (self.xs, self.ys), pos_candidate) {
+                self.resources.push(Resource {
+                    pos: pos_candidate,
+                    amount: (rng.nexti() % 100) as i32 + 10,
+                });
+            }
+        }
+    }
+
     pub(crate) fn set_params(&mut self, params: &GameParams) {
         self.avoidance_mode = params.avoidance_mode;
         self.avoidance_expands = params.avoidance_expands;
@@ -558,6 +582,8 @@ impl Game {
             }
         }
         self.entities = entities;
+
+        self.try_new_resource();
     }
 
     pub(crate) fn is_passable_at(&self, pos: [f64; 2]) -> bool {

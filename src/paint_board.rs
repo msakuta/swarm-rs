@@ -2,6 +2,7 @@ use crate::{
     agent::{Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS, BULLET_SPEED},
     app_data::{AppData, LineMode},
     entity::Entity,
+    game::Resource,
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
     qtree::render::paint_qtree,
@@ -28,6 +29,8 @@ pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     if data.qtree_visible {
         paint_qtree(ctx, data, &view_transform);
     }
+
+    paint_resources(ctx, data, &view_transform);
 
     paint_agents(ctx, data, env, &view_transform);
 
@@ -476,6 +479,26 @@ fn paint_bullets(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
             draw_bullet(ctx, bullet, view_pos, TARGET_PIXELS);
         }
     }
+}
+
+fn paint_resources(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
+    const TARGET_PIXELS: f64 = 10.;
+
+    let draw_bullet = |ctx: &mut PaintCtx, resource: &Resource, pos: Point| {
+        let radius = (resource.amount as f64).sqrt() / TARGET_PIXELS;
+        let circle = Circle::new(pos, radius);
+        ctx.fill(circle, &Color::YELLOW);
+        ctx.stroke(circle, &Color::YELLOW, radius / 10.);
+    };
+
+    let game = data.game.borrow();
+
+    ctx.with_save(|ctx| {
+        ctx.transform(*view_transform);
+        for resource in &game.resources {
+            draw_bullet(ctx, resource, to_point(resource.pos));
+        }
+    });
 }
 
 fn paint_temp_ents(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
