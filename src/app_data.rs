@@ -22,6 +22,7 @@ pub(crate) struct AppData {
     pub(crate) rows_text: String,
     pub(crate) columns_text: String,
     pub(crate) seed_text: String,
+    pub(crate) maze_expansions: String,
     pub(crate) board_type: BoardType,
     pub(crate) game: Game,
     pub(crate) simplify_text: String,
@@ -57,6 +58,7 @@ impl AppData {
         let mut game = Game::new();
         let seed = 123513;
         let scale = WINDOW_HEIGHT / game.ys as f64;
+        let maze_expansion = 2000;
 
         const SOURCE_FILE: &'static str = "behavior_tree.txt";
 
@@ -68,6 +70,7 @@ impl AppData {
             rows_text: game.xs.to_string(),
             columns_text: game.ys.to_string(),
             seed_text: seed.to_string(),
+            maze_expansions: maze_expansion.to_string(),
             board_type: BoardType::Perlin,
             simplify_text: game.simplify.to_string(),
             game,

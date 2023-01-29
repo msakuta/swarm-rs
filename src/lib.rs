@@ -1,5 +1,6 @@
 mod app_data;
 mod board_widget;
+mod dijkstra;
 mod marching_squares;
 mod paint_board;
 mod perlin_noise;

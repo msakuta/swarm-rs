@@ -1,6 +1,9 @@
+mod maze;
+
 use cgmath::{InnerSpace, Vector2};
 
 use druid::Data;
+
 use std::{
     cell::RefCell,
     rc::Rc,
@@ -28,6 +31,7 @@ pub(crate) enum BoardType {
     Rect,
     Crank,
     Perlin,
+    Maze,
 }
 
 #[derive(Debug, Clone, Data)]
@@ -69,6 +73,13 @@ pub(crate) enum AvoidanceMode {
     RrtStar,
 }
 
+pub(crate) struct BoardParams {
+    pub shape: (usize, usize),
+    pub seed: u32,
+    pub simplify: f64,
+    pub maze_expansions: usize,
+}
+
 #[derive(Debug, Clone, Data)]
 pub(crate) struct Game {
     pub(crate) xs: usize,
@@ -100,7 +111,12 @@ impl Game {
         let xs = 128;
         let ys = 128;
 
-        let MeshResult { board, mesh } = Self::create_perlin_board((xs, ys), seed, simplify);
+        let MeshResult { board, mesh } = Self::create_perlin_board(&BoardParams {
+            shape: (xs, ys),
+            seed,
+            simplify,
+            maze_expansions: 0,
+        });
 
         let id_gen = 0;
 
@@ -132,16 +148,13 @@ impl Game {
         }
     }
 
-    pub fn create_perlin_board(
-        shape: (usize, usize),
-        seed: u32,
-        simplify_epsilon: f64,
-    ) -> MeshResult {
+    pub fn create_perlin_board(params: &BoardParams) -> MeshResult {
+        let shape = params.shape;
         let bits = 6;
-        let mut xor128 = Xor128::new(seed);
+        let mut xor128 = Xor128::new(params.seed);
         let terms = gen_terms(&mut xor128, bits);
 
-        create_mesh(shape, simplify_epsilon, |xi, yi| {
+        create_mesh(shape, params.simplify, |xi, yi| {
             let dx = (xi as isize - shape.0 as isize / 2) as f64;
             let dy = (yi as isize - shape.1 as isize / 2) as f64;
             let noise_val = perlin_noise_pixel(xi as f64, yi as f64, bits, &terms, 0.5);
@@ -149,26 +162,18 @@ impl Game {
         })
     }
 
-    pub fn create_rect_board(
-        shape: (usize, usize),
-        _seed: u32,
-        simplify_epsilon: f64,
-    ) -> MeshResult {
-        let (xs, ys) = (shape.0 as isize, shape.1 as isize);
-        create_mesh(shape, simplify_epsilon, |xi, yi| {
+    pub fn create_rect_board(params: &BoardParams) -> MeshResult {
+        let (xs, ys) = (params.shape.0 as isize, params.shape.1 as isize);
+        create_mesh(params.shape, params.simplify, |xi, yi| {
             let dx = xi as isize - xs / 2;
             let dy = yi as isize - ys / 2;
             dx.abs() < xs / 4 && dy.abs() < ys / 4
         })
     }
 
-    pub fn create_crank_board(
-        shape: (usize, usize),
-        _seed: u32,
-        simplify_epsilon: f64,
-    ) -> MeshResult {
-        let (xs, ys) = (shape.0 as isize, shape.1 as isize);
-        create_mesh(shape, simplify_epsilon, |xi, yi| {
+    pub fn create_crank_board(params: &BoardParams) -> MeshResult {
+        let (xs, ys) = (params.shape.0 as isize, params.shape.1 as isize);
+        create_mesh(params.shape, params.simplify, |xi, yi| {
             let dx = xi as isize - xs / 2;
             let dy = yi as isize - ys / 2;
             dx.abs() < xs * 3 / 8
@@ -178,22 +183,18 @@ impl Game {
         })
     }
 
-    pub(crate) fn new_board(
-        &mut self,
-        board_type: BoardType,
-        shape: (usize, usize),
-        seed: u32,
-        simplify: f64,
-    ) {
-        self.xs = shape.0;
-        self.ys = shape.0;
+    pub(crate) fn new_board(&mut self, board_type: BoardType, params: &BoardParams) {
+        self.xs = params.shape.0;
+        self.ys = params.shape.0;
+
         let MeshResult { board, mesh } = match board_type {
-            BoardType::Rect => Self::create_rect_board(shape, seed, simplify),
-            BoardType::Crank => Self::create_crank_board(shape, seed, simplify),
-            BoardType::Perlin => Self::create_perlin_board(shape, seed, simplify),
+            BoardType::Rect => Self::create_rect_board(&params),
+            BoardType::Crank => Self::create_crank_board(&params),
+            BoardType::Perlin => Self::create_perlin_board(&params),
+            BoardType::Maze => Self::create_maze_board(&params),
         };
 
-        self.qtree = Rc::new(RefCell::new(Self::new_qtree(shape, &board, &[])));
+        self.qtree = Rc::new(RefCell::new(Self::new_qtree(params.shape, &board, &[])));
         self.board = Rc::new(board);
         self.mesh = Rc::new(mesh);
         self.entities = Rc::new(RefCell::new(vec![]));
@@ -212,7 +213,7 @@ impl Game {
             .iter()
             .map(|entity| {
                 let entity = entity.borrow();
-                (entity.get_id(), entity.get_shape().buffer(0.).to_aabb())
+                (entity.get_id(), entity.get_shape().to_aabb())
             })
             .collect();
         qtree.initialize(shape, &|rect: Rect| {
@@ -286,6 +287,10 @@ impl Game {
                 y: pos[1] + (rng.next() - 0.5) * randomness,
                 heading: rng.next() * std::f64::consts::PI * 2.,
             };
+
+            if Agent::qtree_collision(None, state_candidate, entities) {
+                continue;
+            }
 
             if Agent::collision_check(None, state_candidate, entities, false) {
                 continue;

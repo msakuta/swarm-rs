@@ -4,7 +4,7 @@ use crate::{
     agent::AvoidanceRenderParams,
     app_data::{AppData, LineMode},
     board_widget::BoardWidget,
-    game::{AvoidanceMode, BoardType},
+    game::{AvoidanceMode, BoardParams, BoardType},
 };
 use behavior_tree_lite::parse_file;
 use druid::widget::{
@@ -31,15 +31,21 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                                 let ys = data.rows_text.parse().unwrap_or(64);
                                 let seed = data.seed_text.parse().unwrap_or(1);
                                 let simplify = data.simplify_text.parse().unwrap_or(1.);
-                                data.game
-                                    .new_board(data.board_type, (xs, ys), seed, simplify);
+                                let params = BoardParams {
+                                    shape: (xs, ys),
+                                    seed,
+                                    simplify,
+                                    maze_expansions: data.maze_expansions.parse().unwrap_or(1),
+                                };
+                                data.game.new_board(data.board_type, &params);
                                 ctx.request_paint();
                             })
                             .padding(5.0),
                     )
                     .with_child(Radio::new("Rect", BoardType::Rect).lens(AppData::board_type))
                     .with_child(Radio::new("Crank", BoardType::Crank).lens(AppData::board_type))
-                    .with_child(Radio::new("Perlin", BoardType::Perlin).lens(AppData::board_type)),
+                    .with_child(Radio::new("Perlin", BoardType::Perlin).lens(AppData::board_type))
+                    .with_child(Radio::new("Maze", BoardType::Maze).lens(AppData::board_type)),
             )
             .with_child(
                 Checkbox::new("Pause")
@@ -153,6 +159,8 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 Flex::row()
                     .with_child(Label::new("Seed: ").padding(3.0))
                     .with_child(TextBox::new().lens(AppData::seed_text))
+                    .with_child(Label::new("Maze expansion: ").padding(3.0))
+                    .with_child(TextBox::new().lens(AppData::maze_expansions))
                     .padding(5.0),
             )
             .with_child(

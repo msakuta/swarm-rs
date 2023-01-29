@@ -140,6 +140,30 @@ impl Agent {
         self.health as f64 / AGENT_MAX_HEALTH as f64
     }
 
+    /// Check collision in qtree bounding boxes
+    pub(crate) fn qtree_collision(
+        ignore: Option<usize>,
+        newpos: AgentState,
+        others: &[RefCell<Entity>],
+    ) -> bool {
+        let aabb = newpos.collision_shape().to_aabb();
+        for other in others {
+            let other = other.borrow();
+            if Some(other.get_id()) == ignore {
+                continue;
+            }
+            let other_aabb = other.get_shape().to_aabb();
+            if aabb[0].floor() <= other_aabb[2].ceil()
+                && other_aabb[0].floor() <= aabb[2].ceil()
+                && aabb[1].floor() <= other_aabb[3].ceil()
+                && other_aabb[1].floor() <= aabb[3].ceil()
+            {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Check collision with other entities, but not walls
     pub(crate) fn collision_check(
         ignore: Option<usize>,
