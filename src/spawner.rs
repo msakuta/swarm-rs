@@ -2,7 +2,7 @@ use crate::{
     entity::{Entity, GameEvent},
     game::Game,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::cell::RefCell;
 
 const SPAWNER_MAX_HEALTH: u32 = 10;
 
@@ -38,7 +38,7 @@ impl Spawner {
         entities: &[RefCell<Entity>],
     ) -> Vec<GameEvent> {
         let mut ret = vec![];
-        let rng = Rc::make_mut(&mut game.rng);
+        let rng = &mut game.rng;
         if entities
             .iter()
             .filter(|entity| {

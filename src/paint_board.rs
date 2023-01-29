@@ -243,7 +243,7 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
 
     let game = data.game.borrow();
     let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
-    let entities = game.entities.borrow();
+    let entities = &game.entities;
 
     for agent in entities.iter() {
         let agent = agent.borrow();
@@ -291,7 +291,6 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             if let Some(target) = agent.get_target() {
                 if let Some(target) = game
                     .entities
-                    .borrow()
                     .iter()
                     .find(|agent| agent.borrow().get_id() == target)
                 {
@@ -480,7 +479,7 @@ fn paint_bullets(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
 }
 
 fn paint_temp_ents(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
-    for temp_ent in data.game.borrow().temp_ents.borrow().iter() {
+    for temp_ent in data.game.borrow().temp_ents.iter() {
         let pos = to_point(temp_ent.pos);
         let circle = Circle::new(pos, 2. * (MAX_TTL - temp_ent.ttl) / MAX_TTL);
         let alpha = (temp_ent.ttl * 512. / MAX_TTL).min(255.) as u8;

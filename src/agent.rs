@@ -394,12 +394,12 @@ impl Agent {
                     let target_triangle = find_triangle_at(
                         &game.mesh,
                         target_pos,
-                        &mut *game.triangle_profiler.borrow_mut(),
+                        &mut game.triangle_profiler.borrow_mut(),
                     );
                     let self_triangle = find_triangle_at(
                         &game.mesh,
                         self.pos,
-                        &mut *game.triangle_profiler.borrow_mut(),
+                        &mut game.triangle_profiler.borrow_mut(),
                     );
                     if target_triangle == self_triangle {
                         return Some(Box::new(true));
@@ -408,7 +408,7 @@ impl Agent {
                         target_pos,
                         &game.board,
                         (game.xs, game.ys),
-                        &mut *game.triangle_profiler.borrow_mut(),
+                        &mut game.triangle_profiler.borrow_mut(),
                     ));
                     return Some(ret);
                 } else if let Some(com) = f.downcast_ref::<FaceToTargetCommand>() {

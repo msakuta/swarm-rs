@@ -4,7 +4,7 @@ use crate::{game::Game, measure_time};
 impl Agent {
     pub fn find_path(&mut self, target: [f64; 2], game: &mut Game) -> Result<(), ()> {
         let ((found_path, search_tree), time) = measure_time(|| {
-            let qtree = game.qtree.borrow();
+            let qtree = &game.qtree;
             if let Some(tgt_id) = self.target {
                 qtree.path_find(&[self.id, tgt_id], self.pos, target)
             } else {
