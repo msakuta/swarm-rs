@@ -1,5 +1,6 @@
 mod app_data;
 mod board_widget;
+mod dijkstra;
 mod marching_squares;
 mod paint_board;
 mod perlin_noise;
@@ -9,8 +10,11 @@ mod widget;
 #[macro_use]
 mod macros;
 mod agent;
+mod collision;
 mod entity;
 mod game;
+mod mesh;
+mod qtree;
 mod spawner;
 mod temp_ents;
 mod triangle_utils;
@@ -23,6 +27,8 @@ const WINDOW_WIDTH: f64 = 1200.;
 const WINDOW_HEIGHT: f64 = 800.;
 
 pub fn main() {
+    log::set_max_level(log::LevelFilter::Off);
+
     let window = WindowDesc::new(make_widget)
         .window_size(Size {
             width: WINDOW_WIDTH,

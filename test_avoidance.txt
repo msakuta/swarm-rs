@@ -1,0 +1,48 @@
+tree main = Sequence {
+    NewPosition (x <- "96", y <- "64", output -> pos)
+    TestAvoidance (pos <- pos)
+    NewPosition (x <- "24", y <- "64", output -> pos)
+    TestAvoidance (pos <- pos)
+}
+
+tree TestAvoidance(in pos) = Sequence {
+    #Retry (n <- "10") {
+        #Avoidance (goal <- pos, back <- "true")
+    #}
+    if (FindPath (target <- pos) ) {
+        var arrived = false
+        if (!arrived) {
+            ForceFailure {
+                Repeat (n <- "100") {
+                    ForceSuccess {
+                        Sequence {
+                            Avoidance (goal <- pos, back <- "true")
+                            if (!FollowPath (arrived -> arrived)) {
+                                if (!arrived) {
+                                    Sequence {
+                                        ReactiveSequence {
+                                            Drive (direction <- "backward")
+                                            Randomize (min <- "10", max <- "20", value -> timeoutValue)
+                                            Timeout (time <- timeoutValue)
+                                        }
+                                        Sequence {
+                                            PathNextNode (output -> pathNext)
+                                            Randomize (min <- "20", max <- "100", value -> timeoutValue)
+                                            ReactiveFallback {
+                                                Avoidance (goal <- pathNext)
+                                                ForceFailure {
+                                                    Timeout (time <- timeoutValue)
+                                                }
+                                                ClearAvoidance
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

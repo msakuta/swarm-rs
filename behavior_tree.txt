@@ -1,0 +1,47 @@
+tree main = Sequence {
+    if (!HasTarget) {
+        FindEnemy
+    }
+    Fallback {
+        if (TargetPos (pos -> targetPos) && IsTargetVisible (target <- targetPos)) {
+            FaceToTarget (target <- targetPos)
+            Shoot
+        } else {
+            FollowPathAndAvoid
+        }
+    }
+}
+
+tree FollowPathAndAvoid = Sequence {
+    TargetPos (pos -> target_pos)
+    if (!HasPath) {
+        FindPath (target <- target_pos)
+    }
+    if (HasPath) {
+        SimpleAvoidance
+        if (!FollowPath) {
+            Print (input <- "Blocked, finding path")
+            ReactiveSequence {
+                Drive (direction <- "backward")
+                Randomize (max <- "20", value -> timeoutValue)
+                Timeout (time <- timeoutValue)
+            }
+            # Find path again if blocked
+            FindPath (target <- target_pos)
+            #AvoidancePlan
+        }
+    }
+}
+
+tree AvoidancePlan = Sequence {
+    if (PathNextNode (output -> pathNext)) {
+        Randomize (min <- "20", max <- "100", value -> timeoutValue)
+        ReactiveFallback {
+            Avoidance (goal <- pathNext)
+            ForceFailure {
+                Timeout (time <- timeoutValue)
+            }
+            ClearAvoidance
+        }
+    }
+}

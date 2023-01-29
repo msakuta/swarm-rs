@@ -3,13 +3,14 @@
 pub(crate) fn perlin_noise_pixel(
     x: f64,
     y: f64,
-    bit: u32,
+    min_octave: u32,
+    max_octave: u32,
     terms: &[[f64; 6]],
     persistence: f64,
 ) -> f64 {
     let mut sum = 0.;
     let [mut maxv, mut f] = [0., 1.];
-    for i in (0..bit).rev() {
+    for i in (min_octave..max_octave).rev() {
         let cell = 1 << i;
         let fcell = cell as f64;
         let dx = x / fcell;

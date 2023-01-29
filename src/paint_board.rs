@@ -1,11 +1,14 @@
 use crate::{
     agent::{Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS, BULLET_SPEED},
     app_data::{AppData, LineMode},
+    entity::Entity,
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
+    qtree::render::paint_qtree,
     temp_ents::MAX_TTL,
     triangle_utils::center_of_triangle_obj,
 };
+
 use druid::{
     kurbo::Shape,
     piet::kurbo::{BezPath, Circle, Line},
@@ -22,6 +25,10 @@ pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
 
     let contours = paint_board(ctx, data, env, &view_transform);
 
+    if data.qtree_visible {
+        paint_qtree(ctx, data, &view_transform);
+    }
+
     paint_agents(ctx, data, env, &view_transform);
 
     paint_bullets(ctx, data, &view_transform);
@@ -31,7 +38,7 @@ pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     *data.render_stats.borrow_mut() = format!(
         "Drawn {} contours, {} triangles",
         contours,
-        data.game.triangulation.triangles.len()
+        data.game.mesh.triangulation.triangles.len()
     );
 }
 
@@ -69,8 +76,8 @@ pub(crate) fn paint_board(
                 ctx.draw_image(
                     &res,
                     (
-                        Point::new(-1., -1.),
-                        Point::new(xs as f64 - 1., ys as f64 - 1.),
+                        Point::new(0., 0.),
+                        Point::new(xs as f64 - 0., ys as f64 - 0.),
                     ),
                     InterpolationMode::NearestNeighbor,
                 );
@@ -140,7 +147,12 @@ pub(crate) fn paint_board(
     if data.triangulation_visible {
         let mut rng = Xor128::new(616516);
 
-        let max_label = *data.game.triangle_labels.iter().max().unwrap_or(&0) as usize + 1;
+        let points = &data.game.mesh.points;
+        let triangles = &data.game.mesh.triangulation.triangles;
+        let triangle_labels = &data.game.mesh.triangle_labels;
+        let triangle_passable = &data.game.mesh.triangle_passable;
+
+        let max_label = *triangle_labels.iter().max().unwrap_or(&0) as usize + 1;
         let label_colors = (0..max_label)
             .map(|_| {
                 Color::rgb8(
@@ -151,36 +163,33 @@ pub(crate) fn paint_board(
             })
             .collect::<Vec<_>>();
 
-        let triangles = &data.game.triangulation.triangles;
         for (i, triangle) in triangles.chunks(3).enumerate() {
             use ::delaunator::EMPTY;
-            let label = data.game.triangle_labels[i];
+            let label = triangle_labels[i];
             if triangles[i * 3] == EMPTY
                 || triangles[i * 3 + 1] == EMPTY
                 || triangles[i * 3 + 2] == EMPTY
             {
                 continue;
             }
-            let color = if data.game.triangle_passable[i] && label >= 0 {
+            let color = if triangle_passable[i] && label >= 0 {
                 label_colors[label as usize].clone()
             } else {
                 Color::RED
             };
 
-            if data.game.triangle_passable[i] && label >= 0 || data.unpassable_visible {
+            if triangle_passable[i] && label >= 0 || data.unpassable_visible {
                 let vertices: [usize; 4] = [triangle[0], triangle[1], triangle[2], triangle[0]];
                 for (start, end) in vertices.iter().zip(vertices.iter().skip(1)) {
                     let line = Line::new(
-                        delaunator_to_druid_point(&data.game.points[*start]),
-                        delaunator_to_druid_point(&data.game.points[*end]),
+                        delaunator_to_druid_point(&points[*start]),
+                        delaunator_to_druid_point(&points[*end]),
                     );
                     ctx.stroke(scale_transform * line, &color, 1.0);
                 }
             }
 
-            if data.triangle_label_visible
-                && (data.game.triangle_passable[i] || data.unpassable_visible)
-            {
+            if data.triangle_label_visible && (triangle_passable[i] || data.unpassable_visible) {
                 let mut layout = TextLayout::<String>::from_text(format!("{}", i));
                 layout.set_font(FontDescriptor::new(FontFamily::SANS_SERIF).with_size(16.0));
                 layout.set_text_color(color);
@@ -189,8 +198,8 @@ pub(crate) fn paint_board(
                     ctx,
                     scale_transform
                         * delaunator_to_druid_point(&center_of_triangle_obj(
-                            &data.game.triangulation,
-                            &data.game.points,
+                            &data.game.mesh.triangulation,
+                            &points,
                             i,
                         )),
                 );
@@ -201,7 +210,7 @@ pub(crate) fn paint_board(
     if data.simplified_visible {
         let mut rng = Xor128::new(32132);
 
-        for bez_path in data.game.simplified_border.as_ref() {
+        for bez_path in &data.game.mesh.simplified_border {
             let stroke_color = Color::rgb8(
                 (rng.nexti() % 0x80 + 0x7f) as u8,
                 (rng.nexti() % 0x80 + 0x7f) as u8,
@@ -215,7 +224,7 @@ pub(crate) fn paint_board(
     contours
 }
 
-fn to_point(pos: [f64; 2]) -> Point {
+pub(crate) fn to_point(pos: [f64; 2]) -> Point {
     Point {
         x: pos[0],
         y: pos[1],
@@ -233,8 +242,9 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
     const AGENT_COLORS: [Color; 2] = [Color::rgb8(0, 255, 127), Color::rgb8(255, 0, 63)];
 
     let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
+    let entities = data.game.entities.borrow();
 
-    for agent in data.game.entities.borrow().iter() {
+    for agent in entities.iter() {
         let agent = agent.borrow();
         let pos = to_point(agent.get_pos());
         let circle = Circle::new(*view_transform * pos, 5.);
@@ -245,6 +255,13 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             let big_circle = Circle::new(*view_transform * pos, 10.);
             ctx.stroke(big_circle, brush, 3.);
         }
+
+        // let bcirc = agent.bounding_circle();
+        // let shape = Circle::new(
+        //     *view_transform * to_point(bcirc.center.into()),
+        //     bcirc.radius * data.scale,
+        // );
+        // ctx.stroke(shape, brush, 1.);
 
         if let Some(orient) = agent.get_orient() {
             let length = 10.;
@@ -286,12 +303,84 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             }
         }
 
+        if data.avoidance_render_params.visible {
+            if let Some(goal) = agent.get_goal() {
+                const CROSS_SIZE: f64 = 5.;
+                let goal = *view_transform * Point::new(goal.x, goal.y);
+                let mut bez_path = BezPath::new();
+                bez_path.move_to(goal + Vec2::new(-CROSS_SIZE, CROSS_SIZE));
+                bez_path.line_to(goal + Vec2::new(CROSS_SIZE, -CROSS_SIZE));
+                bez_path.move_to(goal + Vec2::new(-CROSS_SIZE, -CROSS_SIZE));
+                bez_path.line_to(goal + Vec2::new(CROSS_SIZE, CROSS_SIZE));
+                ctx.stroke(bez_path, brush, 2.);
+            }
+
+            if let Some(search_state) = agent.get_search_state() {
+                search_state.render(
+                    ctx,
+                    env,
+                    view_transform,
+                    &data.avoidance_render_params,
+                    brush,
+                    data.scale,
+                );
+            }
+
+            if let Entity::Agent(agent) = &*agent {
+                if let Some(avoidance_plan) = &agent.avoidance_plan {
+                    for &(drive, steer) in avoidance_plan {
+                        let target = agent.get_avoidance_state((drive, steer));
+                        let circle = Circle::new(to_point(target.into()), AGENT_HALFWIDTH);
+                        ctx.fill(*view_transform * circle, &Color::rgba8(255, 255, 255, 127));
+                    }
+                }
+            }
+        }
+
+        if data.qtree_search_visible {
+            if let Some(search_tree) = agent.get_search_tree() {
+                search_tree.render(ctx, env, view_transform, brush, data.scale);
+            }
+        }
+
         if data.path_visible {
+            let avoidance_drawn = 'breaky: {
+                let Some(path) = agent
+                    .get_avoidance_path() else {
+                        break 'breaky None;
+                    };
+                if path.len() == 0 {
+                    break 'breaky None;
+                }
+                let mut bez_path = BezPath::new();
+                let (rest, last) = if let Some(goal) = agent.get_goal() {
+                    bez_path.move_to(to_point(goal.into()));
+                    let goal: [f64; 2] = goal.into();
+                    (&path[..], path.last().copied().or(Some(goal.into())))
+                } else if let Some((first, rest)) = path.split_first() {
+                    bez_path.move_to(to_point((*first).into()));
+                    (rest, rest.last().copied().or_else(|| Some(*first)))
+                } else {
+                    break 'breaky None;
+                };
+                for point in rest {
+                    bez_path.line_to(to_point((*point).into()));
+                }
+                bez_path.line_to(to_point(agent.get_pos()));
+                ctx.stroke(*view_transform * bez_path, brush, 1.);
+                last.map(|p| p.into())
+            };
             if let Some((first, rest)) = agent.get_path().and_then(|path| path.split_first()) {
                 let mut bez_path = BezPath::new();
-                bez_path.move_to(to_point(*first));
+                if let Some(first) = avoidance_drawn {
+                    bez_path.move_to(to_point(first));
+                } else {
+                    bez_path.move_to(to_point(first.pos));
+                }
                 for point in rest {
-                    bez_path.line_to(to_point(*point));
+                    let circle = Circle::new(to_point(point.pos), point.radius);
+                    ctx.stroke(*view_transform * circle, brush, 1.);
+                    bez_path.line_to(to_point(point.pos));
                 }
                 bez_path.line_to(to_point(agent.get_pos()));
                 ctx.stroke(*view_transform * bez_path, brush, 1.);

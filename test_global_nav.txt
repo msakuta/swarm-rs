@@ -1,0 +1,26 @@
+tree main = Sequence {
+    NewPosition (x <- "96", y <- "64", output -> pos)
+    ClearPath
+    TestGlobalNav (pos <- pos)
+    NewPosition (x <- "24", y <- "64", output -> pos)
+    ClearPath
+    TestGlobalNav (pos <- pos)
+}
+
+tree TestGlobalNav(in pos) = Sequence {
+    if (!HasPath) {
+        FindPath (target <- pos)
+    }
+    Retry (n <- "1000") {
+        if (HasPath) {
+            ReactiveSequence {
+                var arrived = false
+                ForceSuccess {
+                    FollowPath (arrived -> arrived)
+                }
+                !arrived
+                Timeout (time <- "1000")
+            }
+        }
+    }
+}

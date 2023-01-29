@@ -1,0 +1,14 @@
+tree main = Sequence {
+    NewPosition (x <- "64", y <- "52", output -> pos)
+    TestObstacle (pos <- pos)
+    NewPosition (x <- "64", y <- "76", output -> pos)
+    TestObstacle (pos <- pos)
+}
+
+tree TestObstacle(in pos) = Sequence {
+    Repeat (n <- "100") {
+        Sequence {
+            MoveTo (pos <- pos)
+        }
+    }
+}

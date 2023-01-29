@@ -1,6 +1,10 @@
-use crate::{game::Game, WINDOW_HEIGHT};
+use crate::{
+    agent::AvoidanceRenderParams,
+    game::{BoardType, Game},
+    WINDOW_HEIGHT,
+};
 
-use druid::{Data, Lens, Vec2};
+use druid::{Data, Lens, Point, Vec2};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -18,6 +22,8 @@ pub(crate) struct AppData {
     pub(crate) rows_text: String,
     pub(crate) columns_text: String,
     pub(crate) seed_text: String,
+    pub(crate) maze_expansions: String,
+    pub(crate) board_type: BoardType,
     pub(crate) game: Game,
     pub(crate) simplify_text: String,
     pub(crate) line_mode: LineMode,
@@ -28,17 +34,23 @@ pub(crate) struct AppData {
     pub(crate) origin: Vec2,
     pub(crate) scale: f64,
     pub(crate) message: String,
+    pub(super) mouse_pos: Option<Point>,
     pub(crate) get_board_time: f64,
     #[data(ignore)]
     pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
     pub(crate) path_visible: bool,
+    pub(crate) avoidance_render_params: AvoidanceRenderParams,
+    pub qtree_visible: bool,
+    pub qtree_search_visible: bool,
     pub(crate) target_visible: bool,
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
     pub(crate) source_visible: bool,
+    pub(crate) source_file: String,
     /// This buffer is not yet applied to the game.
     pub(crate) source_buffer: Rc<String>,
+    pub(crate) global_render_time: f64,
 }
 
 impl AppData {
@@ -46,32 +58,11 @@ impl AppData {
         let mut game = Game::new();
         let seed = 123513;
         let scale = WINDOW_HEIGHT / game.ys as f64;
+        let maze_expansion = 2000;
 
-        let source_buffer = Rc::new(
-            r#"tree main = Sequence {
-    Fallback {
-        HasTarget (target <- target)
-        FindEnemy
-    }
-    Fallback {
-        HasPath (has_path <- has_path)
-        FindPath
-    }
-    Sequence {
-        HasPath (has_path <- has_path)
-        Fallback {
-            FollowPath
-            ReactiveSequence {
-                Move (direction <- "backward")
-                Randomize (max <- "20", value -> timeoutValue)
-                Timeout (time <- timeoutValue)
-            }
-        }
-        Shoot
-    }
-}"#
-            .to_string(),
-        );
+        const SOURCE_FILE: &'static str = "behavior_tree.txt";
+
+        let source_buffer = Rc::new(include_str!("../behavior_tree.txt").to_string());
 
         game.source = source_buffer.clone();
 
@@ -79,6 +70,8 @@ impl AppData {
             rows_text: game.xs.to_string(),
             columns_text: game.ys.to_string(),
             seed_text: seed.to_string(),
+            maze_expansions: maze_expansion.to_string(),
+            board_type: BoardType::Perlin,
             simplify_text: game.simplify.to_string(),
             game,
             line_mode: LineMode::None,
@@ -89,20 +82,27 @@ impl AppData {
             origin: Vec2::new(0., 0.),
             scale,
             message: "".to_string(),
+            mouse_pos: None,
             render_board_time: Cell::new(0.),
             get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
             path_visible: true,
+            avoidance_render_params: AvoidanceRenderParams::new(),
+            qtree_visible: false,
+            qtree_search_visible: false,
             target_visible: false,
             entity_label_visible: true,
             entity_trace_visible: false,
             source_visible: false,
+            source_file: SOURCE_FILE.to_string(),
             source_buffer,
+            global_render_time: 0.,
         }
     }
 
-    pub(crate) fn update(&mut self) {
+    pub(crate) fn update(&mut self, delta_time: f64) {
         self.game.update();
+        self.global_render_time += delta_time;
     }
 }
 

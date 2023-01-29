@@ -1,13 +1,15 @@
 use std::rc::Rc;
 
 use crate::{
+    agent::AvoidanceRenderParams,
     app_data::{AppData, LineMode},
     board_widget::BoardWidget,
+    game::{AvoidanceMode, BoardParams, BoardType},
 };
 use behavior_tree_lite::parse_file;
 use druid::widget::{
-    Button, Checkbox, CrossAxisAlignment, Either, Flex, Label, LensWrap, RadioGroup, Scroll,
-    Switch, TextBox, WidgetExt,
+    Button, Checkbox, CrossAxisAlignment, Either, Flex, Label, LensWrap, Radio, RadioGroup, Scroll,
+    Slider, Switch, TextBox, WidgetExt,
 };
 use druid::Color;
 use druid::{lens::Field, widget::prelude::*};
@@ -21,16 +23,29 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
         Flex::column()
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .with_child(
-                Button::new("Create board")
-                    .on_click(|ctx, data: &mut AppData, _: &Env| {
-                        let xs = data.columns_text.parse().unwrap_or(64);
-                        let ys = data.rows_text.parse().unwrap_or(64);
-                        let seed = data.seed_text.parse().unwrap_or(1);
-                        let simplify = data.simplify_text.parse().unwrap_or(1.);
-                        data.game.new_board((xs, ys), seed, simplify);
-                        ctx.request_paint();
-                    })
-                    .padding(5.0),
+                Flex::row()
+                    .with_child(
+                        Button::new("Create board")
+                            .on_click(|ctx, data: &mut AppData, _: &Env| {
+                                let xs = data.columns_text.parse().unwrap_or(64);
+                                let ys = data.rows_text.parse().unwrap_or(64);
+                                let seed = data.seed_text.parse().unwrap_or(1);
+                                let simplify = data.simplify_text.parse().unwrap_or(1.);
+                                let params = BoardParams {
+                                    shape: (xs, ys),
+                                    seed,
+                                    simplify,
+                                    maze_expansions: data.maze_expansions.parse().unwrap_or(1),
+                                };
+                                data.game.new_board(data.board_type, &params);
+                                ctx.request_paint();
+                            })
+                            .padding(5.0),
+                    )
+                    .with_child(Radio::new("Rect", BoardType::Rect).lens(AppData::board_type))
+                    .with_child(Radio::new("Crank", BoardType::Crank).lens(AppData::board_type))
+                    .with_child(Radio::new("Perlin", BoardType::Perlin).lens(AppData::board_type))
+                    .with_child(Radio::new("Maze", BoardType::Maze).lens(AppData::board_type)),
             )
             .with_child(
                 Checkbox::new("Pause")
@@ -43,15 +58,11 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             .with_child(
                 Flex::row()
                     .with_child(Label::new("Border line mode:").padding(3.0))
-                    .with_child(
-                        RadioGroup::new([
-                            ("none", LineMode::None),
-                            ("line", LineMode::Line),
-                            ("polygon", LineMode::Polygon),
-                        ])
-                        .lens(AppData::line_mode)
-                        .padding(5.),
-                    ),
+                    .with_child(Radio::new("none", LineMode::None))
+                    .with_child(Radio::new("line", LineMode::Line))
+                    .with_child(Radio::new("polygon", LineMode::Polygon))
+                    .lens(AppData::line_mode)
+                    .padding(5.),
             )
             .with_child(
                 Checkbox::new("Simplified border")
@@ -66,19 +77,70 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     .padding(5.),
             )
             .with_child(
-                Checkbox::new("Path")
-                    .lens(AppData::path_visible)
-                    .padding(5.),
+                Flex::row()
+                    .with_child(
+                        Checkbox::new("Path")
+                            .lens(AppData::path_visible)
+                            .padding(5.),
+                    )
+                    .with_child(
+                        AvoidanceRenderParams::gen_widgets()
+                            .lens(AppData::avoidance_render_params)
+                            .padding(5.),
+                    ),
             )
             .with_child(
-                Checkbox::new("Target line")
-                    .lens(AppData::target_visible)
-                    .padding(5.),
+                Flex::row()
+                    .with_child(Label::new("Avoidance mode:").padding(3.0))
+                    .with_child(
+                        RadioGroup::new([
+                            ("Kinematic", AvoidanceMode::Kinematic),
+                            ("RRT", AvoidanceMode::Rrt),
+                            ("RRT*", AvoidanceMode::RrtStar),
+                        ])
+                        .lens(Field::new(
+                            |data: &AppData| &data.game.avoidance_mode,
+                            |data: &mut AppData| &mut data.game.avoidance_mode,
+                        ))
+                        .padding(5.),
+                    )
+                    .with_child(
+                        Flex::column()
+                            .cross_axis_alignment(CrossAxisAlignment::Start)
+                            .with_child(Label::new(|data: &AppData, _: &_| {
+                                format!("Expands: {:.0}", data.game.avoidance_expands)
+                            }))
+                            .with_child(Slider::new().with_range(1., 20.).lens(Field::new(
+                                |data: &AppData| &data.game.avoidance_expands,
+                                |data: &mut AppData| &mut data.game.avoidance_expands,
+                            ))),
+                    ),
             )
             .with_child(
-                Checkbox::new("Entity label")
-                    .lens(AppData::entity_label_visible)
-                    .padding(5.),
+                Flex::row()
+                    .with_child(
+                        Checkbox::new("QTree")
+                            .lens(AppData::qtree_visible)
+                            .padding(5.),
+                    )
+                    .with_child(
+                        Checkbox::new("QTree search")
+                            .lens(AppData::qtree_search_visible)
+                            .padding(5.),
+                    ),
+            )
+            .with_child(
+                Flex::row()
+                    .with_child(
+                        Checkbox::new("Target line")
+                            .lens(AppData::target_visible)
+                            .padding(5.),
+                    )
+                    .with_child(
+                        Checkbox::new("Entity label")
+                            .lens(AppData::entity_label_visible)
+                            .padding(5.),
+                    ),
             )
             .with_child(
                 Checkbox::new("Entity trace")
@@ -97,6 +159,8 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 Flex::row()
                     .with_child(Label::new("Seed: ").padding(3.0))
                     .with_child(TextBox::new().lens(AppData::seed_text))
+                    .with_child(Label::new("Maze expansion: ").padding(3.0))
+                    .with_child(TextBox::new().lens(AppData::maze_expansions))
                     .padding(5.0),
             )
             .with_child(
@@ -115,12 +179,13 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             ))
             .with_child(Flex::row().with_flex_child(
                 Label::new(|data: &AppData, _: &_| {
+                    let profiler = data.game.triangle_profiler.borrow();
                     format!(
-                        "Triangle time: {:.09}s, calls: {} size: {}, refs: {}",
-                        data.game.triangle_profiler.get_average(),
-                        data.game.triangle_profiler.get_count(),
+                        "Triangle time: {:.06}ms, calls: {} size: {}, refs: {}",
+                        profiler.get_average() * 1e3,
+                        profiler.get_count(),
                         std::mem::size_of::<AppData>(),
-                        Rc::strong_count(&data.game.triangulation)
+                        Rc::strong_count(&data.game.mesh)
                     )
                 }),
                 1.,
@@ -128,35 +193,57 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             .with_child(Flex::row().with_flex_child(
                 Label::new(|data: &AppData, _: &_| {
                     format!(
-                        "Pixel time: {:.09}s, calls: {}",
-                        data.game.pixel_profiler.borrow().get_average(),
+                        "Pixel time: {:.06}ms, calls: {}",
+                        data.game.pixel_profiler.borrow().get_average() * 1e3,
                         data.game.pixel_profiler.borrow().get_count()
                     )
                 }),
                 1.,
-            )),
+            ))
+            .with_child(Flex::row().with_flex_child(
+                Label::new(|data: &AppData, _: &_| {
+                    format!(
+                        "QTree time: {:.06}ms, calls: {}",
+                        data.game.qtree_profiler.borrow().get_average() * 1e3,
+                        data.game.qtree_profiler.borrow().get_count()
+                    )
+                }),
+                1.,
+            ))
+            .with_child(
+                Label::new(|app_data: &AppData, _: &_| {
+                    if let Some(pos) = app_data.mouse_pos {
+                        format!("{:.03}, {:.03}", pos.x, pos.y)
+                    } else {
+                        "".to_string()
+                    }
+                })
+                .padding(5.0)
+                .expand_width(),
+            ),
         Flex::column()
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .with_child(
-                Button::new("Apply").on_click(|_, app_data: &mut AppData, _| {
-                    // Check the syntax before applying
-                    match parse_file(app_data.source_buffer.as_ref()) {
-                        Ok(("", _)) => {
-                            app_data.game.source = app_data.source_buffer.clone();
-                            app_data.message = format!(
-                                "Behavior tree applied! {}",
-                                Rc::strong_count(&app_data.source_buffer)
-                            );
-                        }
-                        Ok((rest, _)) => {
-                            app_data.message =
-                                format!("Behavior tree source ended unexpectedly at {:?}", rest);
-                        }
-                        Err(e) => {
-                            app_data.message = format!("Behavior tree failed to parse: {}", e);
-                        }
-                    }
-                }),
+                Flex::row()
+                    .with_child(
+                        Button::new("Apply").on_click(|_, app_data: &mut AppData, _| {
+                            try_load_behavior_tree(app_data, app_data.source_buffer.clone());
+                        }),
+                    )
+                    .with_child(TextBox::new().lens(AppData::source_file))
+                    .with_child(Button::new("Reload from file").on_click(
+                        |_, app_data: &mut AppData, _| match std::fs::read_to_string(
+                            &app_data.source_file,
+                        ) {
+                            Ok(s) => {
+                                let s = Rc::new(s);
+                                if try_load_behavior_tree(app_data, s.clone()) {
+                                    app_data.source_buffer = s;
+                                }
+                            }
+                            Err(e) => app_data.message = format!("Read file error! {e:?}"),
+                        },
+                    )),
             )
             // For some reason, scroll box doesn't seem to allow scrolling when the text box is longer than the window height.
             .with_child(
@@ -202,4 +289,35 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 .expand_height(),
             0.,
         )
+}
+
+fn count_newlines(src: &str) -> usize {
+    src.lines().count()
+}
+
+fn try_load_behavior_tree(app_data: &mut AppData, src: Rc<String>) -> bool {
+    // Check the syntax before applying
+    match parse_file(&src) {
+        Ok(("", _)) => {
+            app_data.game.source = src.clone();
+            app_data.message = format!(
+                "Behavior tree applied! {}",
+                Rc::strong_count(&app_data.source_buffer)
+            );
+            true
+        }
+        Ok((rest, _)) => {
+            let parsed_src = &src[..rest.as_ptr() as usize - src.as_ptr() as usize];
+            app_data.message = format!(
+                "Behavior tree source ended unexpectedly at ({}) {:?}",
+                count_newlines(parsed_src),
+                rest
+            );
+            false
+        }
+        Err(e) => {
+            app_data.message = format!("Behavior tree failed to parse: {}", e);
+            false
+        }
+    }
 }
