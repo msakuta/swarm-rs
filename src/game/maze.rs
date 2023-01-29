@@ -63,7 +63,7 @@ impl Game {
             // We use costmap only in larger resolutions, because Dijkstra takes a bit of time
             // and we don't care too much about prioritizing unexplored area in lower resolutions,
             // where the general structure of the map is already built in larger resolutions.
-            let mut costmap = if 2 < resolution {
+            let mut costmap = if 4 < resolution {
                 let mut costmap = vec![std::i32::MAX; maze_board.len()];
                 let start = [(maze_shape.0 / 2) as i32, (maze_shape.1 / 2) as i32];
                 dijkstra::dijkstra_fill(&maze_board, maze_shape, start, &mut costmap);
@@ -89,9 +89,8 @@ impl Game {
                         let factor =
                             ((shape.0 / 2) as i32 - dx.abs()).min((shape.1 / 2) as i32 - dy.abs());
                         let factor = factor.min(20);
-                        let factor = 1;
                         let cost = costmap[i] + 1;
-                        (i, (cost * cost * factor) as i32)
+                        (i, (cost * cost * factor * factor) as i32)
                     };
                     let total_weights: i32 = board
                         .iter()
@@ -129,6 +128,15 @@ impl Game {
                 };
                 let dir = DIRECTIONS[(rand.nexti() % 4) as usize];
                 let mut next = source;
+                let dest = [next[0] + dir[0] * 2, next[1] + dir[1] * 2];
+                if dest[0] < 0
+                    || maze_shape.0 as i32 <= dest[0]
+                    || dest[1] < 0
+                    || maze_shape.1 as i32 <= dest[1]
+                    || maze_board[dest[0] as usize + dest[1] as usize * maze_shape.0]
+                {
+                    continue;
+                }
                 for _ in 0..2 {
                     let next_next = [next[0] + dir[0], next[1] + dir[1]];
                     if next_next[0] < 0
