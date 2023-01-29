@@ -38,7 +38,7 @@ pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
     *data.render_stats.borrow_mut() = format!(
         "Drawn {} contours, {} triangles",
         contours,
-        data.game.mesh.triangulation.triangles.len()
+        data.game.borrow().mesh.triangulation.triangles.len()
     );
 }
 
@@ -48,7 +48,8 @@ pub(crate) fn paint_board(
     env: &Env,
     view_transform: &Affine,
 ) -> usize {
-    let (xs, ys) = (data.game.xs, data.game.ys);
+    let game = data.game.borrow();
+    let (xs, ys) = (game.xs, game.ys);
 
     let mut contours = 0;
 
@@ -56,7 +57,7 @@ pub(crate) fn paint_board(
 
     let shape = (xs as isize, ys as isize);
 
-    let field = BoolField::new(data.game.board.as_ref(), shape);
+    let field = BoolField::new(game.board.as_ref(), shape);
 
     ctx.with_save(|ctx| {
         ctx.transform(*view_transform);
@@ -64,8 +65,7 @@ pub(crate) fn paint_board(
         match ctx.make_image(
             xs,
             ys,
-            &data
-                .game
+            &game
                 .board
                 .iter()
                 .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
@@ -147,10 +147,10 @@ pub(crate) fn paint_board(
     if data.triangulation_visible {
         let mut rng = Xor128::new(616516);
 
-        let points = &data.game.mesh.points;
-        let triangles = &data.game.mesh.triangulation.triangles;
-        let triangle_labels = &data.game.mesh.triangle_labels;
-        let triangle_passable = &data.game.mesh.triangle_passable;
+        let points = &game.mesh.points;
+        let triangles = &game.mesh.triangulation.triangles;
+        let triangle_labels = &game.mesh.triangle_labels;
+        let triangle_passable = &game.mesh.triangle_passable;
 
         let max_label = *triangle_labels.iter().max().unwrap_or(&0) as usize + 1;
         let label_colors = (0..max_label)
@@ -198,7 +198,7 @@ pub(crate) fn paint_board(
                     ctx,
                     scale_transform
                         * delaunator_to_druid_point(&center_of_triangle_obj(
-                            &data.game.mesh.triangulation,
+                            &game.mesh.triangulation,
                             &points,
                             i,
                         )),
@@ -210,7 +210,7 @@ pub(crate) fn paint_board(
     if data.simplified_visible {
         let mut rng = Xor128::new(32132);
 
-        for bez_path in &data.game.mesh.simplified_border {
+        for bez_path in &game.mesh.simplified_border {
             let stroke_color = Color::rgb8(
                 (rng.nexti() % 0x80 + 0x7f) as u8,
                 (rng.nexti() % 0x80 + 0x7f) as u8,
@@ -241,8 +241,9 @@ fn to_vec2(pos: [f64; 2]) -> Vec2 {
 fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &Affine) {
     const AGENT_COLORS: [Color; 2] = [Color::rgb8(0, 255, 127), Color::rgb8(255, 0, 63)];
 
+    let game = data.game.borrow();
     let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
-    let entities = data.game.entities.borrow();
+    let entities = game.entities.borrow();
 
     for agent in entities.iter() {
         let agent = agent.borrow();
@@ -288,8 +289,7 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
 
         if data.target_visible {
             if let Some(target) = agent.get_target() {
-                if let Some(target) = data
-                    .game
+                if let Some(target) = game
                     .entities
                     .borrow()
                     .iter()
@@ -447,11 +447,13 @@ fn paint_bullets(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
 
     const TARGET_PIXELS: f64 = 3.;
 
+    let game = data.game.borrow();
+
     let draw_small = data.scale < TARGET_PIXELS / BULLET_RADIUS;
 
     ctx.with_save(|ctx| {
         ctx.transform(*view_transform);
-        for bullet in data.game.bullets.iter() {
+        for bullet in game.bullets.iter() {
             let pos = to_vec2(bullet.pos);
             let velo = to_vec2(bullet.velo).normalize();
             let perp = Vec2::new(velo.y, -velo.x) * BULLET_RADIUS;
@@ -470,7 +472,7 @@ fn paint_bullets(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
     });
 
     if draw_small {
-        for bullet in data.game.bullets.iter() {
+        for bullet in game.bullets.iter() {
             let view_pos = *view_transform * to_point(bullet.pos);
             draw_bullet(ctx, bullet, view_pos, TARGET_PIXELS);
         }
@@ -478,7 +480,7 @@ fn paint_bullets(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
 }
 
 fn paint_temp_ents(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
-    for temp_ent in data.game.temp_ents.borrow().iter() {
+    for temp_ent in data.game.borrow().temp_ents.borrow().iter() {
         let pos = to_point(temp_ent.pos);
         let circle = Circle::new(pos, 2. * (MAX_TTL - temp_ent.ttl) / MAX_TTL);
         let alpha = (temp_ent.ttl * 512. / MAX_TTL).min(255.) as u8;

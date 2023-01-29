@@ -1,6 +1,6 @@
 use crate::{
     agent::AvoidanceRenderParams,
-    game::{BoardType, Game},
+    game::{BoardType, Game, GameParams},
     WINDOW_HEIGHT,
 };
 
@@ -24,7 +24,8 @@ pub(crate) struct AppData {
     pub(crate) seed_text: String,
     pub(crate) maze_expansions: String,
     pub(crate) board_type: BoardType,
-    pub(crate) game: Game,
+    pub(crate) game: Rc<RefCell<Game>>,
+    pub(crate) game_params: GameParams,
     pub(crate) simplify_text: String,
     pub(crate) line_mode: LineMode,
     pub(crate) simplified_visible: bool,
@@ -55,7 +56,7 @@ pub(crate) struct AppData {
 
 impl AppData {
     pub(crate) fn new() -> Self {
-        let mut game = Game::new();
+        let game = Game::new();
         let seed = 123513;
         let scale = WINDOW_HEIGHT / game.ys as f64;
         let maze_expansion = 2000;
@@ -64,7 +65,8 @@ impl AppData {
 
         let source_buffer = Rc::new(include_str!("../behavior_tree.txt").to_string());
 
-        game.source = source_buffer.clone();
+        let mut game_params = GameParams::new();
+        game_params.source = source_buffer.clone();
 
         Self {
             rows_text: game.xs.to_string(),
@@ -73,7 +75,8 @@ impl AppData {
             maze_expansions: maze_expansion.to_string(),
             board_type: BoardType::Perlin,
             simplify_text: game.simplify.to_string(),
-            game,
+            game: Rc::new(RefCell::new(game)),
+            game_params,
             line_mode: LineMode::None,
             simplified_visible: false,
             triangulation_visible: false,
@@ -100,9 +103,14 @@ impl AppData {
         }
     }
 
-    pub(crate) fn update(&mut self, delta_time: f64) {
-        self.game.update();
-        self.global_render_time += delta_time;
+    pub(crate) fn update(&mut self) -> (bool, f64) {
+        let mut game = self.game.borrow_mut();
+        game.set_params(&self.game_params);
+        if !self.game_params.paused {
+            game.update();
+        }
+        self.global_render_time += game.interval;
+        (self.game_params.paused, game.interval)
     }
 }
 

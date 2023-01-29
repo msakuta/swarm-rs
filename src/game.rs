@@ -80,6 +80,25 @@ pub(crate) struct BoardParams {
     pub maze_expansions: usize,
 }
 
+#[derive(Clone, Data)]
+pub(crate) struct GameParams {
+    pub(crate) avoidance_mode: AvoidanceMode,
+    pub(crate) paused: bool,
+    pub(crate) avoidance_expands: f64,
+    pub(crate) source: Rc<String>,
+}
+
+impl GameParams {
+    pub fn new() -> Self {
+        Self {
+            avoidance_mode: AvoidanceMode::RrtStar,
+            paused: false,
+            avoidance_expands: 1.,
+            source: Rc::new("".to_string()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Data)]
 pub(crate) struct Game {
     pub(crate) xs: usize,
@@ -89,7 +108,6 @@ pub(crate) struct Game {
     pub(crate) mesh: Rc<Mesh>,
     pub(crate) entities: Rc<RefCell<Vec<RefCell<Entity>>>>,
     pub(crate) bullets: Rc<Vec<Bullet>>,
-    pub(crate) paused: bool,
     pub(crate) interval: f64,
     pub(crate) rng: Rc<Xor128>,
     pub(crate) id_gen: usize,
@@ -133,7 +151,6 @@ impl Game {
             mesh: Rc::new(mesh),
             entities: Rc::new(RefCell::new(vec![])),
             bullets: Rc::new(vec![]),
-            paused: false,
             interval: 32.,
             rng: Rc::new(Xor128::new(9318245)),
             id_gen,
@@ -374,6 +391,12 @@ impl Game {
             }
         }
         None
+    }
+
+    pub(crate) fn set_params(&mut self, params: &GameParams) {
+        self.avoidance_mode = params.avoidance_mode;
+        self.avoidance_expands = params.avoidance_expands;
+        self.source = params.source.clone();
     }
 
     pub(crate) fn update(&mut self) {

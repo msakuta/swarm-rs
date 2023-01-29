@@ -37,7 +37,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                                     simplify,
                                     maze_expansions: data.maze_expansions.parse().unwrap_or(1),
                                 };
-                                data.game.new_board(data.board_type, &params);
+                                data.game.borrow_mut().new_board(data.board_type, &params);
                                 ctx.request_paint();
                             })
                             .padding(5.0),
@@ -50,8 +50,8 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             .with_child(
                 Checkbox::new("Pause")
                     .lens(Field::new(
-                        |app_data: &AppData| &app_data.game.paused,
-                        |app_data| &mut app_data.game.paused,
+                        |app_data: &AppData| &app_data.game_params.paused,
+                        |app_data| &mut app_data.game_params.paused,
                     ))
                     .padding(5.),
             )
@@ -99,8 +99,8 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                             ("RRT*", AvoidanceMode::RrtStar),
                         ])
                         .lens(Field::new(
-                            |data: &AppData| &data.game.avoidance_mode,
-                            |data: &mut AppData| &mut data.game.avoidance_mode,
+                            |data: &AppData| &data.game_params.avoidance_mode,
+                            |data: &mut AppData| &mut data.game_params.avoidance_mode,
                         ))
                         .padding(5.),
                     )
@@ -108,11 +108,11 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                         Flex::column()
                             .cross_axis_alignment(CrossAxisAlignment::Start)
                             .with_child(Label::new(|data: &AppData, _: &_| {
-                                format!("Expands: {:.0}", data.game.avoidance_expands)
+                                format!("Expands: {:.0}", data.game_params.avoidance_expands)
                             }))
                             .with_child(Slider::new().with_range(1., 20.).lens(Field::new(
-                                |data: &AppData| &data.game.avoidance_expands,
-                                |data: &mut AppData| &mut data.game.avoidance_expands,
+                                |data: &AppData| &data.game_params.avoidance_expands,
+                                |data: &mut AppData| &mut data.game_params.avoidance_expands,
                             ))),
                     ),
             )
@@ -179,13 +179,14 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             ))
             .with_child(Flex::row().with_flex_child(
                 Label::new(|data: &AppData, _: &_| {
-                    let profiler = data.game.triangle_profiler.borrow();
+                    let game = data.game.borrow();
+                    let profiler = game.triangle_profiler.borrow();
                     format!(
                         "Triangle time: {:.06}ms, calls: {} size: {}, refs: {}",
                         profiler.get_average() * 1e3,
                         profiler.get_count(),
                         std::mem::size_of::<AppData>(),
-                        Rc::strong_count(&data.game.mesh)
+                        Rc::strong_count(&data.game)
                     )
                 }),
                 1.,
@@ -194,8 +195,8 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 Label::new(|data: &AppData, _: &_| {
                     format!(
                         "Pixel time: {:.06}ms, calls: {}",
-                        data.game.pixel_profiler.borrow().get_average() * 1e3,
-                        data.game.pixel_profiler.borrow().get_count()
+                        data.game.borrow().pixel_profiler.borrow().get_average() * 1e3,
+                        data.game.borrow().pixel_profiler.borrow().get_count()
                     )
                 }),
                 1.,
@@ -204,8 +205,8 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 Label::new(|data: &AppData, _: &_| {
                     format!(
                         "QTree time: {:.06}ms, calls: {}",
-                        data.game.qtree_profiler.borrow().get_average() * 1e3,
-                        data.game.qtree_profiler.borrow().get_count()
+                        data.game.borrow().qtree_profiler.borrow().get_average() * 1e3,
+                        data.game.borrow().qtree_profiler.borrow().get_count()
                     )
                 }),
                 1.,
@@ -299,7 +300,7 @@ fn try_load_behavior_tree(app_data: &mut AppData, src: Rc<String>) -> bool {
     // Check the syntax before applying
     match parse_file(&src) {
         Ok(("", _)) => {
-            app_data.game.source = src.clone();
+            app_data.game_params.source = src.clone();
             app_data.message = format!(
                 "Behavior tree applied! {}",
                 Rc::strong_count(&app_data.source_buffer)

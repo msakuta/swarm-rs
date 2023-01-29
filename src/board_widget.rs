@@ -32,16 +32,16 @@ impl Widget<AppData> for BoardWidget {
         match event {
             Event::WindowConnected => {
                 ctx.request_paint();
-                let deadline = Duration::from_millis(data.game.interval as u64);
+                let deadline = Duration::from_millis(data.game.borrow().interval as u64);
                 self.timer_id = ctx.request_timer(deadline);
             }
             Event::Timer(id) => {
                 if *id == self.timer_id {
-                    if !data.game.paused {
-                        data.update(data.game.interval);
+                    let (paused, interval) = data.update();
+                    if !paused {
                         ctx.request_paint();
                     }
-                    let deadline = Duration::from_millis(data.game.interval as u64);
+                    let deadline = Duration::from_millis(interval as u64);
                     self.timer_id = ctx.request_timer(deadline);
                 }
             }

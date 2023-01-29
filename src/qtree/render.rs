@@ -8,7 +8,7 @@ use crate::{app_data::AppData, paint_board::to_point};
 use super::{cache_map::FRESH_TICKS, CellState, SearchTree};
 
 pub(crate) fn paint_qtree(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
-    let qtree = &data.game.qtree;
+    let qtree = &data.game.borrow().qtree;
 
     // dbg!(data.global_render_time);
     // let cur = (data.global_render_time / 1000.).rem_euclid(8.) as usize;
