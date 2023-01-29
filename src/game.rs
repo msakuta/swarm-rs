@@ -150,14 +150,16 @@ impl Game {
 
     pub fn create_perlin_board(params: &BoardParams) -> MeshResult {
         let shape = params.shape;
-        let bits = 6;
+        let min_octave = 2;
+        let max_octave = 6;
         let mut xor128 = Xor128::new(params.seed);
-        let terms = gen_terms(&mut xor128, bits);
+        let terms = gen_terms(&mut xor128, max_octave);
 
         create_mesh(shape, params.simplify, |xi, yi| {
             let dx = (xi as isize - shape.0 as isize / 2) as f64;
             let dy = (yi as isize - shape.1 as isize / 2) as f64;
-            let noise_val = perlin_noise_pixel(xi as f64, yi as f64, bits, &terms, 0.5);
+            let noise_val =
+                perlin_noise_pixel(xi as f64, yi as f64, min_octave, max_octave, &terms, 0.5);
             0. + (noise_val - 0.5 * (dx * dx + dy * dy).sqrt() / shape.0 as f64) > -0.125
         })
     }
