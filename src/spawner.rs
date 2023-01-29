@@ -5,6 +5,7 @@ use crate::{
 use std::cell::RefCell;
 
 const SPAWNER_MAX_HEALTH: u32 = 10;
+pub(crate) const SPAWNER_MAX_RESOURCE: i32 = 1000;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Spawner {
@@ -13,6 +14,7 @@ pub(crate) struct Spawner {
     pub team: usize,
     pub active: bool,
     pub health: u32,
+    pub resource: i32,
 }
 
 impl Spawner {
@@ -25,6 +27,7 @@ impl Spawner {
             team,
             active: true,
             health: SPAWNER_MAX_HEALTH,
+            resource: 0,
         }
     }
 
@@ -37,25 +40,34 @@ impl Spawner {
         game: &mut Game,
         entities: &[RefCell<Entity>],
     ) -> Vec<GameEvent> {
-        let mut ret = vec![];
-        let rng = &mut game.rng;
-        if entities
-            .iter()
-            .filter(|entity| {
-                entity
-                    .try_borrow()
-                    .map(|entity| entity.is_agent() && entity.get_team() == self.team)
-                    .unwrap_or(false)
-            })
-            .count()
-            < 3
-            && rng.next() < 0.1
-        {
-            ret.push(GameEvent::SpawnAgent {
-                pos: self.pos,
-                team: self.team,
-            })
+        if self.resource < 100 {
+            self.resource += 1;
         }
-        ret
+
+        if 100 <= self.resource {
+            let mut ret = vec![];
+            let rng = &mut game.rng;
+            if entities
+                .iter()
+                .filter(|entity| {
+                    entity
+                        .try_borrow()
+                        .map(|entity| entity.is_agent() && entity.get_team() == self.team)
+                        .unwrap_or(false)
+                })
+                .count()
+                < 3
+                && rng.next() < 0.1
+            {
+                ret.push(GameEvent::SpawnAgent {
+                    pos: self.pos,
+                    team: self.team,
+                    spawner: self.id,
+                })
+            }
+            ret
+        } else {
+            vec![]
+        }
     }
 }

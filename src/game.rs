@@ -430,9 +430,15 @@ impl Game {
 
         for event in events {
             match event {
-                GameEvent::SpawnAgent { pos, team } => {
+                GameEvent::SpawnAgent { pos, team, spawner } => {
                     if let Some(agent) = self.try_new_agent(pos, team, &entities, false, 10.) {
                         entities.push(RefCell::new(agent));
+                        if let Some(spawner) = entities
+                            .iter_mut()
+                            .find(|ent| ent.borrow().get_id() == spawner)
+                        {
+                            spawner.borrow_mut().remove_resource(100);
+                        }
                     }
                 }
             }

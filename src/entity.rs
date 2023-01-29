@@ -17,7 +17,11 @@ pub(crate) enum Entity {
 }
 
 pub(crate) enum GameEvent {
-    SpawnAgent { pos: [f64; 2], team: usize },
+    SpawnAgent {
+        pos: [f64; 2],
+        team: usize,
+        spawner: usize,
+    },
 }
 
 const SPAWNER_RADIUS: f64 = 0.5;
@@ -154,6 +158,20 @@ impl Entity {
         match self {
             Entity::Agent(agent) => agent.speed,
             _ => 0.,
+        }
+    }
+
+    pub(crate) fn resource(&self) -> i32 {
+        match self {
+            Entity::Spawner(spawner) => spawner.resource,
+            _ => 0,
+        }
+    }
+
+    pub(crate) fn remove_resource(&mut self, resource: i32) {
+        match self {
+            Entity::Spawner(spawner) => spawner.resource = (spawner.resource - resource).max(0),
+            _ => (),
         }
     }
 

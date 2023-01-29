@@ -6,12 +6,13 @@ use crate::{
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
     qtree::render::paint_qtree,
+    spawner::SPAWNER_MAX_RESOURCE,
     temp_ents::MAX_TTL,
     triangle_utils::center_of_triangle_obj,
 };
 
 use druid::{
-    kurbo::Shape,
+    kurbo::{Arc, Shape},
     piet::kurbo::{BezPath, Circle, Line},
     piet::{FontFamily, ImageFormat, InterpolationMode},
     Affine, Color, FontDescriptor, Point, Rect, TextLayout,
@@ -256,8 +257,17 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
         ctx.fill(circle, brush);
 
         if !agent.is_agent() {
+            use std::f64::consts::PI;
             let big_circle = Circle::new(*view_transform * pos, 10.);
             ctx.stroke(big_circle, brush, 3.);
+            let arc = Arc {
+                center: *view_transform * pos,
+                radii: Vec2::new(7.5, 7.5),
+                start_angle: 0.,
+                sweep_angle: agent.resource() as f64 * 2. * PI / SPAWNER_MAX_RESOURCE as f64,
+                x_rotation: -PI / 2.,
+            };
+            ctx.stroke(arc, &Color::YELLOW, 2.5);
         }
 
         // let bcirc = agent.bounding_circle();
