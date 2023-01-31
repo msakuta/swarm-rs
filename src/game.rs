@@ -408,11 +408,23 @@ impl Game {
         for _ in 0..10 {
             let rng = &mut self.rng;
             let pos_candidate = [rng.next() * self.xs as f64, rng.next() * self.ys as f64];
-            if is_passable_at(&self.board, (self.xs, self.ys), pos_candidate) {
-                self.resources.push(Resource {
-                    pos: pos_candidate,
-                    amount: (rng.nexti() % 100) as i32 + 10,
-                });
+            if !is_passable_at(&self.board, (self.xs, self.ys), pos_candidate) {
+                continue;
+            }
+
+            if let Some(tri) = find_triangle_at(
+                &self.mesh,
+                pos_candidate,
+                &mut self.triangle_profiler.borrow_mut(),
+            ) {
+                if Some(self.mesh.triangle_labels[tri]) == self.mesh.largest_label {
+                    if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
+                        self.resources.push(Resource {
+                            pos: pos_candidate,
+                            amount: (rng.nexti() % 128 + 10) as i32,
+                        });
+                    }
+                }
             }
         }
     }
