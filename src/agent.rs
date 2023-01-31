@@ -30,7 +30,7 @@ use crate::{
 };
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
-use behavior_tree_lite::{error::LoadError, Blackboard, Lazy};
+use behavior_tree_lite::{error::LoadError, BehaviorResult, Blackboard, Lazy};
 
 use std::{
     cell::RefCell,
@@ -279,13 +279,12 @@ impl Agent {
                 }
             });
 
-        println!("found Spawner: {best_spawner:?}");
         if let Some((_dist, spawner)) = best_spawner {
             self.target = Some(AgentTarget::Entity(spawner.get_id()));
         }
     }
 
-    pub fn find_resource(&mut self, resources: &[Resource]) {
+    pub fn find_resource(&mut self, resources: &[Resource]) -> bool {
         let best_resource = resources
             .iter()
             // .filter_map(|a| a.try_borrow().ok())
@@ -306,14 +305,16 @@ impl Agent {
             });
 
         if let Some((_dist, resource)) = best_resource {
-            println!("Found resource: {resource:?}");
             self.target = Some(AgentTarget::Resource(resource.pos));
+            true
+        } else {
+            false
         }
     }
 
-    fn collect_resource(&mut self, resources: &mut [Resource]) -> bool {
+    fn collect_resource(&mut self, resources: &mut [Resource]) -> BehaviorResult {
         if AGENT_MAX_RESOURCE <= self.resource {
-            return false;
+            return BehaviorResult::Fail;
         }
         for resource in resources {
             if Vector2::from(resource.pos).distance2(Vector2::from(self.pos))
@@ -326,34 +327,38 @@ impl Agent {
                     .min(10);
                 resource.amount -= moved;
                 self.resource += moved;
-                return true;
+                return BehaviorResult::Running;
             }
         }
-        false
+        BehaviorResult::Success
     }
 
-    fn deposit_resource(&mut self, entities: &[RefCell<Entity>]) -> bool {
+    fn deposit_resource(&mut self, entities: &[RefCell<Entity>]) -> BehaviorResult {
         if self.resource == 0 {
-            return false;
+            return BehaviorResult::Fail;
         }
         for mut entity in entities.iter().filter_map(|ent| ent.try_borrow_mut().ok()) {
             let Entity::Spawner(ref mut spawner) = &mut entity as &mut Entity else {
                 continue;
             };
+            if spawner.team != self.team {
+                continue;
+            }
             if Vector2::from(spawner.pos).distance2(Vector2::from(self.pos))
-                < (AGENT_HALFLENGTH * 2.).powf(2.)
-                && 0 < spawner.resource
+                < (AGENT_HALFLENGTH * 3.).powf(2.)
+                && spawner.resource < SPAWNER_MAX_RESOURCE
             {
                 let moved = self
                     .resource
                     .min(SPAWNER_MAX_RESOURCE - spawner.resource)
                     .min(10);
+                println!(" moving {}", moved);
                 self.resource -= moved;
                 spawner.resource += moved;
-                return true;
+                return BehaviorResult::Running;
             }
         }
-        false
+        BehaviorResult::Success
     }
 
     pub fn shoot_bullet(&mut self, bullets: &mut Vec<Bullet>, target_pos: [f64; 2]) -> bool {
@@ -476,7 +481,7 @@ impl Agent {
                 } else if f.downcast_ref::<FindSpawner>().is_some() {
                     self.find_spawner(entities)
                 } else if f.downcast_ref::<FindResource>().is_some() {
-                    self.find_resource(&game.resources)
+                    return Some(Box::new(self.find_resource(&game.resources)));
                 } else if f.downcast_ref::<CollectResource>().is_some() {
                     return Some(Box::new(self.collect_resource(&mut game.resources)));
                 } else if f.downcast_ref::<DepositResource>().is_some() {

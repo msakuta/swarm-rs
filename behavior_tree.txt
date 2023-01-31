@@ -22,9 +22,9 @@ tree GatherResource = Sequence {
         FollowPathAndAvoid
         DepositResource
     } else {
-        if (!HasTarget) {
+        #if (!HasTarget) {
             FindResource
-        }
+        #}
         FollowPathAndAvoid
         CollectResource
     }

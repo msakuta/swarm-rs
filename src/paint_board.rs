@@ -6,7 +6,6 @@ use crate::{
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
     qtree::render::paint_qtree,
-    spawner::SPAWNER_MAX_RESOURCE,
     temp_ents::MAX_TTL,
     triangle_utils::center_of_triangle_obj,
 };
@@ -257,14 +256,18 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
         ctx.fill(circle, brush);
 
         if !agent.is_agent() {
-            use std::f64::consts::PI;
             let big_circle = Circle::new(*view_transform * pos, 10.);
             ctx.stroke(big_circle, brush, 3.);
+        }
+
+        let resource = agent.resource();
+        if 0 < resource {
+            use std::f64::consts::PI;
             let arc = Arc {
                 center: *view_transform * pos,
                 radii: Vec2::new(7.5, 7.5),
                 start_angle: 0.,
-                sweep_angle: agent.resource() as f64 * 2. * PI / SPAWNER_MAX_RESOURCE as f64,
+                sweep_angle: resource as f64 * 2. * PI / agent.max_resource() as f64,
                 x_rotation: -PI / 2.,
             };
             ctx.stroke(arc, &Color::YELLOW, 2.5);

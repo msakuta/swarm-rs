@@ -195,14 +195,9 @@ impl BehaviorNode for CollectResource {
         arg: BehaviorCallback,
         _ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        if arg(&Self)
+        arg(self)
             .and_then(|res| res.downcast_ref().copied())
-            .unwrap_or(false)
-        {
-            BehaviorResult::Success
-        } else {
-            BehaviorResult::Fail
-        }
+            .unwrap()
     }
 }
 
@@ -214,14 +209,9 @@ impl BehaviorNode for DepositResource {
         arg: BehaviorCallback,
         _ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        if arg(self)
+        arg(self)
             .and_then(|res| res.downcast_ref().copied())
-            .unwrap_or(false)
-        {
-            BehaviorResult::Success
-        } else {
-            BehaviorResult::Fail
-        }
+            .unwrap()
     }
 }
 

@@ -2,11 +2,11 @@ use cgmath::Vector2;
 
 use crate::{
     agent::Agent,
-    agent::{Bullet, PathNode},
+    agent::{Bullet, PathNode, AGENT_MAX_RESOURCE},
     collision::{CollisionShape, Obb},
     game::Game,
     qtree::QTreePathNode,
-    spawner::Spawner,
+    spawner::{Spawner, SPAWNER_MAX_RESOURCE},
 };
 use std::{cell::RefCell, collections::VecDeque};
 
@@ -165,6 +165,13 @@ impl Entity {
         match self {
             Entity::Agent(agent) => agent.resource,
             Entity::Spawner(spawner) => spawner.resource,
+        }
+    }
+
+    pub(crate) fn max_resource(&self) -> i32 {
+        match self {
+            Entity::Agent(_) => AGENT_MAX_RESOURCE,
+            Entity::Spawner(_) => SPAWNER_MAX_RESOURCE,
         }
     }
 
