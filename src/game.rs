@@ -226,6 +226,7 @@ impl Game {
         self.mesh = mesh;
         self.entities = vec![];
         self.bullets = vec![];
+        self.resources.clear();
     }
 
     fn new_qtree(

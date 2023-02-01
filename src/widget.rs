@@ -25,7 +25,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             .with_child(
                 Flex::row()
                     .with_child(
-                        Button::new("Create board")
+                        Button::new("New Game")
                             .on_click(|ctx, data: &mut AppData, _: &Env| {
                                 let xs = data.columns_text.parse().unwrap_or(64);
                                 let ys = data.rows_text.parse().unwrap_or(64);
