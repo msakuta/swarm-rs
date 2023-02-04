@@ -14,10 +14,13 @@ macro_rules! dbg_println {
 }
 
 mod cache_map;
-mod qtree;
+pub(crate) mod qtree;
 pub mod render;
 
-use self::{cache_map::CacheMap, qtree::QTree};
+use self::{
+    cache_map::CacheMap,
+    qtree::{PathFindError, QTree},
+};
 
 const DEBUG: bool = false;
 
@@ -111,7 +114,7 @@ impl QTreeSearcher {
         start: [f64; 2],
         end: [f64; 2],
         goal_radius: f64,
-    ) -> (Option<QTreePath>, SearchTree) {
+    ) -> (Result<QTreePath, PathFindError>, SearchTree) {
         self.qtree.path_find(ignore_id, start, end, goal_radius)
     }
 }

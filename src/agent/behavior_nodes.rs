@@ -1,3 +1,5 @@
+use crate::qtree::qtree::PathFindError;
+
 use super::{motion::OrientToResult, AgentState, MotionResult};
 use behavior_tree_lite::{
     error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context,
@@ -25,6 +27,7 @@ where
 pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     let mut registry = Registry::default();
     registry.register("SetBool", boxify(|| SetBool));
+    registry.register("StringEq", boxify(|| StringEqNode));
     registry.register("Print", boxify(|| PrintNode));
     registry.register("HasTarget", boxify(|| HasTargetNode));
     registry.register("TargetId", boxify(|| TargetIdNode));
@@ -75,6 +78,29 @@ impl BehaviorNode for SetBool {
         let result = ctx.get_parse::<bool>("value");
         if let Some(value) = result {
             ctx.set("output", value);
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+/// Because behavior-tree-lite doesn't support string variables in expressions, we need a silly node like this.
+struct StringEqNode;
+
+impl BehaviorNode for StringEqNode {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("lhs"), PortSpec::new_in("rhs")]
+    }
+
+    fn tick(
+        &mut self,
+        _arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let lhs = ctx.get::<String>("lhs");
+        let rhs = ctx.get::<String>("rhs");
+        if lhs.zip(rhs).map(|(lhs, rhs)| lhs == rhs).unwrap_or(false) {
             BehaviorResult::Success
         } else {
             BehaviorResult::Fail
@@ -367,7 +393,7 @@ pub(super) struct FindPathNode;
 
 impl BehaviorNode for FindPathNode {
     fn provided_ports(&self) -> Vec<PortSpec> {
-        vec![*TARGET_SPEC]
+        vec![*TARGET_SPEC, PortSpec::new_out("fail_reason")]
     }
 
     fn tick(
@@ -375,15 +401,15 @@ impl BehaviorNode for FindPathNode {
         arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        if ctx
+        let path_find_err = ctx
             .get::<[f64; 2]>(*TARGET)
             .and_then(|target| arg(&FindPathCommand(*target)))
-            .and_then(|res| res.downcast_ref().copied())
-            .unwrap_or(false)
-        {
-            BehaviorResult::Success
-        } else {
+            .and_then(|res| res.downcast_ref::<PathFindError>().copied());
+        if let Some(err) = path_find_err {
+            ctx.set("fail_reason", err.to_string());
             BehaviorResult::Fail
+        } else {
+            BehaviorResult::Success
         }
     }
 }

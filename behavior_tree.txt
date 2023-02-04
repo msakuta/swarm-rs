@@ -3,13 +3,13 @@ tree main = Sequence {
     Print(input <- "Resetting fight")
     Repeat (n <- "10000") {
         if (fight) {
-            Print(input <- "Fighting")
+            # Print(input <- "Fighting")
             Fight
         } else {
             ForceSuccess {
                 GatherResource(switchToFight -> fight)
             }
-            Print(input <- "Got fight = {}", arg0 <- fight)
+            #Print(input <- "Got fight = {}", arg0 <- fight)
             if (fight) {
                 ClearPath
                 ForceSuccess {
@@ -25,13 +25,11 @@ tree Fight = Sequence {
         FindEnemy
     }
     ForceSuccess {
-        Fallback {
-            if (TargetPos (pos -> targetPos) && IsTargetVisible (target <- targetPos)) {
-                FaceToTarget (target <- targetPos)
-                Shoot
-            } else {
-                FollowPathAndAvoid
-            }
+        if (TargetPos (pos -> targetPos) && IsTargetVisible (target <- targetPos)) {
+            FaceToTarget (target <- targetPos)
+            Shoot
+        } else {
+            FollowPathAndAvoid
         }
     }
 }
@@ -64,9 +62,12 @@ tree TryReverse = ReactiveSequence {
 tree FollowPathAndAvoid = Sequence {
     TargetPos (pos -> target_pos)
     if (!HasPath) {
-        if (!FindPath (target <- target_pos)) {
-            Print (input <- "Failed to find path!")
-            TryReverse
+        if (!FindPath (target <- target_pos, fail_reason -> failReason)) {
+            Print (input <- "Failed to find path! reason: {}", arg0 <- failReason)
+            # If path finding failed because the start is blocked, try back out
+            if (StringEq(lhs <- failReason, rhs <- "StartBlocked")) {
+                TryReverse
+            }
         }
     }
     if (HasPath) {

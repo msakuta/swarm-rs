@@ -5,7 +5,7 @@ use crate::{
 use std::cell::RefCell;
 
 const SPAWNER_MAX_HEALTH: u32 = 10;
-pub(crate) const SPAWNER_MAX_RESOURCE: i32 = 1000;
+pub(crate) const SPAWNER_MAX_RESOURCE: i32 = 300;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Spawner {

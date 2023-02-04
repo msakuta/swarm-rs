@@ -260,16 +260,39 @@ impl QTree {
         }
         ret
     }
+}
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum PathFindError {
+    StartBlocked,
+    GoalBlocked,
+    SearchFailed,
+}
+
+impl Display for PathFindError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::StartBlocked => "StartBlocked",
+                Self::GoalBlocked => "GoalBlocked",
+                Self::SearchFailed => "SearchFailed",
+            }
+        )
+    }
+}
+
+impl QTree {
     pub fn path_find(
         &self,
         ignore_id: &[usize],
         start: [f64; 2],
         end: [f64; 2],
         goal_radius: f64,
-    ) -> (Option<QTreePath>, SearchTree) {
+    ) -> (Result<QTreePath, PathFindError>, SearchTree) {
         let Some(start_found) = self.find(start) else {
-            return (None, SearchTree::new())
+            return (Err(PathFindError::StartBlocked), SearchTree::new())
         };
         let blocked = |state| match state {
             CellState::Obstacle => true,
@@ -278,14 +301,14 @@ impl QTree {
         };
         if blocked(start_found.1) {
             dbg_println!("Start position {start:?} was occupied!");
-            return (None, SearchTree::new());
+            return (Err(PathFindError::GoalBlocked), SearchTree::new());
         }
         let Some(end_found) = self.find(end) else {
-            return (None, SearchTree::new())
+            return (Err(PathFindError::GoalBlocked), SearchTree::new())
         };
         if blocked(end_found.1) {
             dbg_println!("End position {start:?} was occupied!");
-            return (None, SearchTree::new());
+            return (Err(PathFindError::GoalBlocked), SearchTree::new());
         }
         let end_idx = (
             end_found.0,
@@ -349,7 +372,7 @@ impl QTree {
             let mut path = vec![];
             path.push(QTreePathNode::new_with_qtree(end_idx, self));
             path.push(QTreePathNode::new_with_qtree(start_idx, self));
-            return (Some(path), SearchTree::new());
+            return (Ok(path), SearchTree::new());
         }
 
         let mut closed_set = HashMap::new();
@@ -380,7 +403,7 @@ impl QTree {
                         path.push(QTreePathNode::new_with_qtree(anode, self));
                         node = closed_set.get(&anode).and_then(|bnode| bnode.came_from);
                     }
-                    return (Some(path), self.build_search_tree(closed_set));
+                    return (Ok(path), self.build_search_tree(closed_set));
                 }
                 let new_cost = state.cost + self.width(state.level) as f64;
                 let cell = self.levels[nei_level].get(&nei_idx);
@@ -436,7 +459,10 @@ impl QTree {
             }
         }
 
-        (None, self.build_search_tree(closed_set))
+        (
+            Err(PathFindError::SearchFailed),
+            self.build_search_tree(closed_set),
+        )
     }
 
     fn build_search_tree(&self, closed_set: HashMap<QTreeIdx, ClosedState>) -> SearchTree {
