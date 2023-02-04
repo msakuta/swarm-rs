@@ -180,7 +180,8 @@ impl QTree {
         ]
     }
 
-    fn recurse_find(&self, level: usize, idx: [i32; 2], side: Side) -> Vec<(usize, [i32; 2])> {
+    /// Find a neighbor cell in given level or its sublevels.
+    fn sub_recurse_find(&self, level: usize, idx: [i32; 2], side: Side) -> Vec<(usize, [i32; 2])> {
         if self.levels.len() <= level {
             return vec![];
         }
@@ -198,7 +199,7 @@ impl QTree {
                 Side::Bottom => [[x, y + 1], [x + 1, y + 1]],
             };
             for subcell in subcells {
-                ret.extend_from_slice(&self.recurse_find(level + 1, subcell, side));
+                ret.extend_from_slice(&self.sub_recurse_find(level + 1, subcell, side));
             }
             ret
         } else if same_level.is_some() {
@@ -207,6 +208,33 @@ impl QTree {
         } else {
             vec![]
         }
+    }
+
+    /// Find a neighbor cell in higher levels. The current cell is necessary to stop searching early
+    /// if the higher level cell is the same.
+    fn super_find(
+        &self,
+        current_level: usize,
+        current_idx: [i32; 2],
+        neighbor_idx: [i32; 2],
+    ) -> Option<(usize, [i32; 2], CellState)> {
+        let mut supidx = current_idx;
+        let mut neighbor_supidx = neighbor_idx;
+
+        // We don't need recursion unlike `sub_recurse_find`, because it's a linear search.
+        for suplevel in (0..current_level).rev() {
+            supidx[0] /= 2;
+            supidx[1] /= 2;
+            neighbor_supidx[0] /= 2;
+            neighbor_supidx[1] /= 2;
+            if supidx == neighbor_supidx {
+                return None;
+            }
+            if let Some(&found_parent) = self.levels[suplevel].get(&neighbor_supidx) {
+                return Some((suplevel, neighbor_supidx, found_parent));
+            }
+        }
+        None
     }
 
     fn find_neighbors(&self, level: usize, idx: [i32; 2]) -> Vec<(usize, [i32; 2])> {
@@ -218,34 +246,16 @@ impl QTree {
             (Side::Bottom, [0, -1]),
         ] {
             let neighbor_idx = [idx[0] + offset[0], idx[1] + offset[1]];
-            let substates = self.recurse_find(level, neighbor_idx, side);
+            let substates = self.sub_recurse_find(level, neighbor_idx, side);
             if !substates.is_empty() {
                 ret.extend_from_slice(&substates);
                 continue;
             }
 
             // If we do not find cells in lower levels, it's likely that a super cell exists.
-            // We don't need recursion unlike substates, because it's a linear search.
-            let mut supidx = idx;
-            let mut neighbor_supidx = neighbor_idx;
-            let ancestor = 'ancestor: {
-                for suplevel in (0..level).rev() {
-                    supidx[0] /= 2;
-                    supidx[1] /= 2;
-                    neighbor_supidx[0] /= 2;
-                    neighbor_supidx[1] /= 2;
-                    if supidx == neighbor_supidx {
-                        break 'ancestor None;
-                    }
-                    if let Some(found_parent) = self.levels[suplevel].get(&neighbor_supidx) {
-                        break 'ancestor Some((suplevel, neighbor_supidx, found_parent));
-                    }
-                }
-                None
-            };
-            if let Some(ancestor) = ancestor {
+            if let Some(ancestor) = self.super_find(level, idx, neighbor_idx) {
                 // dbg_println!("    Searching up: {level}, {idx:?}, {side:?}");
-                ret.extend_from_slice(&self.recurse_find(ancestor.0, ancestor.1, side));
+                ret.push((ancestor.0, ancestor.1));
             }
         }
         ret
