@@ -15,8 +15,7 @@ use self::{
     search::{can_connect_goal, insert_to_grid_map, search, to_cell},
 };
 use super::{
-    interpolation::interpolate, wrap_angle, Agent, AgentTarget, GameEnv, AGENT_HALFLENGTH,
-    AGENT_HALFWIDTH, AGENT_SCALE,
+    interpolation::interpolate, wrap_angle, Agent, AgentClass, AgentTarget, GameEnv, AGENT_SCALE,
 };
 use crate::{
     collision::{CollisionShape, Obb},
@@ -37,11 +36,12 @@ impl AgentState {
         Self { x, y, heading }
     }
 
-    pub(crate) fn collision_shape(&self) -> CollisionShape {
+    pub(crate) fn collision_shape(&self, class: AgentClass) -> CollisionShape {
+        let shape = class.shape();
         CollisionShape::BBox(Obb {
             center: Vector2::new(self.x, self.y),
-            xs: AGENT_HALFLENGTH,
-            ys: AGENT_HALFWIDTH,
+            xs: shape.0,
+            ys: shape.1,
             orient: self.heading,
         })
     }
@@ -463,8 +463,9 @@ impl Agent {
     pub(super) fn check_avoidance_collision(&mut self, env: &GameEnv) -> Option<()> {
         let ss = self.search_state.as_mut()?;
 
-        let collision_checker =
-            |state: AgentState| Agent::collision_check(Some(self.id), state, env.entities, true);
+        let collision_checker = |state: AgentState| {
+            Agent::collision_check(Some(self.id), state, self.class, env.entities, true)
+        };
 
         /// Assign infinite cost to node i and its subtree, assuming there are no cycles
         fn infinite_cost(ss: &mut SearchState, i: usize, recurse: usize) {
@@ -570,7 +571,7 @@ impl Agent {
                     .unwrap_or(false);
                 res
             };
-            Agent::collision_check_fn(ignore, state, entities, true)
+            Agent::collision_check_fn(ignore, state, self.class, entities, true)
         };
         let drive = DIST_RADIUS * 2.5 * if back { -1. } else { 1. };
         let mut all_routes = vec![];

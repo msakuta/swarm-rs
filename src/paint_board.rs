@@ -1,5 +1,5 @@
 use crate::{
-    agent::{Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS, BULLET_SPEED},
+    agent::{AgentClass, Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS},
     app_data::{AppData, LineMode},
     entity::Entity,
     game::Resource,
@@ -10,6 +10,7 @@ use crate::{
     triangle_utils::center_of_triangle_obj,
 };
 
+use cgmath::{InnerSpace, Vector2};
 use druid::{
     kurbo::{Arc, Shape},
     piet::kurbo::{BezPath, Circle, Line},
@@ -294,10 +295,12 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                 let rot_transform =
                     *view_transform * Affine::translate(pos.to_vec2()) * Affine::rotate(orient);
                 let mut path = BezPath::new();
-                path.move_to(Point::new(-AGENT_HALFLENGTH, -AGENT_HALFWIDTH));
-                path.line_to(Point::new(AGENT_HALFLENGTH, -AGENT_HALFWIDTH));
-                path.line_to(Point::new(AGENT_HALFLENGTH, AGENT_HALFWIDTH));
-                path.line_to(Point::new(-AGENT_HALFLENGTH, AGENT_HALFWIDTH));
+                let class = agent.get_class().unwrap_or(AgentClass::Worker);
+                let (length, width) = class.shape();
+                path.move_to(Point::new(-length, -width));
+                path.line_to(Point::new(length, -width));
+                path.line_to(Point::new(length, width));
+                path.line_to(Point::new(-length, width));
                 path.close_path();
                 ctx.stroke(rot_transform * path, brush, 1.);
             }
@@ -438,6 +441,19 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             let health = agent.get_health_rate();
             let view_pos_left = *view_transform * Point::new(pos.x - 1., pos.y - 1.);
             let view_pos_right = *view_transform * Point::new(pos.x + 1., pos.y - 1.);
+            if matches!(agent.get_class(), Some(AgentClass::Fighter)) {
+                let mut cross = BezPath::new();
+                let base = view_pos_left + Vec2::new(8., -5.);
+                cross.move_to(base + Vec2::new(-8., -25.));
+                cross.line_to(base + Vec2::new(0., -20.));
+                cross.line_to(base + Vec2::new(8., -25.));
+                cross.line_to(base + Vec2::new(8., -20.));
+                cross.line_to(base + Vec2::new(0., -15.));
+                cross.line_to(base + Vec2::new(-8., -20.));
+                cross.close_path();
+                ctx.fill(&cross, &Color::YELLOW);
+                ctx.stroke(cross, brush, 1.);
+            }
             let l = view_pos_left.x;
             let r = view_pos_right.x;
             let t = view_pos_left.y - 15.;
@@ -475,25 +491,36 @@ fn paint_bullets(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
         for bullet in game.bullets.iter() {
             let pos = to_vec2(bullet.pos);
             let velo = to_vec2(bullet.velo).normalize();
-            let perp = Vec2::new(velo.y, -velo.x) * BULLET_RADIUS;
-            let length = bullet.traveled.min(2. * BULLET_SPEED);
+            let length = bullet
+                .traveled
+                .min(2. * Vector2::from(bullet.velo).magnitude());
             let tail = pos - velo * length;
-            let mut trail = BezPath::new();
-            trail.move_to((pos + perp).to_point());
-            trail.line_to((pos - perp).to_point());
-            trail.line_to(tail.to_point());
-            trail.close_path();
-            ctx.fill(trail, &Color::rgb8(255, 191, 63));
-            if !draw_small {
-                draw_bullet(ctx, bullet, to_point(bullet.pos), BULLET_RADIUS);
-            }
+            if matches!(bullet.shooter_class, AgentClass::Fighter) {
+                let perp = Vec2::new(velo.y, -velo.x) * BULLET_RADIUS;
+                let mut trail = BezPath::new();
+                trail.move_to((pos + perp).to_point());
+                trail.line_to((pos - perp).to_point());
+                trail.line_to(tail.to_point());
+                trail.close_path();
+                ctx.fill(trail, &Color::rgb8(255, 191, 63));
+                if !draw_small {
+                    draw_bullet(ctx, bullet, to_point(bullet.pos), BULLET_RADIUS);
+                }
+            } else {
+                let mut trail = BezPath::new();
+                trail.move_to((pos + velo).to_point());
+                trail.line_to((pos - velo).to_point());
+                ctx.stroke(trail, &Color::rgb8(255, 191, 63), 0.075);
+            };
         }
     });
 
     if draw_small {
         for bullet in game.bullets.iter() {
-            let view_pos = *view_transform * to_point(bullet.pos);
-            draw_bullet(ctx, bullet, view_pos, TARGET_PIXELS);
+            if matches!(bullet.shooter_class, AgentClass::Fighter) {
+                let view_pos = *view_transform * to_point(bullet.pos);
+                draw_bullet(ctx, bullet, view_pos, TARGET_PIXELS);
+            }
         }
     }
 }
@@ -521,8 +548,12 @@ fn paint_resources(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) 
 fn paint_temp_ents(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
     for temp_ent in data.game.borrow().temp_ents.iter() {
         let pos = to_point(temp_ent.pos);
-        let circle = Circle::new(pos, 2. * (MAX_TTL - temp_ent.ttl) / MAX_TTL);
-        let alpha = (temp_ent.ttl * 512. / MAX_TTL).min(255.) as u8;
+        let max_ttl = temp_ent.max_ttl;
+        let circle = Circle::new(
+            pos,
+            temp_ent.max_radius * (max_ttl - temp_ent.ttl) / max_ttl,
+        );
+        let alpha = (temp_ent.ttl * 512. / max_ttl).min(255.) as u8;
         ctx.fill(*view_transform * circle, &Color::rgba8(255, 127, 0, alpha));
     }
 }

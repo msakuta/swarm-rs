@@ -1,8 +1,13 @@
 tree main = Sequence {
     var fight = false
-    Print(input <- "Resetting fight")
+    var fighter = false
+    GetClass(output -> class)
+    if (StringEq(lhs <- class, rhs <- "Fighter")) {
+        SetBool(value <- "true", output -> fighter)
+    }
+    Print(input <- "Resetting fight: {}, fighter: {}", arg0 <- fight, arg1 <- fighter)
     Repeat (n <- "10000") {
-        if (fight) {
+        if (fight || fighter) {
             # Print(input <- "Fighting")
             Fight
         } else {

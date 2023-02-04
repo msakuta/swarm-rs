@@ -1,4 +1,7 @@
-use crate::{agent::interpolation::lerp, paint_board::to_point};
+use crate::{
+    agent::{interpolation::lerp, AgentClass},
+    paint_board::to_point,
+};
 
 use super::{sampler::REWIRE_DISTANCE, SearchState, CELL_SIZE, DIST_RADIUS};
 use druid::{
@@ -135,7 +138,10 @@ impl SearchState {
                                 }
                             }
                             if params.shape_visible && 0 < level {
-                                if let Some(vertices) = state.state.collision_shape().to_vertices()
+                                if let Some(vertices) = state
+                                    .state
+                                    .collision_shape(AgentClass::Worker)
+                                    .to_vertices()
                                 {
                                     if let Some((first, rest)) = vertices.split_first() {
                                         let mut path = BezPath::new();

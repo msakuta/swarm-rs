@@ -1,6 +1,6 @@
 use crate::{
     agent::Agent,
-    agent::{Bullet, PathNode, AGENT_MAX_RESOURCE},
+    agent::{AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE},
     collision::CollisionShape,
     game::Game,
     qtree::QTreePathNode,
@@ -18,6 +18,7 @@ pub(crate) enum GameEvent {
     SpawnAgent {
         pos: [f64; 2],
         team: usize,
+        class: AgentClass,
         spawner: usize,
     },
 }
@@ -37,6 +38,13 @@ impl Entity {
         }
     }
 
+    pub(crate) fn get_class(&self) -> Option<AgentClass> {
+        match self {
+            Entity::Agent(agent) => Some(agent.class),
+            Entity::Spawner(_) => None,
+        }
+    }
+
     pub(crate) fn get_pos(&self) -> [f64; 2] {
         match self {
             Entity::Agent(agent) => agent.pos,
@@ -53,7 +61,9 @@ impl Entity {
 
     pub(crate) fn get_last_state(&self) -> Option<CollisionShape> {
         match self {
-            Entity::Agent(agent) => agent.get_last_state().map(|state| state.collision_shape()),
+            Entity::Agent(agent) => agent
+                .get_last_state()
+                .map(|state| state.collision_shape(agent.class)),
             Entity::Spawner(_spawner) => None, // Spawner never moves
         }
     }
@@ -177,14 +187,14 @@ impl Entity {
         }
     }
 
-    pub(crate) fn damage(&mut self) -> bool {
+    pub(crate) fn damage(&mut self, damage: u32) -> bool {
         match self {
             Entity::Agent(agent) => {
-                agent.health -= 1;
+                agent.health = agent.health.saturating_sub(damage);
                 agent.health == 0
             }
             Entity::Spawner(spawner) => {
-                spawner.health -= 1;
+                spawner.health = spawner.health.saturating_sub(damage);
                 spawner.health == 0
             }
         }

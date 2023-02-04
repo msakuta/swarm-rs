@@ -11,7 +11,7 @@ use std::{
 };
 
 use crate::{
-    agent::{Agent, AgentState, Bullet},
+    agent::{Agent, AgentClass, AgentState, Bullet},
     app_data::is_passable_at,
     collision::CollisionShape,
     entity::{Entity, GameEvent},
@@ -301,6 +301,7 @@ impl Game {
         &mut self,
         pos: [f64; 2],
         team: usize,
+        class: AgentClass,
         entities: &[RefCell<Entity>],
         static_: bool,
         randomness: f64,
@@ -318,11 +319,11 @@ impl Game {
                 heading: rng.next() * std::f64::consts::PI * 2.,
             };
 
-            if Agent::qtree_collision(None, state_candidate, entities) {
+            if Agent::qtree_collision(None, state_candidate, class, entities) {
                 continue;
             }
 
-            if Agent::collision_check(None, state_candidate, entities, false) {
+            if Agent::collision_check(None, state_candidate, class, entities, false) {
                 continue;
             }
 
@@ -345,6 +346,7 @@ impl Game {
                         state_candidate.into(),
                         state_candidate.heading,
                         team,
+                        class,
                         if static_ {
                             STATIC_SOURCE_FILE
                         } else {
@@ -458,14 +460,21 @@ impl Game {
 
         for event in events {
             match event {
-                GameEvent::SpawnAgent { pos, team, spawner } => {
-                    if let Some(agent) = self.try_new_agent(pos, team, &entities, false, 10.) {
+                GameEvent::SpawnAgent {
+                    pos,
+                    team,
+                    class,
+                    spawner,
+                } => {
+                    if let Some(agent) = self.try_new_agent(pos, team, class, &entities, false, 10.)
+                    {
+                        println!("Spawning agent {class:?}");
                         entities.push(RefCell::new(agent));
                         if let Some(spawner) = entities
                             .iter_mut()
                             .find(|ent| ent.borrow().get_id() == spawner)
                         {
-                            spawner.borrow_mut().remove_resource(100);
+                            spawner.borrow_mut().remove_resource(class.cost());
                         }
                     }
                 }
@@ -501,11 +510,19 @@ impl Game {
                                 &Vector2::from(bullet.velo),
                                 agent_vertices.into_iter().map(Vector2::from),
                             ) {
-                                temp_ents.push(TempEnt::new(bullet.pos));
-                                if agent.damage() {
+                                let temp_ent = match bullet.shooter_class {
+                                    AgentClass::Worker => {
+                                        TempEnt::new(bullet.pos, crate::temp_ents::MAX_TTL / 2., 1.)
+                                    }
+                                    AgentClass::Fighter => {
+                                        TempEnt::new(bullet.pos, crate::temp_ents::MAX_TTL, 2.)
+                                    }
+                                };
+                                temp_ents.push(temp_ent);
+                                if agent.damage(bullet.damage) {
                                     agent.set_active(false);
+                                    println!("Entity {} is being killed", agent.get_id());
                                 }
-                                println!("Agent {} is being killed", agent.get_id());
                                 return None;
                             }
                         }

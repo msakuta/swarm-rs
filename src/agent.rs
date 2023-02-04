@@ -9,7 +9,7 @@ use self::{
     behavior_nodes::{
         build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, ClearPathNode,
         ClearTarget, CollectResource, DepositResource, DriveCommand, FaceToTargetCommand,
-        FindEnemyCommand, FindPathCommand, FindResource, FindSpawner, FollowPathCommand,
+        FindEnemyCommand, FindPathCommand, FindResource, FindSpawner, FollowPathCommand, GetClass,
         GetIdCommand, GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode,
         IsResourceFull, IsSpawnerResourceFull, IsTargetVisibleCommand, MoveToCommand, ShootCommand,
         SimpleAvoidanceCommand, TargetIdNode, TargetPosCommand,
@@ -33,6 +33,7 @@ use behavior_tree_lite::{error::LoadError, BehaviorResult, Blackboard, Lazy};
 use std::{
     cell::RefCell,
     collections::{HashSet, VecDeque},
+    fmt::Display,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Mutex,
@@ -44,14 +45,99 @@ pub(crate) struct Bullet {
     pub pos: [f64; 2],
     pub velo: [f64; 2],
     pub team: usize,
+    pub damage: u32,
     /// Distance traveled, used for rendering
     pub traveled: f64,
+    pub shooter_class: AgentClass,
+}
+
+impl Bullet {
+    pub fn new(pos: [f64; 2], velo: [f64; 2], team: usize, damage: u32, class: AgentClass) -> Self {
+        Self {
+            pos,
+            velo,
+            team,
+            damage,
+            traveled: 0.,
+            shooter_class: class,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum AgentTarget {
     Entity(usize),
     Resource([f64; 2]),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AgentClass {
+    Worker,
+    Fighter,
+}
+
+impl Display for AgentClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Worker => "Worker",
+                Self::Fighter => "Fighter",
+            }
+        )
+    }
+}
+
+impl AgentClass {
+    pub(crate) fn cost(&self) -> i32 {
+        match self {
+            Self::Worker => 100,
+            Self::Fighter => 500,
+        }
+    }
+
+    pub(crate) fn health(&self) -> u32 {
+        match self {
+            Self::Worker => AGENT_MAX_HEALTH,
+            Self::Fighter => AGENT_MAX_HEALTH * 3,
+        }
+    }
+
+    pub(crate) fn damage(&self) -> u32 {
+        match self {
+            Self::Worker => BULLET_DAMAGE,
+            Self::Fighter => BULLET_DAMAGE * 10,
+        }
+    }
+
+    pub(crate) fn bullet_speed(&self) -> f64 {
+        match self {
+            Self::Worker => BULLET_SPEED * 0.7,
+            Self::Fighter => BULLET_SPEED,
+        }
+    }
+
+    pub(crate) fn cooldown(&self) -> f64 {
+        match self {
+            Self::Worker => 20.,
+            Self::Fighter => 50.,
+        }
+    }
+
+    pub(crate) fn speed(&self) -> f64 {
+        match self {
+            Self::Worker => AGENT_SPEED,
+            Self::Fighter => AGENT_SPEED * 0.7,
+        }
+    }
+
+    pub(crate) fn shape(&self) -> (f64, f64) {
+        match self {
+            Self::Worker => (AGENT_HALFLENGTH, AGENT_HALFWIDTH),
+            Self::Fighter => (AGENT_HALFLENGTH * 1.5, AGENT_HALFWIDTH * 1.5),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -64,6 +150,7 @@ pub(crate) struct Agent {
     pub orient: f64,
     pub speed: f64,
     pub team: usize,
+    pub class: AgentClass,
     cooldown: f64,
     pub health: u32,
     pub resource: i32,
@@ -83,11 +170,12 @@ const AGENT_SCALE: f64 = 1.;
 pub(crate) const AGENT_HALFWIDTH: f64 = 0.3 * AGENT_SCALE;
 pub(crate) const AGENT_HALFLENGTH: f64 = 0.6 * AGENT_SCALE;
 pub(crate) const AGENT_SPEED: f64 = 0.125;
-pub(crate) const AGENT_MAX_HEALTH: u32 = 3;
+pub(crate) const AGENT_MAX_HEALTH: u32 = 100;
 pub(crate) const AGENT_MAX_RESOURCE: i32 = 100;
 const AGENT_VISIBLE_DISTANCE: f64 = 30.;
 pub(crate) const BULLET_RADIUS: f64 = 0.15;
 pub(crate) const BULLET_SPEED: f64 = 2.;
+pub(crate) const BULLET_DAMAGE: u32 = 10;
 
 struct GameEnv<'a> {
     _game: &'a mut Game,
@@ -100,6 +188,7 @@ impl Agent {
         pos: [f64; 2],
         orient: f64,
         team: usize,
+        class: AgentClass,
         behavior_source: &str,
     ) -> Result<Self, LoadError> {
         let id = *id_gen;
@@ -118,8 +207,9 @@ impl Agent {
             orient,
             speed: 0.,
             team,
+            class,
             cooldown: 5.,
-            health: AGENT_MAX_HEALTH,
+            health: class.health(),
             resource: 0,
             goal: None,
             search_state: None,
@@ -158,16 +248,17 @@ impl Agent {
     }
 
     pub(crate) fn get_health_rate(&self) -> f64 {
-        self.health as f64 / AGENT_MAX_HEALTH as f64
+        self.health as f64 / self.class.health() as f64
     }
 
     /// Check collision in qtree bounding boxes
     pub(crate) fn qtree_collision(
         ignore: Option<usize>,
         newpos: AgentState,
+        class: AgentClass,
         others: &[RefCell<Entity>],
     ) -> bool {
-        let aabb = newpos.collision_shape().to_aabb();
+        let aabb = newpos.collision_shape(class).to_aabb();
         for other in others {
             let other = other.borrow();
             if Some(other.get_id()) == ignore {
@@ -187,20 +278,22 @@ impl Agent {
     pub(crate) fn collision_check(
         ignore: Option<usize>,
         newpos: AgentState,
+        class: AgentClass,
         others: &[RefCell<Entity>],
         prediction: bool,
     ) -> bool {
-        Self::collision_check_fn(|id| Some(id) == ignore, newpos, others, prediction)
+        Self::collision_check_fn(|id| Some(id) == ignore, newpos, class, others, prediction)
     }
 
     /// Check collision with other entities, but not walls
     pub(crate) fn collision_check_fn(
         ignore: impl Fn(usize) -> bool,
         newpos: AgentState,
+        class: AgentClass,
         others: &[RefCell<Entity>],
         prediction: bool,
     ) -> bool {
-        let shape = newpos.collision_shape();
+        let shape = newpos.collision_shape(class);
         for entity in others.iter() {
             if let Ok(entity) = entity.try_borrow() {
                 if ignore(entity.get_id()) {
@@ -390,7 +483,6 @@ impl Agent {
                     .resource
                     .min(SPAWNER_MAX_RESOURCE - spawner.resource)
                     .min(10);
-                println!("deposit_resource moving {}", moved);
                 self.resource -= moved;
                 spawner.resource += moved;
                 if self.resource == 0 {
@@ -412,16 +504,17 @@ impl Agent {
         if dir.dot((Vector2::from(target_pos) - Vector2::from(self.pos)).normalize()) < 0.5 {
             return false;
         }
-        let bullet = Bullet {
-            pos: self.pos,
-            velo: (dir * BULLET_SPEED).into(),
-            team: self.team,
-            traveled: 0.,
-        };
+        let bullet = Bullet::new(
+            self.pos,
+            (dir * self.class.bullet_speed()).into(),
+            self.team,
+            self.class.damage(),
+            self.class,
+        );
 
         bullets.push(bullet);
 
-        self.cooldown += 50.;
+        self.cooldown += self.class.cooldown();
         true
     }
 
@@ -522,6 +615,8 @@ impl Agent {
                 } else if let Some(com) = f.downcast_ref::<MoveToCommand>() {
                     command = Some(Command::MoveTo(*com));
                     return MotionCommandResult::as_move_to(&self.last_motion_result);
+                } else if f.downcast_ref::<GetClass>().is_some() {
+                    return Some(Box::new(self.class));
                 } else if f.downcast_ref::<HasTargetNode>().is_some() {
                     return Some(Box::new(self.has_target(&entities)));
                 } else if f.downcast_ref::<TargetIdNode>().is_some() {

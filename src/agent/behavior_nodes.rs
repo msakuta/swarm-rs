@@ -1,6 +1,6 @@
 use crate::qtree::qtree::PathFindError;
 
-use super::{motion::OrientToResult, AgentState, MotionResult};
+use super::{motion::OrientToResult, AgentClass, AgentState, MotionResult};
 use behavior_tree_lite::{
     error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context,
     Lazy, PortSpec, Registry, Symbol,
@@ -28,7 +28,9 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     let mut registry = Registry::default();
     registry.register("SetBool", boxify(|| SetBool));
     registry.register("StringEq", boxify(|| StringEqNode));
+    registry.register("Gt", boxify(|| GtNode));
     registry.register("Print", boxify(|| PrintNode));
+    registry.register("GetClass", boxify(|| GetClass));
     registry.register("HasTarget", boxify(|| HasTargetNode));
     registry.register("TargetId", boxify(|| TargetIdNode));
     registry.register("TargetPos", boxify(|| TargetPosNode));
@@ -108,6 +110,28 @@ impl BehaviorNode for StringEqNode {
     }
 }
 
+struct GtNode;
+
+impl BehaviorNode for GtNode {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("lhs"), PortSpec::new_in("rhs")]
+    }
+
+    fn tick(
+        &mut self,
+        _arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let lhs = ctx.get_parse::<i32>("lhs");
+        let rhs = ctx.get_parse::<i32>("rhs");
+        if lhs.zip(rhs).map(|(lhs, rhs)| lhs > rhs).unwrap_or(false) {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
 pub(super) struct GetIdCommand;
 
 struct PrintNode;
@@ -153,6 +177,26 @@ impl BehaviorNode for PrintNode {
         } else {
             BehaviorResult::Fail
         }
+    }
+}
+
+pub(super) struct GetClass;
+
+impl BehaviorNode for GetClass {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_out("output")]
+    }
+
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let result = arg(self)
+            .and_then(|a| a.downcast_ref::<AgentClass>().copied())
+            .expect("Level (u32) should be always available");
+        ctx.set("output", result.to_string());
+        BehaviorResult::Success
     }
 }
 

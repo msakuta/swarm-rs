@@ -1,12 +1,13 @@
 use crate::{
+    agent::AgentClass,
     collision::{aabb_intersects, CollisionShape, Obb},
     entity::{Entity, GameEvent},
     game::Game,
 };
 use std::cell::RefCell;
 
-const SPAWNER_MAX_HEALTH: u32 = 10;
-pub(crate) const SPAWNER_MAX_RESOURCE: i32 = 300;
+const SPAWNER_MAX_HEALTH: u32 = 1000;
+pub(crate) const SPAWNER_MAX_RESOURCE: i32 = 1000;
 pub(crate) const SPAWNER_RADIUS: f64 = 1.0;
 
 pub(crate) type SpawnerState = [f64; 2];
@@ -76,34 +77,40 @@ impl Spawner {
         game: &mut Game,
         entities: &[RefCell<Entity>],
     ) -> Vec<GameEvent> {
-        if self.resource < 100 {
+        if self.resource < AgentClass::Worker.cost() {
             self.resource += 1;
         }
 
-        if 100 <= self.resource {
-            let mut ret = vec![];
-            let rng = &mut game.rng;
-            if entities
-                .iter()
-                .filter(|entity| {
-                    entity
-                        .try_borrow()
-                        .map(|entity| entity.is_agent() && entity.get_team() == self.team)
-                        .unwrap_or(false)
-                })
-                .count()
-                < 3
-                && rng.next() < 0.1
-            {
-                ret.push(GameEvent::SpawnAgent {
-                    pos: self.pos,
-                    team: self.team,
-                    spawner: self.id,
-                })
+        for class in [AgentClass::Fighter, AgentClass::Worker] {
+            if class.cost() <= self.resource {
+                let mut ret = vec![];
+                let rng = &mut game.rng;
+                if entities
+                    .iter()
+                    .filter(|entity| {
+                        entity
+                            .try_borrow()
+                            .map(|entity| {
+                                entity.is_agent()
+                                    && entity.get_team() == self.team
+                                    && entity.get_class() == Some(class)
+                            })
+                            .unwrap_or(false)
+                    })
+                    .count()
+                    < 3
+                    && rng.next() < 0.1
+                {
+                    ret.push(GameEvent::SpawnAgent {
+                        pos: self.pos,
+                        team: self.team,
+                        spawner: self.id,
+                        class,
+                    })
+                }
+                return ret;
             }
-            ret
-        } else {
-            vec![]
         }
+        vec![]
     }
 }

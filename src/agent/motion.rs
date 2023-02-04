@@ -4,7 +4,7 @@ use cgmath::{InnerSpace, Vector2};
 
 use crate::{app_data::is_passable_at, entity::Entity, game::Game};
 
-use super::{wrap_angle, Agent, AgentState, MotionResult, AGENT_SPEED};
+use super::{wrap_angle, Agent, AgentState, MotionResult};
 
 /// The agent can take only one of the motion commands in one tick.
 /// This enum will store the result from previous tick, because behavior tree may try
@@ -108,7 +108,7 @@ impl Agent {
             )
         };
 
-        let self_shape = state.collision_shape();
+        let self_shape = state.collision_shape(self.class);
 
         if !entities
             .iter()
@@ -136,15 +136,15 @@ impl Agent {
         others: &[RefCell<Entity>],
     ) -> bool {
         let forward = Vector2::new(self.orient.cos(), self.orient.sin());
-        let target_pos =
-            Vector2::from(self.pos) + drive.min(AGENT_SPEED).max(-AGENT_SPEED) * forward;
+        let speed = self.class.speed();
+        let target_pos = Vector2::from(self.pos) + drive.min(speed).max(-speed) * forward;
         let target_state = AgentState {
             x: target_pos.x,
             y: target_pos.y,
             heading: self.orient,
         };
 
-        if Self::collision_check(Some(self.id), target_state, others, false) {
+        if Self::collision_check(Some(self.id), target_state, self.class, others, false) {
             self.speed = 0.;
             return false;
         }
