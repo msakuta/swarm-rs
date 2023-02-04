@@ -4,16 +4,16 @@ use cgmath::{InnerSpace, Vector2};
 
 use crate::{app_data::is_passable_at, entity::Entity, game::Game};
 
-use super::{wrap_angle, Agent, AgentState, FollowPathResult, AGENT_SPEED};
+use super::{wrap_angle, Agent, AgentState, MotionResult, AGENT_SPEED};
 
 /// The agent can take only one of the motion commands in one tick.
 /// This enum will store the result from previous tick, because behavior tree may try
 /// to perform multiple commands in a tick, but the actual agent can take only one move.
 #[derive(Debug)]
-pub(super) enum MotionResult {
+pub(super) enum MotionCommandResult {
     Drive(bool),
-    MoveTo(bool),
-    FollowPath(FollowPathResult),
+    MoveTo(MotionResult),
+    FollowPath(MotionResult),
     FaceToTarget(OrientToResult),
 }
 
@@ -29,19 +29,25 @@ macro_rules! impl_as_result {
     }
 }
 
-impl MotionResult {
-    impl_as_result!(as_drive, MotionResult::Drive);
-    impl_as_result!(as_move_to, MotionResult::MoveTo);
+impl MotionCommandResult {
+    impl_as_result!(as_drive, MotionCommandResult::Drive);
+
+    pub(super) fn as_move_to(this: &Option<Self>) -> Option<Box<dyn std::any::Any>> {
+        let r = this.as_ref()?;
+        if let MotionCommandResult::MoveTo(r) = r {
+            Some(Box::new(*r) as Box<dyn std::any::Any>)
+        } else {
+            None
+        }
+    }
 
     /// FollowPath command will return Following until it finds a path
     pub(super) fn as_follow_path(this: &Option<Self>) -> Option<Box<dyn std::any::Any>> {
-        let Some(r) = this else {
-            return None;
-        };
-        if let MotionResult::FollowPath(r) = r {
+        let r = this.as_ref()?;
+        if let MotionCommandResult::FollowPath(r) = r {
             Some(Box::new(*r) as Box<dyn std::any::Any>)
         } else {
-            Some(Box::new(FollowPathResult::Following) as Box<dyn std::any::Any>)
+            Some(Box::new(MotionResult::Following) as Box<dyn std::any::Any>)
         }
     }
 
@@ -162,24 +168,28 @@ impl Agent {
         false
     }
 
+    /// Returns whether the motion was achieved
     pub(crate) fn move_to(
         &mut self,
         game: &mut Game,
         target_pos: [f64; 2],
         backward: bool,
         others: &[RefCell<Entity>],
-    ) -> bool {
-        if matches!(
-            self.orient_to(target_pos, backward, others),
-            OrientToResult::Arrived | OrientToResult::Blocked
-        ) {
-            let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
-            let distance = delta.magnitude();
+    ) -> MotionResult {
+        let orient = self.orient_to(target_pos, backward, others);
+        match orient {
+            OrientToResult::Approaching => MotionResult::Following,
+            OrientToResult::Arrived => {
+                let delta = Vector2::from(target_pos) - Vector2::from(self.pos);
+                let distance = delta.magnitude();
 
-            self.drive(if backward { -distance } else { distance }, game, others)
-        } else {
-            self.speed = 0.;
-            true
+                self.drive(if backward { -distance } else { distance }, game, others)
+                    .into()
+            }
+            OrientToResult::Blocked => {
+                self.speed = 0.;
+                MotionResult::Blocked
+            }
         }
     }
 }

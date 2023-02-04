@@ -13,7 +13,7 @@ use self::{
         IsTargetVisibleCommand, MoveToCommand, ShootCommand, SimpleAvoidanceCommand, TargetIdNode,
         TargetPosCommand,
     },
-    motion::{MotionResult, OrientToResult},
+    motion::{MotionCommandResult, OrientToResult},
 };
 use crate::{
     agent::behavior_nodes::{
@@ -75,7 +75,7 @@ pub(crate) struct Agent {
     pub avoidance_plan: Option<Vec<(f64, f64)>>,
     pub path: QTreePath,
     pub trace: VecDeque<[f64; 2]>,
-    last_motion_result: Option<MotionResult>,
+    last_motion_result: Option<MotionCommandResult>,
     last_state: Option<AgentState>,
     behavior_tree: Option<BehaviorTree>,
     blackboard: Blackboard,
@@ -188,8 +188,20 @@ impl Agent {
     }
 
     /// Check collision with other entities, but not walls
+    ///
+    /// Simpler interface of [`collision_check_fn`]
     pub(crate) fn collision_check(
         ignore: Option<usize>,
+        newpos: AgentState,
+        others: &[RefCell<Entity>],
+        prediction: bool,
+    ) -> bool {
+        Self::collision_check_fn(|id| Some(id) == ignore, newpos, others, prediction)
+    }
+
+    /// Check collision with other entities, but not walls
+    pub(crate) fn collision_check_fn(
+        ignore: impl Fn(usize) -> bool,
         newpos: AgentState,
         others: &[RefCell<Entity>],
         prediction: bool,
@@ -197,7 +209,7 @@ impl Agent {
         let shape = newpos.collision_shape();
         for entity in others.iter() {
             if let Ok(entity) = entity.try_borrow() {
-                if Some(entity.get_id()) == ignore {
+                if ignore(entity.get_id()) {
                     continue;
                 }
                 let buffer = if prediction && entity.get_speed() != 0. {
@@ -352,10 +364,15 @@ impl Agent {
                     .resource
                     .min(SPAWNER_MAX_RESOURCE - spawner.resource)
                     .min(10);
-                println!(" moving {}", moved);
+                println!("deposit_resource moving {}", moved);
                 self.resource -= moved;
                 spawner.resource += moved;
-                return BehaviorResult::Running;
+                if self.resource == 0 {
+                    self.path.clear();
+                    return BehaviorResult::Success;
+                } else {
+                    return BehaviorResult::Running;
+                }
             }
         }
         BehaviorResult::Success
@@ -398,22 +415,27 @@ impl Agent {
         }
     }
 
-    fn do_simple_avoidance(&mut self, _game: &mut Game, entities: &[RefCell<Entity>]) -> bool {
+    fn do_simple_avoidance(
+        &mut self,
+        _game: &mut Game,
+        entities: &[RefCell<Entity>],
+    ) -> Option<OrientToResult> {
         let Some(steer) = &self.avoidance_plan else {
-            return false
+            return None;
         };
         let min_steer = steer
             .iter()
             .min_by(|a, b| a.1.abs().partial_cmp(&b.1.abs()).unwrap());
         let Some(&(drive, steer)) = min_steer else {
-            return false
+            return None
         };
         if steer != 0. {
             let target = self.get_avoidance_state((drive, steer));
             let res = self.orient_to(target.into(), false, entities);
-            matches!(res, OrientToResult::Approaching)
+            println!("{}: do_simple_avoidance: {res:?} steer: {steer:?}", self.id);
+            Some(res)
         } else {
-            false
+            None
         }
     }
 
@@ -468,10 +490,10 @@ impl Agent {
             let mut process = |f: &dyn std::any::Any| {
                 if let Some(com) = f.downcast_ref::<DriveCommand>() {
                     command = Some(Command::Drive(*com));
-                    return MotionResult::as_drive(&self.last_motion_result);
+                    return MotionCommandResult::as_drive(&self.last_motion_result);
                 } else if let Some(com) = f.downcast_ref::<MoveToCommand>() {
                     command = Some(Command::MoveTo(*com));
-                    return MotionResult::as_move_to(&self.last_motion_result);
+                    return MotionCommandResult::as_move_to(&self.last_motion_result);
                 } else if f.downcast_ref::<HasTargetNode>().is_some() {
                     return Some(Box::new(self.target.is_some()));
                 } else if f.downcast_ref::<TargetIdNode>().is_some() {
@@ -513,11 +535,11 @@ impl Agent {
                         _ => (),
                     }
                 } else if let Some(com) = f.downcast_ref::<FindPathCommand>() {
-                    let found_path = self.find_path(com.0, game).is_ok();
+                    let found_path = self.find_path(com.0, game);
                     return Some(Box::new(found_path) as Box<dyn std::any::Any>);
                 } else if let Some(cmd) = f.downcast_ref::<FollowPathCommand>() {
                     command = Some(Command::FollowPath(*cmd));
-                    return MotionResult::as_follow_path(&self.last_motion_result);
+                    return MotionCommandResult::as_follow_path(&self.last_motion_result);
                 } else if f.downcast_ref::<ShootCommand>().is_some() {
                     let forward = Vector2::new(self.orient.cos(), self.orient.sin());
                     self.shoot_bullet(bullets, (Vector2::from(self.pos) + forward).into());
@@ -560,7 +582,7 @@ impl Agent {
                     return Some(ret);
                 } else if let Some(com) = f.downcast_ref::<FaceToTargetCommand>() {
                     command = Some(Command::FaceToTarget(*com));
-                    return MotionResult::as_face_to_target(&self.last_motion_result);
+                    return MotionCommandResult::as_face_to_target(&self.last_motion_result);
                 }
                 None
                 // if let Some(f) = f.downcast_ref::<dyn Fn(&Agent)>() {
@@ -578,22 +600,23 @@ impl Agent {
                 self.last_state = None;
             }
 
+            // An agent can only run one command per tick.
             match command {
                 Some(Command::Drive(com)) => {
                     let res = self.drive(com.0, game, entities);
-                    self.last_motion_result = Some(MotionResult::Drive(res));
+                    self.last_motion_result = Some(MotionCommandResult::Drive(res));
                 }
                 Some(Command::MoveTo(com)) => {
                     let res = self.move_to(game, com.0, false, entities);
-                    self.last_motion_result = Some(MotionResult::MoveTo(res));
+                    self.last_motion_result = Some(MotionCommandResult::MoveTo(res));
                 }
                 Some(Command::FollowPath(_com)) => {
                     let res = self.follow_path(game, entities);
-                    self.last_motion_result = Some(MotionResult::FollowPath(res));
+                    self.last_motion_result = Some(MotionCommandResult::FollowPath(res));
                 }
                 Some(Command::FaceToTarget(com)) => {
                     let res = self.orient_to(com.0, false, entities);
-                    self.last_motion_result = Some(MotionResult::FaceToTarget(res));
+                    self.last_motion_result = Some(MotionCommandResult::FaceToTarget(res));
                 }
                 _ => {
                     self.last_motion_result = None;
@@ -641,46 +664,49 @@ impl Agent {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum FollowPathResult {
+pub(crate) enum MotionResult {
     Following,
     Blocked,
     Arrived,
 }
 
-impl From<bool> for FollowPathResult {
+impl From<bool> for MotionResult {
     fn from(b: bool) -> Self {
         if b {
-            FollowPathResult::Following
+            MotionResult::Following
         } else {
-            FollowPathResult::Blocked
+            MotionResult::Blocked
         }
     }
 }
 
-impl From<FollowPathResult> for bool {
-    fn from(b: FollowPathResult) -> bool {
-        matches!(b, FollowPathResult::Following)
+impl From<MotionResult> for bool {
+    fn from(b: MotionResult) -> bool {
+        matches!(b, MotionResult::Following)
     }
 }
 
 impl Agent {
-    fn follow_path(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) -> FollowPathResult {
+    fn follow_path(&mut self, game: &mut Game, entities: &[RefCell<Entity>]) -> MotionResult {
         if self.follow_avoidance_path(game, entities) {
-            FollowPathResult::Following
+            MotionResult::Following
         } else if let Some(target) = self.path.last() {
             if target.radius < Vector2::from(target.pos).distance(Vector2::from(self.pos)) {
                 let target_pos = target.pos;
-                if self.do_simple_avoidance(game, entities) {
-                    FollowPathResult::Following
-                } else {
-                    self.move_to(game, target_pos, false, entities).into()
+                let res = self.do_simple_avoidance(game, entities);
+                match res {
+                    Some(OrientToResult::Blocked) => MotionResult::Blocked,
+                    Some(OrientToResult::Approaching) | Some(OrientToResult::Arrived) => {
+                        MotionResult::Following
+                    }
+                    None => self.move_to(game, target_pos, false, entities).into(),
                 }
             } else {
                 self.path.pop();
-                FollowPathResult::Following
+                MotionResult::Following
             }
         } else {
-            FollowPathResult::Arrived
+            MotionResult::Arrived
         }
     }
 

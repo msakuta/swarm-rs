@@ -1,4 +1,4 @@
-use super::{motion::OrientToResult, AgentState, FollowPathResult};
+use super::{motion::OrientToResult, AgentState, MotionResult};
 use behavior_tree_lite::{
     error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context,
     Lazy, PortSpec, Registry, Symbol,
@@ -300,7 +300,7 @@ pub(super) struct FindPathNode;
 
 impl BehaviorNode for FindPathNode {
     fn provided_ports(&self) -> Vec<PortSpec> {
-        vec![PortSpec::new_in("target")]
+        vec![*TARGET_SPEC]
     }
 
     fn tick(
@@ -308,8 +308,12 @@ impl BehaviorNode for FindPathNode {
         arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        if let Some(target) = ctx.get::<[f64; 2]>("target") {
-            arg(&FindPathCommand(*target));
+        if ctx
+            .get::<[f64; 2]>(*TARGET)
+            .and_then(|target| arg(&FindPathCommand(*target)))
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap_or(false)
+        {
             BehaviorResult::Success
         } else {
             BehaviorResult::Fail
@@ -332,15 +336,14 @@ impl BehaviorNode for FollowPath {
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         let res = arg(&FollowPathCommand);
-        let res = res
-            .as_ref()
-            .and_then(|res| res.downcast_ref::<FollowPathResult>())
-            .map(|b| *b)
-            .unwrap_or(FollowPathResult::Blocked);
+        let res = res.as_ref().map(|r| {
+            *r.downcast_ref::<MotionResult>()
+                .expect("MotionResult type expected")
+        });
 
-        ctx.set("arrived", matches!(res, FollowPathResult::Arrived));
+        ctx.set("arrived", matches!(res, Some(MotionResult::Arrived)));
 
-        if res.into() {
+        if res.unwrap_or(MotionResult::Following).into() {
             BehaviorResult::Success
         } else {
             // println!("Can't follow path!");
@@ -391,10 +394,12 @@ impl BehaviorNode for MoveToNode {
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         if let Some(pos) = ctx.get::<[f64; 2]>("pos") {
-            if arg(&MoveToCommand(*pos))
-                .and_then(|res| res.downcast_ref::<bool>().copied())
-                .unwrap_or(false)
-            {
+            if matches!(
+                arg(&MoveToCommand(*pos))
+                    .and_then(|res| res.downcast_ref::<MotionResult>().copied())
+                    .expect("MotionResult type is expected"),
+                MotionResult::Following
+            ) {
                 BehaviorResult::Success
             } else {
                 BehaviorResult::Fail

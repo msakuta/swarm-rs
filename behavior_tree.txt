@@ -33,10 +33,12 @@ tree GatherResource = Sequence {
 tree FollowPathAndAvoid = Sequence {
     TargetPos (pos -> target_pos)
     if (!HasPath) {
-        FindPath (target <- target_pos)
+        if (!FindPath (target <- target_pos)) {
+            Print (input <- "Failed to find path!")
+        }
     }
     if (HasPath) {
-        SimpleAvoidance
+        #SimpleAvoidance
         if (!FollowPath) {
             Print (input <- "Blocked, finding path")
             ReactiveSequence {

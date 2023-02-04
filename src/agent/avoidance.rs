@@ -15,8 +15,8 @@ use self::{
     search::{can_connect_goal, insert_to_grid_map, search, to_cell},
 };
 use super::{
-    interpolation::interpolate, wrap_angle, Agent, GameEnv, AGENT_HALFLENGTH, AGENT_HALFWIDTH,
-    AGENT_SCALE,
+    interpolation::interpolate, wrap_angle, Agent, AgentTarget, GameEnv, AGENT_HALFLENGTH,
+    AGENT_HALFWIDTH, AGENT_SCALE,
 };
 use crate::{
     collision::{CollisionShape, Obb},
@@ -552,8 +552,26 @@ impl Agent {
         back: bool,
         entities: &[RefCell<Entity>],
     ) -> Vec<(f64, f64)> {
-        let collision_checker =
-            |state: AgentState| Agent::collision_check(Some(self.id), state, entities, true);
+        let collision_checker = |state: AgentState| {
+            let ignore = |id| {
+                if id == self.id {
+                    return true;
+                }
+                let res = self
+                    .target
+                    .map(|target| {
+                        if let AgentTarget::Entity(tid) = target {
+                            println!("{}: Collision ignoring target {tid:?}", self.id);
+                            tid == id
+                        } else {
+                            false
+                        }
+                    })
+                    .unwrap_or(false);
+                res
+            };
+            Agent::collision_check_fn(ignore, state, entities, true)
+        };
         let drive = DIST_RADIUS * 2.5 * if back { -1. } else { 1. };
         let mut all_routes = vec![];
 

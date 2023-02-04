@@ -110,8 +110,9 @@ impl QTreeSearcher {
         ignore_id: &[usize],
         start: [f64; 2],
         end: [f64; 2],
+        goal_radius: f64,
     ) -> (Option<QTreePath>, SearchTree) {
-        self.qtree.path_find(ignore_id, start, end)
+        self.qtree.path_find(ignore_id, start, end, goal_radius)
     }
 }
 
@@ -130,7 +131,7 @@ pub(crate) struct QTreePathNode {
 }
 
 impl QTreePathNode {
-    pub fn _new(pos: [f64; 2], radius: f64) -> Self {
+    pub fn new(pos: [f64; 2], radius: f64) -> Self {
         Self { pos, radius }
     }
 

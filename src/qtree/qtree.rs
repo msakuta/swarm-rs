@@ -247,6 +247,7 @@ impl QTree {
         ignore_id: &[usize],
         start: [f64; 2],
         end: [f64; 2],
+        goal_radius: f64,
     ) -> (Option<QTreePath>, SearchTree) {
         let Some(start_found) = self.find(start) else {
             return (None, SearchTree::new())
@@ -352,7 +353,9 @@ impl QTree {
 
                 if (nei_level, nei_idx) == end_idx {
                     let mut path = vec![];
-                    path.push(QTreePathNode::new_with_qtree(end_idx, self));
+                    // The last node should directly connect to the goal
+                    // path.push(QTreePathNode::new_with_qtree(end_idx, self));
+                    path.push(QTreePathNode::new(end, goal_radius));
                     let mut node = Some((state.level, state.idx));
                     while let Some(anode) = node {
                         path.push(QTreePathNode::new_with_qtree(anode, self));
@@ -414,7 +417,7 @@ impl QTree {
             }
         }
 
-        (Some(vec![]), self.build_search_tree(closed_set))
+        (None, self.build_search_tree(closed_set))
     }
 
     fn build_search_tree(&self, closed_set: HashMap<QTreeIdx, ClosedState>) -> SearchTree {
