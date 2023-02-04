@@ -217,24 +217,35 @@ impl QTree {
             (Side::Right, [-1, 0]),
             (Side::Bottom, [0, -1]),
         ] {
-            let subidx = [idx[0] + offset[0], idx[1] + offset[1]];
-            let substates = self.recurse_find(level, subidx, side);
-            ret.extend_from_slice(&substates);
-            let supidx = [subidx[0] / 2, subidx[1] / 2];
-            if substates.is_empty() && supidx != [idx[0] / 2, idx[1] / 2] {
-                let mut parent = (level - 1, supidx);
-                let mut ancestor = None;
-                while 0 < parent.0 {
-                    if let Some(found_parent) = self.levels[parent.0].get(&parent.1) {
-                        ancestor = Some((parent.0, parent.1, found_parent));
-                        break;
+            let neighbor_idx = [idx[0] + offset[0], idx[1] + offset[1]];
+            let substates = self.recurse_find(level, neighbor_idx, side);
+            if !substates.is_empty() {
+                ret.extend_from_slice(&substates);
+                continue;
+            }
+
+            // If we do not find cells in lower levels, it's likely that a super cell exists.
+            // We don't need recursion unlike substates, because it's a linear search.
+            let mut supidx = idx;
+            let mut neighbor_supidx = neighbor_idx;
+            let ancestor = 'ancestor: {
+                for suplevel in (0..level).rev() {
+                    supidx[0] /= 2;
+                    supidx[1] /= 2;
+                    neighbor_supidx[0] /= 2;
+                    neighbor_supidx[1] /= 2;
+                    if supidx == neighbor_supidx {
+                        break 'ancestor None;
                     }
-                    parent = (level - 1, [idx[0] / 2, idx[1] / 2]);
+                    if let Some(found_parent) = self.levels[suplevel].get(&neighbor_supidx) {
+                        break 'ancestor Some((suplevel, neighbor_supidx, found_parent));
+                    }
                 }
-                if let Some(ancestor) = ancestor {
-                    // dbg_println!("    Searching up: {level}, {idx:?}, {side:?}");
-                    ret.extend_from_slice(&self.recurse_find(ancestor.0, ancestor.1, side));
-                }
+                None
+            };
+            if let Some(ancestor) = ancestor {
+                // dbg_println!("    Searching up: {level}, {idx:?}, {side:?}");
+                ret.extend_from_slice(&self.recurse_find(ancestor.0, ancestor.1, side));
             }
         }
         ret
