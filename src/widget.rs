@@ -208,7 +208,19 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     let game = data.game.borrow();
                     let profiler = game.qtree_profiler.borrow();
                     format!(
-                        "QTree time: {:.06}ms, calls: {}",
+                        "QTree update time: {:.06}ms, calls: {}",
+                        profiler.get_average() * 1e3,
+                        profiler.get_count()
+                    )
+                }),
+                1.,
+            ))
+            .with_child(Flex::row().with_flex_child(
+                Label::new(|data: &AppData, _: &_| {
+                    let game = data.game.borrow();
+                    let profiler = game.path_find_profiler.borrow();
+                    format!(
+                        "Path find time: {:.06}ms, calls: {}",
                         profiler.get_average() * 1e3,
                         profiler.get_count()
                     )

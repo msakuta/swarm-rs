@@ -3,7 +3,7 @@ use crate::{game::Game, measure_time, qtree::qtree::PathFindError};
 
 impl Agent {
     pub fn find_path(&mut self, target: [f64; 2], game: &mut Game) -> Option<PathFindError> {
-        let ((found_path, search_tree), _time) = measure_time(|| {
+        let ((found_path, search_tree), time) = measure_time(|| {
             let qtree = &game.qtree;
             if let Some(AgentTarget::Entity(tgt_id)) = self.target {
                 qtree.path_find(&[self.id, tgt_id], self.pos, target, AGENT_HALFLENGTH * 1.5)
@@ -11,7 +11,7 @@ impl Agent {
                 qtree.path_find(&[self.id], self.pos, target, AGENT_HALFLENGTH * 1.5)
             }
         });
-        // println!("Agent::find_path: {:.03} ms", time * 1e3);
+        game.path_find_profiler.get_mut().add(time);
         self.search_tree = Some(search_tree);
         match found_path {
             Ok(path) => {

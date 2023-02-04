@@ -124,6 +124,7 @@ pub(crate) struct Game {
     pub(crate) triangle_profiler: RefCell<Profiler>,
     pub(crate) pixel_profiler: RefCell<Profiler>,
     pub(crate) qtree_profiler: RefCell<Profiler>,
+    pub(crate) path_find_profiler: RefCell<Profiler>,
     pub(crate) source: Rc<String>,
     pub(crate) qtree: QTreeSearcher,
 }
@@ -168,6 +169,7 @@ impl Game {
             triangle_profiler: RefCell::new(Profiler::new()),
             pixel_profiler: RefCell::new(Profiler::new()),
             qtree_profiler: RefCell::new(Profiler::new()),
+            path_find_profiler: RefCell::new(Profiler::new()),
             source: Rc::new(String::new()),
             qtree,
         }
