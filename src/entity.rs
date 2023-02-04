@@ -1,9 +1,7 @@
-use cgmath::Vector2;
-
 use crate::{
     agent::Agent,
     agent::{Bullet, PathNode, AGENT_MAX_RESOURCE},
-    collision::{CollisionShape, Obb},
+    collision::CollisionShape,
     game::Game,
     qtree::QTreePathNode,
     spawner::{Spawner, SPAWNER_MAX_RESOURCE},
@@ -23,8 +21,6 @@ pub(crate) enum GameEvent {
         spawner: usize,
     },
 }
-
-const SPAWNER_RADIUS: f64 = 0.5;
 
 impl Entity {
     pub(crate) fn get_id(&self) -> usize {
@@ -51,15 +47,7 @@ impl Entity {
     pub(crate) fn get_shape(&self) -> CollisionShape {
         match self {
             Entity::Agent(agent) => agent.get_shape(),
-            Entity::Spawner(spawner) => {
-                let spawner_pos = Vector2::from(spawner.pos);
-                CollisionShape::BBox(Obb {
-                    center: spawner_pos,
-                    xs: SPAWNER_RADIUS,
-                    ys: SPAWNER_RADIUS,
-                    orient: 0.,
-                })
-            }
+            Entity::Spawner(spawner) => spawner.get_shape(),
         }
     }
 
@@ -116,6 +104,13 @@ impl Entity {
         match self {
             Entity::Agent(agent) => Some(agent.orient),
             _ => None,
+        }
+    }
+
+    pub(crate) fn get_aabb(&self) -> [f64; 4] {
+        match self {
+            Entity::Agent(agent) => agent.get_shape().to_aabb(),
+            Entity::Spawner(spawner) => Spawner::collision_shape(spawner.pos).to_aabb(),
         }
     }
 

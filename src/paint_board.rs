@@ -301,6 +301,10 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                 path.close_path();
                 ctx.stroke(rot_transform * path, brush, 1.);
             }
+        } else {
+            let aabb = agent.get_aabb();
+            let rect = Rect::new(aabb[0], aabb[1], aabb[2], aabb[3]);
+            ctx.stroke(*view_transform * rect.to_path(0.01), brush, 1.);
         }
 
         if data.target_visible {

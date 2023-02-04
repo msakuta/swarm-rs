@@ -1,4 +1,5 @@
 use crate::{
+    collision::{aabb_intersects, CollisionShape, Obb},
     entity::{Entity, GameEvent},
     game::Game,
 };
@@ -6,6 +7,9 @@ use std::cell::RefCell;
 
 const SPAWNER_MAX_HEALTH: u32 = 10;
 pub(crate) const SPAWNER_MAX_RESOURCE: i32 = 300;
+pub(crate) const SPAWNER_RADIUS: f64 = 1.0;
+
+pub(crate) type SpawnerState = [f64; 2];
 
 #[derive(Clone, Debug)]
 pub(crate) struct Spawner {
@@ -33,6 +37,38 @@ impl Spawner {
 
     pub(crate) fn get_health_rate(&self) -> f64 {
         self.health as f64 / SPAWNER_MAX_HEALTH as f64
+    }
+
+    pub(crate) fn get_shape(&self) -> CollisionShape {
+        Self::collision_shape(self.pos)
+    }
+
+    pub(crate) fn collision_shape(pos: SpawnerState) -> CollisionShape {
+        CollisionShape::BBox(Obb {
+            center: pos.into(),
+            xs: SPAWNER_RADIUS,
+            ys: SPAWNER_RADIUS,
+            orient: 0.,
+        })
+    }
+
+    pub(crate) fn qtree_collision(
+        ignore: Option<usize>,
+        newpos: SpawnerState,
+        others: &[RefCell<Entity>],
+    ) -> bool {
+        let aabb = Self::collision_shape(newpos).buffer(1.).to_aabb();
+        for other in others {
+            let other = other.borrow();
+            if Some(other.get_id()) == ignore {
+                continue;
+            }
+            let other_aabb = other.get_shape().to_aabb();
+            if aabb_intersects(&aabb, &other_aabb) {
+                return true;
+            }
+        }
+        false
     }
 
     pub(crate) fn update(

@@ -18,12 +18,12 @@ use self::{
 };
 use crate::{
     app_data::is_passable_at,
-    collision::{CollisionShape, Obb},
+    collision::{aabb_intersects, CollisionShape, Obb},
     entity::Entity,
     game::{Board, Game, Profiler, Resource},
     measure_time,
     qtree::{QTreePath, SearchTree},
-    spawner::SPAWNER_MAX_RESOURCE,
+    spawner::{SPAWNER_MAX_RESOURCE, SPAWNER_RADIUS},
     triangle_utils::find_triangle_at,
 };
 use ::behavior_tree_lite::Context;
@@ -174,11 +174,7 @@ impl Agent {
                 continue;
             }
             let other_aabb = other.get_shape().to_aabb();
-            if aabb[0].floor() <= other_aabb[2].ceil()
-                && other_aabb[0].floor() <= aabb[2].ceil()
-                && aabb[1].floor() <= other_aabb[3].ceil()
-                && other_aabb[1].floor() <= aabb[3].ceil()
-            {
+            if aabb_intersects(&aabb, &other_aabb) {
                 return true;
             }
         }
@@ -387,7 +383,7 @@ impl Agent {
                 continue;
             }
             if Vector2::from(spawner.pos).distance2(Vector2::from(self.pos))
-                < (AGENT_HALFLENGTH * 3.).powf(2.)
+                < ((AGENT_HALFLENGTH + SPAWNER_RADIUS) * 1.5).powf(2.)
                 && spawner.resource < SPAWNER_MAX_RESOURCE
             {
                 let moved = self

@@ -17,6 +17,8 @@ mod cache_map;
 pub(crate) mod qtree;
 pub mod render;
 
+use crate::collision::Aabb;
+
 use self::{
     cache_map::CacheMap,
     qtree::{PathFindError, QTree},
@@ -116,6 +118,19 @@ impl QTreeSearcher {
         goal_radius: f64,
     ) -> (Result<QTreePath, PathFindError>, SearchTree) {
         self.qtree.path_find(ignore_id, start, end, goal_radius)
+    }
+
+    pub fn check_collision(&self, aabb: &Aabb) -> bool {
+        for x in aabb[0].floor() as i32..aabb[2].ceil() as i32 {
+            for y in aabb[1].floor() as i32..aabb[3].ceil() as i32 {
+                if let Some((_, cell)) = self.qtree.find_by_idx([x, y]) {
+                    if matches!(cell, CellState::Obstacle) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 }
 

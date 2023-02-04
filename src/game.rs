@@ -381,6 +381,15 @@ impl Game {
         for _ in 0..10 {
             let rng = &mut self.rng;
             let pos_candidate = [rng.next() * self.xs as f64, rng.next() * self.ys as f64];
+            if self
+                .qtree
+                .check_collision(&Spawner::collision_shape(pos_candidate).to_aabb())
+            {
+                continue;
+            }
+            if Spawner::qtree_collision(None, pos_candidate, &self.entities) {
+                continue;
+            }
             if let Some(tri) = find_triangle_at(
                 &self.mesh,
                 pos_candidate,
