@@ -1,22 +1,46 @@
 tree main = Sequence {
-    GatherResource
+    var fight = false
+    Print(input <- "Resetting fight")
+    Repeat (n <- "10000") {
+        if (fight) {
+            Print(input <- "Fighting")
+            Fight
+        } else {
+            ForceSuccess {
+                GatherResource(switchToFight -> fight)
+            }
+            Print(input <- "Got fight = {}", arg0 <- fight)
+            if (fight) {
+                ClearPath
+                ForceSuccess {
+                    ClearTarget
+                }
+            }
+        }
+    }
 }
 
 tree Fight = Sequence {
     if (!HasTarget) {
         FindEnemy
     }
-    Fallback {
-        if (TargetPos (pos -> targetPos) && IsTargetVisible (target <- targetPos)) {
-            FaceToTarget (target <- targetPos)
-            Shoot
-        } else {
-            FollowPathAndAvoid
+    ForceSuccess {
+        Fallback {
+            if (TargetPos (pos -> targetPos) && IsTargetVisible (target <- targetPos)) {
+                FaceToTarget (target <- targetPos)
+                Shoot
+            } else {
+                FollowPathAndAvoid
+            }
         }
     }
 }
 
-tree GatherResource = Sequence {
+tree GatherResource(out switchToFight) = Sequence {
+    if (IsSpawnerResourceFull) {
+        SetBool(value <- "true", output -> switchToFight)
+        !Print(input <- "Set swithToFight = {}", arg0 <- switchToFight)
+    }
     if (IsResourceFull) {
         FindSpawner
         FollowPathAndAvoid
@@ -30,22 +54,26 @@ tree GatherResource = Sequence {
     }
 }
 
+tree TryReverse = ReactiveSequence {
+    # Try to revese in an attempt to "unstack"
+    Drive (direction <- "backward")
+    Randomize (max <- "20", value -> timeoutValue)
+    Timeout (time <- timeoutValue)
+}
+
 tree FollowPathAndAvoid = Sequence {
     TargetPos (pos -> target_pos)
     if (!HasPath) {
         if (!FindPath (target <- target_pos)) {
             Print (input <- "Failed to find path!")
+            TryReverse
         }
     }
     if (HasPath) {
         #SimpleAvoidance
         if (!FollowPath) {
             Print (input <- "Blocked, finding path")
-            ReactiveSequence {
-                Drive (direction <- "backward")
-                Randomize (max <- "20", value -> timeoutValue)
-                Timeout (time <- timeoutValue)
-            }
+            TryReverse
             # Find path again if blocked
             FindPath (target <- target_pos)
             #AvoidancePlan

@@ -8,17 +8,15 @@ pub(crate) use self::avoidance::{AgentState, AvoidanceRenderParams, PathNode, Se
 use self::{
     behavior_nodes::{
         build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, ClearPathNode,
-        DriveCommand, FaceToTargetCommand, FindEnemyCommand, FindPathCommand, FollowPathCommand,
-        GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode,
-        IsTargetVisibleCommand, MoveToCommand, ShootCommand, SimpleAvoidanceCommand, TargetIdNode,
-        TargetPosCommand,
+        ClearTarget, CollectResource, DepositResource, DriveCommand, FaceToTargetCommand,
+        FindEnemyCommand, FindPathCommand, FindResource, FindSpawner, FollowPathCommand,
+        GetIdCommand, GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode,
+        IsResourceFull, IsSpawnerResourceFull, IsTargetVisibleCommand, MoveToCommand, ShootCommand,
+        SimpleAvoidanceCommand, TargetIdNode, TargetPosCommand,
     },
     motion::{MotionCommandResult, OrientToResult},
 };
 use crate::{
-    agent::behavior_nodes::{
-        CollectResource, DepositResource, FindResource, FindSpawner, IsResourceFull,
-    },
     app_data::is_passable_at,
     collision::{CollisionShape, Obb},
     entity::Entity,
@@ -263,7 +261,39 @@ impl Agent {
         }
     }
 
-    pub(crate) fn find_spawner(&mut self, agents: &[RefCell<Entity>]) {
+    fn has_target(&self, entities: &[RefCell<Entity>]) -> bool {
+        let Some(target) = self.target else { return false };
+        match target {
+            AgentTarget::Entity(id) => entities.iter().any(|entity| {
+                let Ok(entity) = entity.try_borrow() else { return false };
+                entity.get_id() == id
+            }),
+            AgentTarget::Resource(_) => true,
+        }
+    }
+
+    fn is_spawner_resource_full(&self, entities: &[RefCell<Entity>]) -> bool {
+        entities
+            .iter()
+            .filter_map(|a| a.try_borrow().ok())
+            .filter(|a| {
+                let aid = a.get_id();
+                let ateam = a.get_team();
+                !self.unreachables.contains(&aid)
+                    && aid != self.id
+                    && ateam == self.team
+                    && !a.is_agent()
+            })
+            .all(|a| {
+                if let Entity::Spawner(spawner) = &*a {
+                    spawner.resource == SPAWNER_MAX_RESOURCE
+                } else {
+                    false
+                }
+            })
+    }
+
+    fn find_spawner(&mut self, agents: &[RefCell<Entity>]) {
         let best_spawner = agents
             .iter()
             .filter_map(|a| a.try_borrow().ok())
@@ -488,14 +518,16 @@ impl Agent {
             ctx.set("target", self.target);
             ctx.set("has_path", !self.path.is_empty());
             let mut process = |f: &dyn std::any::Any| {
-                if let Some(com) = f.downcast_ref::<DriveCommand>() {
+                if f.downcast_ref::<GetIdCommand>().is_some() {
+                    return Some(Box::new(self.id) as Box<dyn std::any::Any>);
+                } else if let Some(com) = f.downcast_ref::<DriveCommand>() {
                     command = Some(Command::Drive(*com));
                     return MotionCommandResult::as_drive(&self.last_motion_result);
                 } else if let Some(com) = f.downcast_ref::<MoveToCommand>() {
                     command = Some(Command::MoveTo(*com));
                     return MotionCommandResult::as_move_to(&self.last_motion_result);
                 } else if f.downcast_ref::<HasTargetNode>().is_some() {
-                    return Some(Box::new(self.target.is_some()));
+                    return Some(Box::new(self.has_target(&entities)));
                 } else if f.downcast_ref::<TargetIdNode>().is_some() {
                     return Some(Box::new(self.target));
                 } else if f.downcast_ref::<FindEnemyCommand>().is_some() {
@@ -504,12 +536,18 @@ impl Agent {
                     self.find_spawner(entities)
                 } else if f.downcast_ref::<FindResource>().is_some() {
                     return Some(Box::new(self.find_resource(&game.resources)));
+                } else if f.downcast_ref::<ClearTarget>().is_some() {
+                    let had_target = self.target.is_some();
+                    self.target = None;
+                    return Some(Box::new(had_target));
                 } else if f.downcast_ref::<CollectResource>().is_some() {
                     return Some(Box::new(self.collect_resource(&mut game.resources)));
                 } else if f.downcast_ref::<DepositResource>().is_some() {
                     return Some(Box::new(self.deposit_resource(&entities)));
                 } else if f.downcast_ref::<IsResourceFull>().is_some() {
                     return Some(Box::new(AGENT_MAX_RESOURCE <= self.resource));
+                } else if f.downcast_ref::<IsSpawnerResourceFull>().is_some() {
+                    return Some(Box::new(self.is_spawner_resource_full(&entities)));
                 } else if f.downcast_ref::<HasPathNode>().is_some() {
                     return Some(Box::new(!self.path.is_empty()));
                 } else if f.downcast_ref::<ClearPathNode>().is_some() {

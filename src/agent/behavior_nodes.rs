@@ -32,9 +32,11 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("FindEnemy", boxify(|| FindEnemy));
     registry.register("FindSpawner", boxify(|| FindSpawner));
     registry.register("FindResource", boxify(|| FindResource));
+    registry.register("ClearTarget", boxify(|| ClearTarget));
     registry.register("CollectResource", boxify(|| CollectResource));
     registry.register("DepositResource", boxify(|| DepositResource));
     registry.register("IsResourceFull", boxify(|| IsResourceFull));
+    registry.register("IsSpawnerResourceFull", boxify(|| IsSpawnerResourceFull));
     registry.register("HasPath", boxify(|| HasPathNode));
     registry.register("ClearPath", boxify(|| ClearPathNode));
     registry.register("FindPath", boxify(|| FindPathNode));
@@ -80,20 +82,47 @@ impl BehaviorNode for SetBool {
     }
 }
 
-pub(super) struct PrintNode;
+pub(super) struct GetIdCommand;
+
+struct PrintNode;
 
 impl BehaviorNode for PrintNode {
     fn provided_ports(&self) -> Vec<PortSpec> {
-        vec![PortSpec::new_in("input")]
+        vec![
+            PortSpec::new_in("input"),
+            PortSpec::new_in("arg0"),
+            PortSpec::new_in("arg1"),
+        ]
     }
 
     fn tick(
         &mut self,
-        _arg: BehaviorCallback,
+        arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         if let Some(result) = ctx.get::<String>("input") {
-            println!("PrintNode: {result:?}");
+            let get_string = |key| {
+                ctx.get::<String>(key)
+                    .cloned()
+                    .or_else(|| ctx.get::<bool>(key).map(|v| v.to_string()))
+                    .or_else(|| ctx.get::<i32>(key).map(|v| v.to_string()))
+                    .or_else(|| ctx.get::<f64>(key).map(|v| v.to_string()))
+                    .or_else(|| ctx.get::<[i32; 2]>(key).map(|v| format!("{:?}", v)))
+            };
+            let arg0 = get_string("arg0");
+            let arg1 = get_string("arg1");
+            let result = match (arg0, arg1) {
+                (Some(arg0), Some(arg1)) => {
+                    result.replacen("{}", &arg0, 1).replacen("{}", &arg1, 1)
+                }
+                (Some(arg0), None) => result.replacen("{}", &arg0, 1),
+                _ => result.clone(),
+            };
+            if let Some(id) = arg(&GetIdCommand).and_then(|res| res.downcast::<usize>().ok()) {
+                println!("PrintNode({}): {result:?}", *id);
+            } else {
+                println!("PrintNode(?): {result:?}");
+            }
             BehaviorResult::Success
         } else {
             BehaviorResult::Fail
@@ -187,6 +216,25 @@ impl BehaviorNode for FindResource {
     }
 }
 
+pub(super) struct ClearTarget;
+
+impl BehaviorNode for ClearTarget {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let Some(result) = arg(self).and_then(|a| a.downcast_ref::<bool>().copied()) else {
+            return BehaviorResult::Fail;
+        };
+        if result {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
 pub(super) struct CollectResource;
 
 impl BehaviorNode for CollectResource {
@@ -231,6 +279,25 @@ impl BehaviorNode for IsResourceFull {
             BehaviorResult::Success
         } else {
             // println!("IsResourceFull? no");
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct IsSpawnerResourceFull;
+
+impl BehaviorNode for IsSpawnerResourceFull {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if arg(self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap_or(false)
+        {
+            BehaviorResult::Success
+        } else {
             BehaviorResult::Fail
         }
     }

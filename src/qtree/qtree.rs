@@ -260,9 +260,7 @@ impl QTree {
         }
         ret
     }
-}
 
-impl QTree {
     pub fn path_find(
         &self,
         ignore_id: &[usize],
