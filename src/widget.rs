@@ -26,17 +26,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 .with_child(
                     Button::new("New Game")
                         .on_click(|ctx, data: &mut AppData, _: &Env| {
-                            let xs = data.columns_text.parse().unwrap_or(64);
-                            let ys = data.rows_text.parse().unwrap_or(64);
-                            let seed = data.seed_text.parse().unwrap_or(1);
-                            let simplify = data.simplify_text.parse().unwrap_or(1.);
-                            let params = BoardParams {
-                                shape: (xs, ys),
-                                seed,
-                                simplify,
-                                maze_expansions: data.maze_expansions.parse().unwrap_or(1),
-                            };
-                            data.game.borrow_mut().new_board(data.board_type, &params);
+                            data.new_game();
                             ctx.request_paint();
                         })
                         .padding(5.0),

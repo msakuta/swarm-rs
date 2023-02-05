@@ -1,6 +1,6 @@
 use crate::{
     agent::AvoidanceRenderParams,
-    game::{BoardType, Game, GameParams},
+    game::{BoardParams, BoardType, Game, GameParams},
     WINDOW_HEIGHT,
 };
 
@@ -35,6 +35,8 @@ pub(crate) struct AppData {
     pub(crate) origin: Vec2,
     pub(crate) scale: f64,
     pub(crate) message: String,
+    pub(crate) big_message: String,
+    pub(crate) big_message_time: f64,
     pub(super) mouse_pos: Option<Point>,
     pub(crate) get_board_time: f64,
     #[data(ignore)]
@@ -58,7 +60,7 @@ pub(crate) struct AppData {
 
 impl AppData {
     pub(crate) fn new() -> Self {
-        let game = Game::new();
+        let mut game = Game::new();
         let seed = 123513;
         let scale = WINDOW_HEIGHT / game.ys as f64;
         let maze_expansion = 2000;
@@ -74,6 +76,9 @@ impl AppData {
         let mut game_params = GameParams::new();
         game_params.agent_source = agent_source_buffer.clone();
         game_params.spawner_source = spawner_source_buffer.clone();
+
+        game.set_params(&game_params);
+        game.init();
 
         Self {
             rows_text: game.xs.to_string(),
@@ -92,6 +97,8 @@ impl AppData {
             origin: Vec2::new(0., 0.),
             scale,
             message: "".to_string(),
+            big_message: "Game Start".to_string(),
+            big_message_time: 5000.,
             mouse_pos: None,
             render_board_time: Cell::new(0.),
             get_board_time: 0.,
@@ -115,11 +122,37 @@ impl AppData {
     pub(crate) fn update(&mut self) -> (bool, f64) {
         let mut game = self.game.borrow_mut();
         game.set_params(&self.game_params);
+        let interval = game.interval;
         if !self.game_params.paused {
-            game.update();
+            let update_res = game.update();
+            if let crate::game::UpdateResult::TeamWon(team) = update_res {
+                drop(game);
+                self.new_game();
+                self.big_message = ["Green team won!!", "Red team won!!"][team].to_string();
+                self.big_message_time = 5000.;
+            }
         }
-        self.global_render_time += game.interval;
-        (self.game_params.paused, game.interval)
+        self.global_render_time += interval;
+        (self.game_params.paused, interval)
+    }
+
+    pub(crate) fn new_game(&mut self) {
+        let xs = self.columns_text.parse().unwrap_or(64);
+        let ys = self.rows_text.parse().unwrap_or(64);
+        let seed = self.seed_text.parse().unwrap_or(1);
+        let simplify = self.simplify_text.parse().unwrap_or(1.);
+        let params = BoardParams {
+            shape: (xs, ys),
+            seed,
+            simplify,
+            maze_expansions: self.maze_expansions.parse().unwrap_or(1),
+        };
+        let mut game = self.game.borrow_mut();
+        game.new_board(self.board_type, &params);
+        game.init();
+
+        self.big_message = "Game Start".to_string();
+        self.big_message_time = 5000.;
     }
 }
 

@@ -46,6 +46,11 @@ pub(crate) struct Profiler {
     count: usize,
 }
 
+pub(crate) enum UpdateResult {
+    Running,
+    TeamWon(usize),
+}
+
 impl Profiler {
     pub(crate) fn new() -> Self {
         Self {
@@ -176,6 +181,22 @@ impl Game {
             agent_source: Rc::new(String::new()),
             spawner_source: Rc::new(String::new()),
             qtree,
+        }
+    }
+
+    pub(crate) fn init(&mut self) {
+        for team in 0..2 {
+            if !self
+                .entities
+                .iter()
+                .any(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
+            {
+                let spawner = self.try_new_spawner(team);
+                println!("spawner: {spawner:?}");
+                if let Some(spawner) = spawner {
+                    self.entities.push(RefCell::new(spawner));
+                }
+            }
         }
     }
 
@@ -459,7 +480,7 @@ impl Game {
         self.spawner_source = params.spawner_source.clone();
     }
 
-    pub(crate) fn update(&mut self) {
+    pub(crate) fn update(&mut self) -> UpdateResult {
         let mut entities = std::mem::take(&mut self.entities);
         let mut bullets = std::mem::take(&mut self.bullets);
         let mut events = vec![];
@@ -629,22 +650,19 @@ impl Game {
         // }
 
         for team in 0..2 {
-            let rng = &mut self.rng;
-            if entities
+            if !entities
                 .iter()
-                .filter(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
-                .count()
-                < 1
-                && rng.next() < 0.1
+                .any(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
             {
-                if let Some(spawner) = self.try_new_spawner(team) {
-                    entities.push(RefCell::new(spawner));
-                }
+                self.entities = entities;
+                return UpdateResult::TeamWon((team + 1) % 2);
             }
         }
         self.entities = entities;
 
         self.try_new_resource();
+
+        UpdateResult::Running
     }
 
     pub(crate) fn is_passable_at(&self, pos: [f64; 2]) -> bool {

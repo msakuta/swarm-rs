@@ -38,6 +38,27 @@ pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
 
     paint_temp_ents(ctx, data, &view_transform);
 
+    if 0. < data.big_message_time {
+        let mut layout = TextLayout::<String>::from_text(&data.big_message);
+        layout.set_font(FontDescriptor::new(FontFamily::SANS_SERIF).with_size(48.0));
+        layout.set_text_color(Color::rgba(
+            1.,
+            1.,
+            1.,
+            (data.big_message_time / 1000.).min(1.),
+        ));
+        layout.rebuild_if_needed(ctx.text(), env);
+        let metrics = layout.layout_metrics();
+        let size = ctx.size();
+        layout.draw(
+            ctx,
+            Point::new(
+                (size.width - metrics.size.width) / 2.,
+                (size.height - metrics.size.height) / 2.,
+            ),
+        );
+    }
+
     *data.render_stats.borrow_mut() = format!(
         "Drawn {} contours, {} triangles",
         contours,
