@@ -67,16 +67,7 @@ pub(crate) fn paint_board(
     ctx.with_save(|ctx| {
         ctx.transform(*view_transform);
 
-        match ctx.make_image(
-            xs,
-            ys,
-            &game
-                .board
-                .iter()
-                .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
-                .collect::<Vec<_>>(),
-            ImageFormat::Grayscale,
-        ) {
+        let render_image = |ctx: &mut PaintCtx, image: Result<_, druid::piet::Error>| match image {
             Ok(res) => {
                 ctx.draw_image(
                     &res,
@@ -88,6 +79,50 @@ pub(crate) fn paint_board(
                 );
             }
             Err(e) => println!("Make image error: {}", e.to_string()),
+        };
+
+        if data.show_label_image {
+            let mut rng = Xor128::new(616516);
+            let max_label = *game.mesh.labeled_image.iter().max().unwrap_or(&0) as usize + 1;
+            let label_colors = (0..max_label)
+                .map(|label| {
+                    if label == 0 {
+                        [OBSTACLE_COLOR, OBSTACLE_COLOR, OBSTACLE_COLOR]
+                    } else {
+                        [
+                            (rng.nexti() % 0x80) as u8,
+                            (rng.nexti() % 0x80) as u8,
+                            (rng.nexti() % 0x80) as u8,
+                        ]
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let img = ctx.make_image(
+                xs,
+                ys,
+                &game
+                    .mesh
+                    .labeled_image
+                    .iter()
+                    .map(|p| label_colors[*p as usize].into_iter())
+                    .flatten()
+                    .collect::<Vec<_>>(),
+                ImageFormat::Rgb,
+            );
+            render_image(ctx, img);
+        } else {
+            let img = ctx.make_image(
+                xs,
+                ys,
+                &game
+                    .board
+                    .iter()
+                    .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
+                    .collect::<Vec<_>>(),
+                ImageFormat::Grayscale,
+            );
+            render_image(ctx, img);
         }
 
         if let LineMode::Polygon = data.line_mode {

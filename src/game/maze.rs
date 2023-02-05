@@ -66,7 +66,7 @@ impl Game {
             let mut costmap = if 4 < resolution {
                 let mut costmap = vec![std::i32::MAX; maze_board.len()];
                 let start = [(maze_shape.0 / 2) as i32, (maze_shape.1 / 2) as i32];
-                dijkstra::dijkstra_fill(&maze_board, maze_shape, start, &mut costmap);
+                dijkstra::dijkstra_fill(&maze_board, maze_shape, start, &mut &mut costmap[..]);
                 Some(costmap)
             } else {
                 None
