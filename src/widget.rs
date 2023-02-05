@@ -31,10 +31,16 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                         })
                         .padding(5.0),
                 )
-                .with_child(Radio::new("Rect", BoardType::Rect).lens(AppData::board_type))
-                .with_child(Radio::new("Crank", BoardType::Crank).lens(AppData::board_type))
-                .with_child(Radio::new("Perlin", BoardType::Perlin).lens(AppData::board_type))
-                .with_child(Radio::new("Maze", BoardType::Maze).lens(AppData::board_type)),
+                .with_child(
+                    RadioGroup::row([
+                        ("Rect", BoardType::Rect),
+                        ("Crank", BoardType::Crank),
+                        ("Perlin", BoardType::Perlin),
+                        ("Rooms", BoardType::Rooms),
+                        ("Maze", BoardType::Maze),
+                    ])
+                    .lens(AppData::board_type),
+                ),
         )
         .with_child(
             Checkbox::new("Pause")
