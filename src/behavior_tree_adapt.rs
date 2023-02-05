@@ -115,6 +115,7 @@ impl BehaviorNode for PrintNode {
                     .or_else(|| ctx.get::<i32>(key).map(|v| v.to_string()))
                     .or_else(|| ctx.get::<f64>(key).map(|v| v.to_string()))
                     .or_else(|| ctx.get::<[i32; 2]>(key).map(|v| format!("{:?}", v)))
+                    .or_else(|| ctx.get::<[f64; 2]>(key).map(|v| format!("{:?}", v)))
             };
             let arg0 = get_string("arg0");
             let arg1 = get_string("arg1");

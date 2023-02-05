@@ -65,6 +65,10 @@ impl QTreeSearcher {
         }
     }
 
+    pub fn find(&self, pos: [f64; 2]) -> Option<(usize, CellState)> {
+        self.qtree.find(pos)
+    }
+
     pub fn start_update(&mut self) {
         self.cache_map.start_update();
     }

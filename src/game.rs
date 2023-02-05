@@ -456,6 +456,10 @@ impl Game {
                 continue;
             }
 
+            if !matches!(self.qtree.find(pos_candidate), Some((_, CellState::Free))) {
+                continue;
+            }
+
             if let Some(tri) = find_triangle_at(
                 &self.mesh,
                 pos_candidate,
@@ -465,7 +469,7 @@ impl Game {
                     if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
                         self.resources.push(Resource {
                             pos: pos_candidate,
-                            amount: (rng.nexti() % 128 + 10) as i32,
+                            amount: (rng.nexti() % 128 + 80) as i32,
                         });
                     }
                 }
@@ -632,7 +636,7 @@ impl Game {
 
         self.qtree_profiler.borrow_mut().add(timer);
 
-        let mut entities: Vec<_> = std::mem::take(&mut self.entities)
+        let entities: Vec<_> = std::mem::take(&mut self.entities)
             .into_iter()
             .filter(|agent| agent.borrow().get_active())
             .collect();

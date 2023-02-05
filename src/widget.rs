@@ -4,7 +4,7 @@ use crate::{
     agent::AvoidanceRenderParams,
     app_data::{AppData, LineMode},
     board_widget::BoardWidget,
-    game::{AvoidanceMode, BoardParams, BoardType},
+    game::{AvoidanceMode, BoardType},
 };
 use behavior_tree_lite::parse_file;
 use druid::widget::{

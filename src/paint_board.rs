@@ -38,26 +38,7 @@ pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
 
     paint_temp_ents(ctx, data, &view_transform);
 
-    if 0. < data.big_message_time {
-        let mut layout = TextLayout::<String>::from_text(&data.big_message);
-        layout.set_font(FontDescriptor::new(FontFamily::SANS_SERIF).with_size(48.0));
-        layout.set_text_color(Color::rgba(
-            1.,
-            1.,
-            1.,
-            (data.big_message_time / 1000.).min(1.),
-        ));
-        layout.rebuild_if_needed(ctx.text(), env);
-        let metrics = layout.layout_metrics();
-        let size = ctx.size();
-        layout.draw(
-            ctx,
-            Point::new(
-                (size.width - metrics.size.width) / 2.,
-                (size.height - metrics.size.height) / 2.,
-            ),
-        );
-    }
+    paint_big_message(ctx, env, data);
 
     *data.render_stats.borrow_mut() = format!(
         "Drawn {} contours, {} triangles",
@@ -556,11 +537,11 @@ fn paint_bullets(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
 fn paint_resources(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
     const TARGET_PIXELS: f64 = 10.;
 
-    let draw_bullet = |ctx: &mut PaintCtx, resource: &Resource, pos: Point| {
+    let draw_resource = |ctx: &mut PaintCtx, resource: &Resource, pos: Point| {
         let radius = (resource.amount as f64).sqrt() / TARGET_PIXELS;
         let circle = Circle::new(pos, radius);
         ctx.fill(circle, &Color::YELLOW);
-        ctx.stroke(circle, &Color::YELLOW, radius / 10.);
+        ctx.stroke(circle, &Color::YELLOW, radius / 30.);
     };
 
     let game = data.game.borrow();
@@ -568,7 +549,7 @@ fn paint_resources(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) 
     ctx.with_save(|ctx| {
         ctx.transform(*view_transform);
         for resource in &game.resources {
-            draw_bullet(ctx, resource, to_point(resource.pos));
+            draw_resource(ctx, resource, to_point(resource.pos));
         }
     });
 }
@@ -583,5 +564,28 @@ fn paint_temp_ents(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) 
         );
         let alpha = (temp_ent.ttl * 512. / max_ttl).min(255.) as u8;
         ctx.fill(*view_transform * circle, &Color::rgba8(255, 127, 0, alpha));
+    }
+}
+
+fn paint_big_message(ctx: &mut PaintCtx, env: &Env, data: &AppData) {
+    if 0. < data.big_message_time {
+        let mut layout = TextLayout::<String>::from_text(&data.big_message);
+        layout.set_font(FontDescriptor::new(FontFamily::SANS_SERIF).with_size(48.0));
+        layout.set_text_color(Color::rgba(
+            1.,
+            1.,
+            1.,
+            (data.big_message_time / 1000.).min(1.),
+        ));
+        layout.rebuild_if_needed(ctx.text(), env);
+        let metrics = layout.layout_metrics();
+        let size = ctx.size();
+        layout.draw(
+            ctx,
+            Point::new(
+                (size.width - metrics.size.width) / 2.,
+                (size.height - metrics.size.height) / 2.,
+            ),
+        );
     }
 }
