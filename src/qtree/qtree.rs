@@ -180,7 +180,8 @@ impl QTree {
         ]
     }
 
-    fn recurse_find(&self, level: usize, idx: [i32; 2], side: Side) -> Vec<(usize, [i32; 2])> {
+    /// Find a neighbor cell in given level or its sublevels.
+    fn sub_recurse_find(&self, level: usize, idx: [i32; 2], side: Side) -> Vec<(usize, [i32; 2])> {
         if self.levels.len() <= level {
             return vec![];
         }
@@ -198,7 +199,7 @@ impl QTree {
                 Side::Bottom => [[x, y + 1], [x + 1, y + 1]],
             };
             for subcell in subcells {
-                ret.extend_from_slice(&self.recurse_find(level + 1, subcell, side));
+                ret.extend_from_slice(&self.sub_recurse_find(level + 1, subcell, side));
             }
             ret
         } else if same_level.is_some() {
@@ -209,6 +210,33 @@ impl QTree {
         }
     }
 
+    /// Find a neighbor cell in higher levels. The current cell is necessary to stop searching early
+    /// if the higher level cell is the same.
+    fn super_find(
+        &self,
+        current_level: usize,
+        current_idx: [i32; 2],
+        neighbor_idx: [i32; 2],
+    ) -> Option<(usize, [i32; 2], CellState)> {
+        let mut supidx = current_idx;
+        let mut neighbor_supidx = neighbor_idx;
+
+        // We don't need recursion unlike `sub_recurse_find`, because it's a linear search.
+        for suplevel in (0..current_level).rev() {
+            supidx[0] /= 2;
+            supidx[1] /= 2;
+            neighbor_supidx[0] /= 2;
+            neighbor_supidx[1] /= 2;
+            if supidx == neighbor_supidx {
+                return None;
+            }
+            if let Some(&found_parent) = self.levels[suplevel].get(&neighbor_supidx) {
+                return Some((suplevel, neighbor_supidx, found_parent));
+            }
+        }
+        None
+    }
+
     fn find_neighbors(&self, level: usize, idx: [i32; 2]) -> Vec<(usize, [i32; 2])> {
         let mut ret = vec![];
         for (side, offset) in [
@@ -217,27 +245,41 @@ impl QTree {
             (Side::Right, [-1, 0]),
             (Side::Bottom, [0, -1]),
         ] {
-            let subidx = [idx[0] + offset[0], idx[1] + offset[1]];
-            let substates = self.recurse_find(level, subidx, side);
-            ret.extend_from_slice(&substates);
-            let supidx = [subidx[0] / 2, subidx[1] / 2];
-            if substates.is_empty() && supidx != [idx[0] / 2, idx[1] / 2] {
-                let mut parent = (level - 1, supidx);
-                let mut ancestor = None;
-                while 0 < parent.0 {
-                    if let Some(found_parent) = self.levels[parent.0].get(&parent.1) {
-                        ancestor = Some((parent.0, parent.1, found_parent));
-                        break;
-                    }
-                    parent = (level - 1, [idx[0] / 2, idx[1] / 2]);
-                }
-                if let Some(ancestor) = ancestor {
-                    // dbg_println!("    Searching up: {level}, {idx:?}, {side:?}");
-                    ret.extend_from_slice(&self.recurse_find(ancestor.0, ancestor.1, side));
-                }
+            let neighbor_idx = [idx[0] + offset[0], idx[1] + offset[1]];
+            let substates = self.sub_recurse_find(level, neighbor_idx, side);
+            if !substates.is_empty() {
+                ret.extend_from_slice(&substates);
+                continue;
+            }
+
+            // If we do not find cells in lower levels, it's likely that a super cell exists.
+            if let Some(ancestor) = self.super_find(level, idx, neighbor_idx) {
+                // dbg_println!("    Searching up: {level}, {idx:?}, {side:?}");
+                ret.push((ancestor.0, ancestor.1));
             }
         }
         ret
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum PathFindError {
+    StartBlocked,
+    GoalBlocked,
+    SearchFailed,
+}
+
+impl Display for PathFindError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::StartBlocked => "StartBlocked",
+                Self::GoalBlocked => "GoalBlocked",
+                Self::SearchFailed => "SearchFailed",
+            }
+        )
     }
 }
 
@@ -247,9 +289,10 @@ impl QTree {
         ignore_id: &[usize],
         start: [f64; 2],
         end: [f64; 2],
-    ) -> (Option<QTreePath>, SearchTree) {
+        goal_radius: f64,
+    ) -> (Result<QTreePath, PathFindError>, SearchTree) {
         let Some(start_found) = self.find(start) else {
-            return (None, SearchTree::new())
+            return (Err(PathFindError::StartBlocked), SearchTree::new())
         };
         let blocked = |state| match state {
             CellState::Obstacle => true,
@@ -258,14 +301,14 @@ impl QTree {
         };
         if blocked(start_found.1) {
             dbg_println!("Start position {start:?} was occupied!");
-            return (None, SearchTree::new());
+            return (Err(PathFindError::GoalBlocked), SearchTree::new());
         }
         let Some(end_found) = self.find(end) else {
-            return (None, SearchTree::new())
+            return (Err(PathFindError::GoalBlocked), SearchTree::new())
         };
         if blocked(end_found.1) {
             dbg_println!("End position {start:?} was occupied!");
-            return (None, SearchTree::new());
+            return (Err(PathFindError::GoalBlocked), SearchTree::new());
         }
         let end_idx = (
             end_found.0,
@@ -329,7 +372,7 @@ impl QTree {
             let mut path = vec![];
             path.push(QTreePathNode::new_with_qtree(end_idx, self));
             path.push(QTreePathNode::new_with_qtree(start_idx, self));
-            return (Some(path), SearchTree::new());
+            return (Ok(path), SearchTree::new());
         }
 
         let mut closed_set = HashMap::new();
@@ -352,13 +395,15 @@ impl QTree {
 
                 if (nei_level, nei_idx) == end_idx {
                     let mut path = vec![];
-                    path.push(QTreePathNode::new_with_qtree(end_idx, self));
+                    // The last node should directly connect to the goal
+                    // path.push(QTreePathNode::new_with_qtree(end_idx, self));
+                    path.push(QTreePathNode::new(end, goal_radius));
                     let mut node = Some((state.level, state.idx));
                     while let Some(anode) = node {
                         path.push(QTreePathNode::new_with_qtree(anode, self));
                         node = closed_set.get(&anode).and_then(|bnode| bnode.came_from);
                     }
-                    return (Some(path), self.build_search_tree(closed_set));
+                    return (Ok(path), self.build_search_tree(closed_set));
                 }
                 let new_cost = state.cost + self.width(state.level) as f64;
                 let cell = self.levels[nei_level].get(&nei_idx);
@@ -370,7 +415,7 @@ impl QTree {
                 let Some(cell) = cell else {
                     continue
                 };
-                if !matches!(cell, CellState::Free) {
+                if blocked(*cell) {
                     continue;
                 }
                 let cell_idx = [nei_bottom[0] / nei_width, nei_bottom[1] / nei_width];
@@ -394,27 +439,13 @@ impl QTree {
                         came_from: Some((state.level, state.idx)),
                     },
                 );
-                // } else if 0 < state.level {
-                //     let sup_idx = [nei_idx[0] / 2, nei_idx[1] / 2];
-                //     let new_cost = state.cost + self.width(state.level - 1) as f64;
-                //     println!("Super Neighbor {nei_idx:?} -> {sup_idx:?}: new_cost: {new_cost}");
-                //     if closed_set
-                //         .get(&(state.level - 1, sup_idx))
-                //         .map(|cost| *cost <= new_cost)
-                //         .unwrap_or(false)
-                //     {
-                //         continue;
-                //     }
-                //     open_set.push(OpenState {
-                //         level: state.level - 1,
-                //         idx: sup_idx,
-                //         cost: new_cost,
-                //     });
-                //     closed_set.insert((state.level - 1, sup_idx), new_cost);
             }
         }
 
-        (Some(vec![]), self.build_search_tree(closed_set))
+        (
+            Err(PathFindError::SearchFailed),
+            self.build_search_tree(closed_set),
+        )
     }
 
     fn build_search_tree(&self, closed_set: HashMap<QTreeIdx, ClosedState>) -> SearchTree {

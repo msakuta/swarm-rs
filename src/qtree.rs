@@ -14,10 +14,15 @@ macro_rules! dbg_println {
 }
 
 mod cache_map;
-mod qtree;
+pub(crate) mod qtree;
 pub mod render;
 
-use self::{cache_map::CacheMap, qtree::QTree};
+use crate::collision::Aabb;
+
+use self::{
+    cache_map::CacheMap,
+    qtree::{PathFindError, QTree},
+};
 
 const DEBUG: bool = false;
 
@@ -58,6 +63,10 @@ impl QTreeSearcher {
         for (i, cell) in self.qtree.levels.iter().enumerate() {
             dbg_println!("level {i}: {}", cell.len());
         }
+    }
+
+    pub fn find(&self, pos: [f64; 2]) -> Option<(usize, CellState)> {
+        self.qtree.find(pos)
     }
 
     pub fn start_update(&mut self) {
@@ -110,8 +119,22 @@ impl QTreeSearcher {
         ignore_id: &[usize],
         start: [f64; 2],
         end: [f64; 2],
-    ) -> (Option<QTreePath>, SearchTree) {
-        self.qtree.path_find(ignore_id, start, end)
+        goal_radius: f64,
+    ) -> (Result<QTreePath, PathFindError>, SearchTree) {
+        self.qtree.path_find(ignore_id, start, end, goal_radius)
+    }
+
+    pub fn check_collision(&self, aabb: &Aabb) -> bool {
+        for x in aabb[0].floor() as i32..aabb[2].ceil() as i32 {
+            for y in aabb[1].floor() as i32..aabb[3].ceil() as i32 {
+                if let Some((_, cell)) = self.qtree.find_by_idx([x, y]) {
+                    if matches!(cell, CellState::Obstacle) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 }
 
@@ -123,14 +146,14 @@ pub(crate) enum CellState {
     Mixed,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct QTreePathNode {
     pub pos: [f64; 2],
     pub radius: f64,
 }
 
 impl QTreePathNode {
-    pub fn _new(pos: [f64; 2], radius: f64) -> Self {
+    pub fn new(pos: [f64; 2], radius: f64) -> Self {
         Self { pos, radius }
     }
 

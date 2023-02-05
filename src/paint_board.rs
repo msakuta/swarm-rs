@@ -1,16 +1,17 @@
 use crate::{
-    agent::{Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS, BULLET_SPEED},
+    agent::{AgentClass, Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS},
     app_data::{AppData, LineMode},
     entity::Entity,
+    game::Resource,
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
     qtree::render::paint_qtree,
-    temp_ents::MAX_TTL,
     triangle_utils::center_of_triangle_obj,
 };
 
+use cgmath::{InnerSpace, Vector2};
 use druid::{
-    kurbo::Shape,
+    kurbo::{Arc, Shape},
     piet::kurbo::{BezPath, Circle, Line},
     piet::{FontFamily, ImageFormat, InterpolationMode},
     Affine, Color, FontDescriptor, Point, Rect, TextLayout,
@@ -29,11 +30,15 @@ pub(crate) fn paint_game(ctx: &mut PaintCtx, data: &AppData, env: &Env) {
         paint_qtree(ctx, data, &view_transform);
     }
 
+    paint_resources(ctx, data, &view_transform);
+
     paint_agents(ctx, data, env, &view_transform);
 
     paint_bullets(ctx, data, &view_transform);
 
     paint_temp_ents(ctx, data, &view_transform);
+
+    paint_big_message(ctx, env, data);
 
     *data.render_stats.borrow_mut() = format!(
         "Drawn {} contours, {} triangles",
@@ -257,6 +262,19 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             ctx.stroke(big_circle, brush, 3.);
         }
 
+        let resource = agent.resource();
+        if 0 < resource {
+            use std::f64::consts::PI;
+            let arc = Arc {
+                center: *view_transform * pos,
+                radii: Vec2::new(7.5, 7.5),
+                start_angle: 0.,
+                sweep_angle: resource as f64 * 2. * PI / agent.max_resource() as f64,
+                x_rotation: -PI / 2.,
+            };
+            ctx.stroke(arc, &Color::YELLOW, 2.5);
+        }
+
         // let bcirc = agent.bounding_circle();
         // let shape = Circle::new(
         //     *view_transform * to_point(bcirc.center.into()),
@@ -265,7 +283,12 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
         // ctx.stroke(shape, brush, 1.);
 
         if let Some(orient) = agent.get_orient() {
-            let length = 10.;
+            let class = agent.get_class().unwrap_or(AgentClass::Worker);
+            let length = if matches!(class, AgentClass::Fighter) {
+                20.
+            } else {
+                10.
+            };
             let view_pos = *view_transform * pos;
             let dest = Point::new(
                 view_pos.x + orient.cos() * length,
@@ -278,13 +301,22 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                 let rot_transform =
                     *view_transform * Affine::translate(pos.to_vec2()) * Affine::rotate(orient);
                 let mut path = BezPath::new();
-                path.move_to(Point::new(-AGENT_HALFLENGTH, -AGENT_HALFWIDTH));
-                path.line_to(Point::new(AGENT_HALFLENGTH, -AGENT_HALFWIDTH));
-                path.line_to(Point::new(AGENT_HALFLENGTH, AGENT_HALFWIDTH));
-                path.line_to(Point::new(-AGENT_HALFLENGTH, AGENT_HALFWIDTH));
+                let mut first = true;
+                class.vertices(|v| {
+                    if first {
+                        path.move_to(Point::new(v[0], v[1]));
+                        first = false;
+                    } else {
+                        path.line_to(Point::new(v[0], v[1]));
+                    }
+                });
                 path.close_path();
                 ctx.stroke(rot_transform * path, brush, 1.);
             }
+        } else {
+            let aabb = agent.get_aabb();
+            let rect = Rect::new(aabb[0], aabb[1], aabb[2], aabb[3]);
+            ctx.stroke(*view_transform * rect.to_path(0.01), brush, 1.);
         }
 
         if data.target_visible {
@@ -418,6 +450,19 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
             let health = agent.get_health_rate();
             let view_pos_left = *view_transform * Point::new(pos.x - 1., pos.y - 1.);
             let view_pos_right = *view_transform * Point::new(pos.x + 1., pos.y - 1.);
+            if matches!(agent.get_class(), Some(AgentClass::Fighter)) {
+                let mut cross = BezPath::new();
+                let base = view_pos_left + Vec2::new(8., -5.);
+                cross.move_to(base + Vec2::new(-8., -25.));
+                cross.line_to(base + Vec2::new(0., -20.));
+                cross.line_to(base + Vec2::new(8., -25.));
+                cross.line_to(base + Vec2::new(8., -20.));
+                cross.line_to(base + Vec2::new(0., -15.));
+                cross.line_to(base + Vec2::new(-8., -20.));
+                cross.close_path();
+                ctx.fill(&cross, &Color::YELLOW);
+                ctx.stroke(cross, brush, 1.);
+            }
             let l = view_pos_left.x;
             let r = view_pos_right.x;
             let t = view_pos_left.y - 15.;
@@ -455,34 +500,92 @@ fn paint_bullets(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
         for bullet in game.bullets.iter() {
             let pos = to_vec2(bullet.pos);
             let velo = to_vec2(bullet.velo).normalize();
-            let perp = Vec2::new(velo.y, -velo.x) * BULLET_RADIUS;
-            let length = bullet.traveled.min(2. * BULLET_SPEED);
+            let length = bullet
+                .traveled
+                .min(2. * Vector2::from(bullet.velo).magnitude());
             let tail = pos - velo * length;
-            let mut trail = BezPath::new();
-            trail.move_to((pos + perp).to_point());
-            trail.line_to((pos - perp).to_point());
-            trail.line_to(tail.to_point());
-            trail.close_path();
-            ctx.fill(trail, &Color::rgb8(255, 191, 63));
-            if !draw_small {
-                draw_bullet(ctx, bullet, to_point(bullet.pos), BULLET_RADIUS);
-            }
+            if matches!(bullet.shooter_class, AgentClass::Fighter) {
+                let perp = Vec2::new(velo.y, -velo.x) * BULLET_RADIUS;
+                let mut trail = BezPath::new();
+                trail.move_to((pos + perp).to_point());
+                trail.line_to((pos - perp).to_point());
+                trail.line_to(tail.to_point());
+                trail.close_path();
+                ctx.fill(trail, &Color::rgb8(255, 191, 63));
+                if !draw_small {
+                    draw_bullet(ctx, bullet, to_point(bullet.pos), BULLET_RADIUS);
+                }
+            } else {
+                let mut trail = BezPath::new();
+                trail.move_to((pos + velo).to_point());
+                trail.line_to((pos - velo).to_point());
+                ctx.stroke(trail, &Color::rgb8(255, 191, 63), 0.075);
+            };
         }
     });
 
     if draw_small {
         for bullet in game.bullets.iter() {
-            let view_pos = *view_transform * to_point(bullet.pos);
-            draw_bullet(ctx, bullet, view_pos, TARGET_PIXELS);
+            if matches!(bullet.shooter_class, AgentClass::Fighter) {
+                let view_pos = *view_transform * to_point(bullet.pos);
+                draw_bullet(ctx, bullet, view_pos, TARGET_PIXELS);
+            }
         }
     }
+}
+
+fn paint_resources(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
+    const TARGET_PIXELS: f64 = 10.;
+
+    let draw_resource = |ctx: &mut PaintCtx, resource: &Resource, pos: Point| {
+        let radius = (resource.amount as f64).sqrt() / TARGET_PIXELS;
+        let circle = Circle::new(pos, radius);
+        ctx.fill(circle, &Color::YELLOW);
+        ctx.stroke(circle, &Color::YELLOW, radius / 30.);
+    };
+
+    let game = data.game.borrow();
+
+    ctx.with_save(|ctx| {
+        ctx.transform(*view_transform);
+        for resource in &game.resources {
+            draw_resource(ctx, resource, to_point(resource.pos));
+        }
+    });
 }
 
 fn paint_temp_ents(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
     for temp_ent in data.game.borrow().temp_ents.iter() {
         let pos = to_point(temp_ent.pos);
-        let circle = Circle::new(pos, 2. * (MAX_TTL - temp_ent.ttl) / MAX_TTL);
-        let alpha = (temp_ent.ttl * 512. / MAX_TTL).min(255.) as u8;
+        let max_ttl = temp_ent.max_ttl;
+        let circle = Circle::new(
+            pos,
+            temp_ent.max_radius * (max_ttl - temp_ent.ttl) / max_ttl,
+        );
+        let alpha = (temp_ent.ttl * 512. / max_ttl).min(255.) as u8;
         ctx.fill(*view_transform * circle, &Color::rgba8(255, 127, 0, alpha));
+    }
+}
+
+fn paint_big_message(ctx: &mut PaintCtx, env: &Env, data: &AppData) {
+    if 0. < data.big_message_time {
+        let mut layout = TextLayout::<String>::from_text(&data.big_message);
+        layout.set_font(FontDescriptor::new(FontFamily::SANS_SERIF).with_size(48.0));
+        layout.set_text_color(Color::rgba(
+            1.,
+            1.,
+            1.,
+            (data.big_message_time / 1000.).min(1.),
+        ));
+        layout.rebuild_if_needed(ctx.text(), env);
+        let metrics = layout.layout_metrics();
+        let size = ctx.size();
+        layout.draw(
+            ctx,
+            Point::new(
+                (size.width - metrics.size.width) / 2.,
+                (size.height - metrics.size.height) / 2.,
+            ),
+        );
     }
 }

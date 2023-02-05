@@ -1,4 +1,5 @@
 mod app_data;
+mod behavior_tree_adapt;
 mod board_widget;
 mod dijkstra;
 mod marching_squares;
@@ -34,7 +35,7 @@ pub fn wasm_main() {
 }
 
 pub fn main() {
-    let window = WindowDesc::new(make_widget)
+    let window = WindowDesc::new(make_widget())
         .window_size(Size {
             width: WINDOW_WIDTH,
             height: WINDOW_HEIGHT,
@@ -45,7 +46,7 @@ pub fn main() {
         );
 
     AppLauncher::with_window(window)
-        .use_simple_logger()
+        .log_to_console()
         .launch(AppData::new())
         .expect("launch failed");
 }

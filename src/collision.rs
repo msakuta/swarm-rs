@@ -75,6 +75,13 @@ impl CollisionShape {
     }
 }
 
+pub(crate) fn aabb_intersects(a: &Aabb, b: &Aabb) -> bool {
+    a[0].floor() <= b[2].ceil()
+        && b[0].floor() <= a[2].ceil()
+        && a[1].floor() <= b[3].ceil()
+        && b[1].floor() <= a[3].ceil()
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BoundingCircle {
     pub center: Vector2<f64>,

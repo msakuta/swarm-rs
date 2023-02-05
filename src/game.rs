@@ -11,7 +11,7 @@ use std::{
 };
 
 use crate::{
-    agent::{Agent, AgentState, Bullet},
+    agent::{Agent, AgentClass, AgentState, Bullet},
     app_data::is_passable_at,
     collision::CollisionShape,
     entity::{Entity, GameEvent},
@@ -23,6 +23,12 @@ use crate::{
     temp_ents::TempEnt,
     triangle_utils::{check_shape_in_mesh, find_triangle_at},
 };
+
+#[derive(Clone, Debug)]
+pub(crate) struct Resource {
+    pub pos: [f64; 2],
+    pub amount: i32,
+}
 
 pub(crate) type Board = Vec<bool>;
 
@@ -38,6 +44,11 @@ pub(crate) enum BoardType {
 pub(crate) struct Profiler {
     total: f64,
     count: usize,
+}
+
+pub(crate) enum UpdateResult {
+    Running,
+    TeamWon(usize),
 }
 
 impl Profiler {
@@ -85,7 +96,8 @@ pub(crate) struct GameParams {
     pub(crate) avoidance_mode: AvoidanceMode,
     pub(crate) paused: bool,
     pub(crate) avoidance_expands: f64,
-    pub(crate) source: Rc<String>,
+    pub(crate) agent_source: Rc<String>,
+    pub(crate) spawner_source: Rc<String>,
 }
 
 impl GameParams {
@@ -94,7 +106,8 @@ impl GameParams {
             avoidance_mode: AvoidanceMode::RrtStar,
             paused: false,
             avoidance_expands: 1.,
-            source: Rc::new("".to_string()),
+            agent_source: Rc::new("".to_string()),
+            spawner_source: Rc::new("".to_string()),
         }
     }
 }
@@ -108,6 +121,7 @@ pub(crate) struct Game {
     pub(crate) mesh: Mesh,
     pub(crate) entities: Vec<RefCell<Entity>>,
     pub(crate) bullets: Vec<Bullet>,
+    pub(crate) resources: Vec<Resource>,
     pub(crate) interval: f64,
     pub(crate) rng: Xor128,
     pub(crate) id_gen: usize,
@@ -117,7 +131,9 @@ pub(crate) struct Game {
     pub(crate) triangle_profiler: RefCell<Profiler>,
     pub(crate) pixel_profiler: RefCell<Profiler>,
     pub(crate) qtree_profiler: RefCell<Profiler>,
-    pub(crate) source: Rc<String>,
+    pub(crate) path_find_profiler: RefCell<Profiler>,
+    pub(crate) agent_source: Rc<String>,
+    pub(crate) spawner_source: Rc<String>,
     pub(crate) qtree: QTreeSearcher,
 }
 
@@ -151,6 +167,7 @@ impl Game {
             mesh,
             entities: vec![],
             bullets: vec![],
+            resources: vec![],
             interval: 32.,
             rng: Xor128::new(9318245),
             id_gen,
@@ -160,8 +177,26 @@ impl Game {
             triangle_profiler: RefCell::new(Profiler::new()),
             pixel_profiler: RefCell::new(Profiler::new()),
             qtree_profiler: RefCell::new(Profiler::new()),
-            source: Rc::new(String::new()),
+            path_find_profiler: RefCell::new(Profiler::new()),
+            agent_source: Rc::new(String::new()),
+            spawner_source: Rc::new(String::new()),
             qtree,
+        }
+    }
+
+    pub(crate) fn init(&mut self) {
+        for team in 0..2 {
+            if !self
+                .entities
+                .iter()
+                .any(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
+            {
+                let spawner = self.try_new_spawner(team);
+                println!("spawner: {spawner:?}");
+                if let Some(spawner) = spawner {
+                    self.entities.push(RefCell::new(spawner));
+                }
+            }
         }
     }
 
@@ -218,6 +253,7 @@ impl Game {
         self.mesh = mesh;
         self.entities = vec![];
         self.bullets = vec![];
+        self.resources.clear();
     }
 
     fn new_qtree(
@@ -290,11 +326,12 @@ impl Game {
         &mut self,
         pos: [f64; 2],
         team: usize,
+        class: AgentClass,
         entities: &[RefCell<Entity>],
         static_: bool,
         randomness: f64,
     ) -> Option<Entity> {
-        const STATIC_SOURCE_FILE: &str = include_str!("../test_obstacle.txt");
+        const STATIC_SOURCE_FILE: &str = include_str!("../behavior_tree_config/test_obstacle.txt");
         let rng = &mut self.rng;
         let id_gen = &mut self.id_gen;
         let triangle_labels = &self.mesh.triangle_labels;
@@ -307,11 +344,11 @@ impl Game {
                 heading: rng.next() * std::f64::consts::PI * 2.,
             };
 
-            if Agent::qtree_collision(None, state_candidate, entities) {
+            if Agent::qtree_collision(None, state_candidate, class, entities) {
                 continue;
             }
 
-            if Agent::collision_check(None, state_candidate, entities, false) {
+            if Agent::collision_check(None, state_candidate, class, entities, false) {
                 continue;
             }
 
@@ -334,10 +371,11 @@ impl Game {
                         state_candidate.into(),
                         state_candidate.heading,
                         team,
+                        class,
                         if static_ {
                             STATIC_SOURCE_FILE
                         } else {
-                            &self.source
+                            &self.agent_source
                         },
                     );
                     match agent {
@@ -370,6 +408,15 @@ impl Game {
         for _ in 0..10 {
             let rng = &mut self.rng;
             let pos_candidate = [rng.next() * self.xs as f64, rng.next() * self.ys as f64];
+            if self
+                .qtree
+                .check_collision(&Spawner::collision_shape(pos_candidate).to_aabb())
+            {
+                continue;
+            }
+            if Spawner::qtree_collision(None, pos_candidate, &self.entities) {
+                continue;
+            }
             if let Some(tri) = find_triangle_at(
                 &self.mesh,
                 pos_candidate,
@@ -377,11 +424,16 @@ impl Game {
             ) {
                 if Some(self.mesh.triangle_labels[tri]) == self.mesh.largest_label {
                     if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
-                        return Some(Entity::Spawner(Spawner::new(
+                        let spawner = Spawner::new(
                             &mut self.id_gen,
                             pos_candidate,
                             team,
-                        )));
+                            &self.spawner_source,
+                        );
+                        match spawner {
+                            Ok(spawner) => return Some(Entity::Spawner(spawner)),
+                            Err(err) => println!("Spawner failed to create!: {err}"),
+                        }
                     }
                 }
             }
@@ -389,13 +441,50 @@ impl Game {
         None
     }
 
+    fn try_new_resource(&mut self) {
+        self.resources = std::mem::take(&mut self.resources)
+            .into_iter()
+            .filter(|res| 0 < res.amount)
+            .collect();
+        if 10 < self.resources.len() {
+            return;
+        }
+        for _ in 0..10 {
+            let rng = &mut self.rng;
+            let pos_candidate = [rng.next() * self.xs as f64, rng.next() * self.ys as f64];
+            if !is_passable_at(&self.board, (self.xs, self.ys), pos_candidate) {
+                continue;
+            }
+
+            if !matches!(self.qtree.find(pos_candidate), Some((_, CellState::Free))) {
+                continue;
+            }
+
+            if let Some(tri) = find_triangle_at(
+                &self.mesh,
+                pos_candidate,
+                &mut self.triangle_profiler.borrow_mut(),
+            ) {
+                if Some(self.mesh.triangle_labels[tri]) == self.mesh.largest_label {
+                    if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
+                        self.resources.push(Resource {
+                            pos: pos_candidate,
+                            amount: (rng.nexti() % 128 + 80) as i32,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     pub(crate) fn set_params(&mut self, params: &GameParams) {
         self.avoidance_mode = params.avoidance_mode;
         self.avoidance_expands = params.avoidance_expands;
-        self.source = params.source.clone();
+        self.agent_source = params.agent_source.clone();
+        self.spawner_source = params.spawner_source.clone();
     }
 
-    pub(crate) fn update(&mut self) {
+    pub(crate) fn update(&mut self) -> UpdateResult {
         let mut entities = std::mem::take(&mut self.entities);
         let mut bullets = std::mem::take(&mut self.bullets);
         let mut events = vec![];
@@ -406,9 +495,22 @@ impl Game {
 
         for event in events {
             match event {
-                GameEvent::SpawnAgent { pos, team } => {
-                    if let Some(agent) = self.try_new_agent(pos, team, &entities, false, 10.) {
+                GameEvent::SpawnAgent {
+                    pos,
+                    team,
+                    class,
+                    spawner,
+                } => {
+                    if let Some(agent) = self.try_new_agent(pos, team, class, &entities, false, 10.)
+                    {
+                        println!("Spawning agent {class:?}");
                         entities.push(RefCell::new(agent));
+                        if let Some(spawner) = entities
+                            .iter_mut()
+                            .find(|ent| ent.borrow().get_id() == spawner)
+                        {
+                            spawner.borrow_mut().remove_resource(class.cost());
+                        }
                     }
                 }
             }
@@ -443,11 +545,19 @@ impl Game {
                                 &Vector2::from(bullet.velo),
                                 agent_vertices.into_iter().map(Vector2::from),
                             ) {
-                                temp_ents.push(TempEnt::new(bullet.pos));
-                                if agent.damage() {
+                                let temp_ent = match bullet.shooter_class {
+                                    AgentClass::Worker => {
+                                        TempEnt::new(bullet.pos, crate::temp_ents::MAX_TTL / 2., 1.)
+                                    }
+                                    AgentClass::Fighter => {
+                                        TempEnt::new(bullet.pos, crate::temp_ents::MAX_TTL, 2.)
+                                    }
+                                };
+                                temp_ents.push(temp_ent);
+                                if agent.damage(bullet.damage) {
                                     agent.set_active(false);
+                                    println!("Entity {} is being killed", agent.get_id());
                                 }
-                                println!("Agent {} is being killed", agent.get_id());
                                 return None;
                             }
                         }
@@ -526,7 +636,7 @@ impl Game {
 
         self.qtree_profiler.borrow_mut().add(timer);
 
-        let mut entities: Vec<_> = std::mem::take(&mut self.entities)
+        let entities: Vec<_> = std::mem::take(&mut self.entities)
             .into_iter()
             .filter(|agent| agent.borrow().get_active())
             .collect();
@@ -544,20 +654,19 @@ impl Game {
         // }
 
         for team in 0..2 {
-            let rng = &mut self.rng;
-            if entities
+            if !entities
                 .iter()
-                .filter(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
-                .count()
-                < 1
-                && rng.next() < 0.1
+                .any(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
             {
-                if let Some(spawner) = self.try_new_spawner(team) {
-                    entities.push(RefCell::new(spawner));
-                }
+                self.entities = entities;
+                return UpdateResult::TeamWon((team + 1) % 2);
             }
         }
         self.entities = entities;
+
+        self.try_new_resource();
+
+        UpdateResult::Running
     }
 
     pub(crate) fn is_passable_at(&self, pos: [f64; 2]) -> bool {

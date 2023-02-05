@@ -1,12 +1,10 @@
-use cgmath::Vector2;
-
 use crate::{
     agent::Agent,
-    agent::{Bullet, PathNode},
-    collision::{CollisionShape, Obb},
+    agent::{AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE},
+    collision::CollisionShape,
     game::Game,
     qtree::QTreePathNode,
-    spawner::Spawner,
+    spawner::{Spawner, SPAWNER_MAX_RESOURCE},
 };
 use std::{cell::RefCell, collections::VecDeque};
 
@@ -17,10 +15,13 @@ pub(crate) enum Entity {
 }
 
 pub(crate) enum GameEvent {
-    SpawnAgent { pos: [f64; 2], team: usize },
+    SpawnAgent {
+        pos: [f64; 2],
+        team: usize,
+        class: AgentClass,
+        spawner: usize,
+    },
 }
-
-const SPAWNER_RADIUS: f64 = 0.5;
 
 impl Entity {
     pub(crate) fn get_id(&self) -> usize {
@@ -37,6 +38,13 @@ impl Entity {
         }
     }
 
+    pub(crate) fn get_class(&self) -> Option<AgentClass> {
+        match self {
+            Entity::Agent(agent) => Some(agent.class),
+            Entity::Spawner(_) => None,
+        }
+    }
+
     pub(crate) fn get_pos(&self) -> [f64; 2] {
         match self {
             Entity::Agent(agent) => agent.pos,
@@ -47,21 +55,15 @@ impl Entity {
     pub(crate) fn get_shape(&self) -> CollisionShape {
         match self {
             Entity::Agent(agent) => agent.get_shape(),
-            Entity::Spawner(spawner) => {
-                let spawner_pos = Vector2::from(spawner.pos);
-                CollisionShape::BBox(Obb {
-                    center: spawner_pos,
-                    xs: SPAWNER_RADIUS,
-                    ys: SPAWNER_RADIUS,
-                    orient: 0.,
-                })
-            }
+            Entity::Spawner(spawner) => spawner.get_shape(),
         }
     }
 
     pub(crate) fn get_last_state(&self) -> Option<CollisionShape> {
         match self {
-            Entity::Agent(agent) => agent.get_last_state().map(|state| state.collision_shape()),
+            Entity::Agent(agent) => agent
+                .get_last_state()
+                .map(|state| state.collision_shape(agent.class)),
             Entity::Spawner(_spawner) => None, // Spawner never moves
         }
     }
@@ -82,7 +84,7 @@ impl Entity {
 
     pub(crate) fn get_target(&self) -> Option<usize> {
         match self {
-            Entity::Agent(agent) => agent.target,
+            Entity::Agent(agent) => agent.get_target(),
             Entity::Spawner(_) => None,
         }
     }
@@ -112,6 +114,13 @@ impl Entity {
         match self {
             Entity::Agent(agent) => Some(agent.orient),
             _ => None,
+        }
+    }
+
+    pub(crate) fn get_aabb(&self) -> [f64; 4] {
+        match self {
+            Entity::Agent(agent) => agent.get_shape().to_aabb(),
+            Entity::Spawner(spawner) => Spawner::collision_shape(spawner.pos).to_aabb(),
         }
     }
 
@@ -157,14 +166,35 @@ impl Entity {
         }
     }
 
-    pub(crate) fn damage(&mut self) -> bool {
+    pub(crate) fn resource(&self) -> i32 {
+        match self {
+            Entity::Agent(agent) => agent.resource,
+            Entity::Spawner(spawner) => spawner.resource,
+        }
+    }
+
+    pub(crate) fn max_resource(&self) -> i32 {
+        match self {
+            Entity::Agent(_) => AGENT_MAX_RESOURCE,
+            Entity::Spawner(_) => SPAWNER_MAX_RESOURCE,
+        }
+    }
+
+    pub(crate) fn remove_resource(&mut self, resource: i32) {
+        match self {
+            Entity::Agent(agent) => agent.resource = (agent.resource - resource).max(0),
+            Entity::Spawner(spawner) => spawner.resource = (spawner.resource - resource).max(0),
+        }
+    }
+
+    pub(crate) fn damage(&mut self, damage: u32) -> bool {
         match self {
             Entity::Agent(agent) => {
-                agent.health -= 1;
+                agent.health = agent.health.saturating_sub(damage);
                 agent.health == 0
             }
             Entity::Spawner(spawner) => {
-                spawner.health -= 1;
+                spawner.health = spawner.health.saturating_sub(damage);
                 spawner.health == 0
             }
         }
@@ -179,7 +209,6 @@ impl Entity {
         let mut ret = vec![];
         match self {
             Entity::Agent(ref mut agent) => {
-                agent.find_enemy(entities);
                 agent.update(app_data, entities, bullets);
             }
             Entity::Spawner(ref mut spawner) => {

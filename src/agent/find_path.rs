@@ -1,21 +1,32 @@
-use super::Agent;
-use crate::{game::Game, measure_time};
+use super::{Agent, AgentTarget, AGENT_HALFLENGTH};
+use crate::{
+    game::Game,
+    measure_time,
+    qtree::{qtree::PathFindError, QTreePathNode},
+};
 
 impl Agent {
-    pub fn find_path(&mut self, target: [f64; 2], game: &mut Game) -> Result<(), ()> {
+    pub fn find_path(
+        &mut self,
+        target: [f64; 2],
+        game: &mut Game,
+    ) -> Result<Vec<QTreePathNode>, PathFindError> {
         let ((found_path, search_tree), time) = measure_time(|| {
             let qtree = &game.qtree;
-            if let Some(tgt_id) = self.target {
-                qtree.path_find(&[self.id, tgt_id], self.pos, target)
+            if let Some(AgentTarget::Entity(tgt_id)) = self.target {
+                qtree.path_find(&[self.id, tgt_id], self.pos, target, AGENT_HALFLENGTH * 1.5)
             } else {
-                qtree.path_find(&[self.id], self.pos, target)
+                qtree.path_find(&[self.id], self.pos, target, AGENT_HALFLENGTH * 1.5)
             }
         });
-        println!("Agent::find_path: {:.03} ms", time * 1e3);
+        game.path_find_profiler.get_mut().add(time);
         self.search_tree = Some(search_tree);
-        if let Some(path) = found_path {
-            self.path = path
+        match found_path {
+            Ok(path) => {
+                self.path = path.clone();
+                Ok(path)
+            }
+            Err(err) => Err(err),
         }
-        Ok(())
     }
 }

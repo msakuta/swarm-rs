@@ -41,6 +41,7 @@ impl Widget<AppData> for BoardWidget {
                     if !paused {
                         ctx.request_paint();
                     }
+                    data.big_message_time = (data.big_message_time - interval).max(0.);
                     let deadline = Duration::from_millis(interval as u64);
                     self.timer_id = ctx.request_timer(deadline);
                 }

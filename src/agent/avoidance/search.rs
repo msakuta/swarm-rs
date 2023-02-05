@@ -134,17 +134,17 @@ pub(super) fn search<S: StateSampler>(
             const USE_SEPAX: bool = true;
             const USE_STEER: bool = false;
             let collision_checker = |state: AgentState| {
-                if Agent::collision_check(Some(this.id), state, env.entities, true) {
+                if Agent::collision_check(Some(this.id), state, this.class, env.entities, true) {
                     return false;
                 }
                 !env.game.check_hit(
                     &start_state
-                        .collision_shape()
+                        .collision_shape(this.class)
                         .with_position(state.as_point().into()),
                 )
             };
             if USE_SEPAX {
-                let start_shape = start_state.collision_shape();
+                let start_shape = start_state.collision_shape(this.class);
                 let (hit, level) = env
                     .entities
                     .iter()
@@ -163,8 +163,11 @@ pub(super) fn search<S: StateSampler>(
                 } else {
                     (
                         interpolate(start_state, next_state, DIST_RADIUS * 0.5, |pos| {
-                            !env.game
-                                .check_hit(&start_state.collision_shape().with_position(pos.into()))
+                            !env.game.check_hit(
+                                &start_state
+                                    .collision_shape(this.class)
+                                    .with_position(pos.into()),
+                            )
                         }),
                         level,
                     )

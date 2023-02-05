@@ -1,6 +1,6 @@
 use crate::{
     agent::AvoidanceRenderParams,
-    game::{BoardType, Game, GameParams},
+    game::{BoardParams, BoardType, Game, GameParams},
     WINDOW_HEIGHT,
 };
 
@@ -35,6 +35,8 @@ pub(crate) struct AppData {
     pub(crate) origin: Vec2,
     pub(crate) scale: f64,
     pub(crate) message: String,
+    pub(crate) big_message: String,
+    pub(crate) big_message_time: f64,
     pub(super) mouse_pos: Option<Point>,
     pub(crate) get_board_time: f64,
     #[data(ignore)]
@@ -48,25 +50,35 @@ pub(crate) struct AppData {
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
     pub(crate) source_visible: bool,
-    pub(crate) source_file: String,
+    pub(crate) agent_source_file: String,
     /// This buffer is not yet applied to the game.
-    pub(crate) source_buffer: Rc<String>,
+    pub(crate) agent_source_buffer: Rc<String>,
+    pub(crate) spawner_source_file: String,
+    pub(crate) spawner_source_buffer: Rc<String>,
     pub(crate) global_render_time: f64,
 }
 
 impl AppData {
     pub(crate) fn new() -> Self {
-        let game = Game::new();
+        let mut game = Game::new();
         let seed = 123513;
         let scale = WINDOW_HEIGHT / game.ys as f64;
         let maze_expansion = 2000;
 
-        const SOURCE_FILE: &'static str = "behavior_tree.txt";
+        const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
+        const SPAWNER_SOURCE_FILE: &'static str = "behavior_tree_config/spawner.txt";
 
-        let source_buffer = Rc::new(include_str!("../behavior_tree.txt").to_string());
+        let agent_source_buffer =
+            Rc::new(include_str!("../behavior_tree_config/agent.txt").to_string());
+        let spawner_source_buffer =
+            Rc::new(include_str!("../behavior_tree_config/spawner.txt").to_string());
 
         let mut game_params = GameParams::new();
-        game_params.source = source_buffer.clone();
+        game_params.agent_source = agent_source_buffer.clone();
+        game_params.spawner_source = spawner_source_buffer.clone();
+
+        game.set_params(&game_params);
+        game.init();
 
         Self {
             rows_text: game.xs.to_string(),
@@ -85,6 +97,8 @@ impl AppData {
             origin: Vec2::new(0., 0.),
             scale,
             message: "".to_string(),
+            big_message: "Game Start".to_string(),
+            big_message_time: 5000.,
             mouse_pos: None,
             render_board_time: Cell::new(0.),
             get_board_time: 0.,
@@ -97,8 +111,10 @@ impl AppData {
             entity_label_visible: true,
             entity_trace_visible: false,
             source_visible: false,
-            source_file: SOURCE_FILE.to_string(),
-            source_buffer,
+            agent_source_file: AGENT_SOURCE_FILE.to_string(),
+            agent_source_buffer,
+            spawner_source_file: SPAWNER_SOURCE_FILE.to_string(),
+            spawner_source_buffer,
             global_render_time: 0.,
         }
     }
@@ -106,11 +122,37 @@ impl AppData {
     pub(crate) fn update(&mut self) -> (bool, f64) {
         let mut game = self.game.borrow_mut();
         game.set_params(&self.game_params);
+        let interval = game.interval;
         if !self.game_params.paused {
-            game.update();
+            let update_res = game.update();
+            if let crate::game::UpdateResult::TeamWon(team) = update_res {
+                drop(game);
+                self.new_game();
+                self.big_message = ["Green team won!!", "Red team won!!"][team].to_string();
+                self.big_message_time = 5000.;
+            }
         }
-        self.global_render_time += game.interval;
-        (self.game_params.paused, game.interval)
+        self.global_render_time += interval;
+        (self.game_params.paused, interval)
+    }
+
+    pub(crate) fn new_game(&mut self) {
+        let xs = self.columns_text.parse().unwrap_or(64);
+        let ys = self.rows_text.parse().unwrap_or(64);
+        let seed = self.seed_text.parse().unwrap_or(1);
+        let simplify = self.simplify_text.parse().unwrap_or(1.);
+        let params = BoardParams {
+            shape: (xs, ys),
+            seed,
+            simplify,
+            maze_expansions: self.maze_expansions.parse().unwrap_or(1),
+        };
+        let mut game = self.game.borrow_mut();
+        game.new_board(self.board_type, &params);
+        game.init();
+
+        self.big_message = "Game Start".to_string();
+        self.big_message_time = 5000.;
     }
 }
 

@@ -1,35 +1,31 @@
-use super::{motion::OrientToResult, AgentState, FollowPathResult};
+use crate::{
+    behavior_tree_adapt::{common_tree_nodes, BehaviorTree},
+    qtree::{qtree::PathFindError, QTreePathNode},
+};
+
+use super::{motion::OrientToResult, AgentClass, AgentState, MotionResult};
 use behavior_tree_lite::{
-    error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult, Context,
-    Lazy, PortSpec, Registry, Symbol,
+    boxify, error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult,
+    Context, Lazy, PortSpec, Registry, Symbol,
 };
 use cgmath::{Matrix2, Rad, Vector2};
 use rand::{distributions::Uniform, prelude::Distribution};
 
-/// Boundary to skip Debug trait from propagating to BehaviorNode trait
-pub(super) struct BehaviorTree(pub Box<dyn BehaviorNode>);
-
-impl std::fmt::Debug for BehaviorTree {
-    fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        std::fmt::Result::Ok(())
-    }
-}
-
-fn boxify<T>(cons: impl (Fn() -> T) + 'static) -> Box<dyn Fn() -> Box<dyn BehaviorNode>>
-where
-    for<'a> T: BehaviorNode + 'static,
-{
-    Box::new(move || Box::new(cons()))
-}
-
 pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     let mut registry = Registry::default();
-    registry.register("SetBool", boxify(|| SetBool));
-    registry.register("Print", boxify(|| PrintNode));
+    common_tree_nodes(&mut registry);
+    registry.register("GetClass", boxify(|| GetClass));
     registry.register("HasTarget", boxify(|| HasTargetNode));
     registry.register("TargetId", boxify(|| TargetIdNode));
     registry.register("TargetPos", boxify(|| TargetPosNode));
     registry.register("FindEnemy", boxify(|| FindEnemy));
+    registry.register("FindSpawner", boxify(|| FindSpawner));
+    registry.register("FindResource", boxify(|| FindResource));
+    registry.register("ClearTarget", boxify(|| ClearTarget));
+    registry.register("CollectResource", boxify(|| CollectResource));
+    registry.register("DepositResource", boxify(|| DepositResource));
+    registry.register("IsResourceFull", boxify(|| IsResourceFull));
+    registry.register("IsSpawnerResourceFull", boxify(|| IsSpawnerResourceFull));
     registry.register("HasPath", boxify(|| HasPathNode));
     registry.register("ClearPath", boxify(|| ClearPathNode));
     registry.register("FindPath", boxify(|| FindPathNode));
@@ -53,46 +49,23 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     Ok(BehaviorTree(load(&tree_source, &registry, true)?))
 }
 
-pub(super) struct SetBool;
+pub(super) struct GetClass;
 
-impl BehaviorNode for SetBool {
+impl BehaviorNode for GetClass {
     fn provided_ports(&self) -> Vec<PortSpec> {
-        vec![PortSpec::new_in("value"), PortSpec::new_out("output")]
+        vec![PortSpec::new_out("output")]
     }
 
     fn tick(
         &mut self,
-        _arg: BehaviorCallback,
+        arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        let result = ctx.get_parse::<bool>("value");
-        if let Some(value) = result {
-            ctx.set("output", value);
-            BehaviorResult::Success
-        } else {
-            BehaviorResult::Fail
-        }
-    }
-}
-
-pub(super) struct PrintNode;
-
-impl BehaviorNode for PrintNode {
-    fn provided_ports(&self) -> Vec<PortSpec> {
-        vec![PortSpec::new_in("input")]
-    }
-
-    fn tick(
-        &mut self,
-        _arg: BehaviorCallback,
-        ctx: &mut behavior_tree_lite::Context,
-    ) -> BehaviorResult {
-        if let Some(result) = ctx.get::<String>("input") {
-            println!("PrintNode: {result:?}");
-            BehaviorResult::Success
-        } else {
-            BehaviorResult::Fail
-        }
+        let result = arg(self)
+            .and_then(|a| a.downcast_ref::<AgentClass>().copied())
+            .expect("Level (u32) should be always available");
+        ctx.set("output", result.to_string());
+        BehaviorResult::Success
     }
 }
 
@@ -145,9 +118,127 @@ impl BehaviorNode for FindEnemy {
         arg: BehaviorCallback,
         _ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        // println!("FindEnemy node");
         arg(&FindEnemyCommand);
         BehaviorResult::Success
+    }
+}
+
+pub(super) struct FindSpawner;
+
+impl BehaviorNode for FindSpawner {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        arg(self);
+        BehaviorResult::Success
+    }
+}
+
+pub(super) struct FindResource;
+
+impl BehaviorNode for FindResource {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if arg(&Self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap_or(false)
+        {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct ClearTarget;
+
+impl BehaviorNode for ClearTarget {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let Some(result) = arg(self).and_then(|a| a.downcast_ref::<bool>().copied()) else {
+            return BehaviorResult::Fail;
+        };
+        if result {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct CollectResource;
+
+impl BehaviorNode for CollectResource {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        arg(self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap()
+    }
+}
+
+pub(super) struct DepositResource;
+
+impl BehaviorNode for DepositResource {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        arg(self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap()
+    }
+}
+
+pub(super) struct IsResourceFull;
+
+impl BehaviorNode for IsResourceFull {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if arg(self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap_or(false)
+        {
+            // println!("IsResourceFull? yes");
+            BehaviorResult::Success
+        } else {
+            // println!("IsResourceFull? no");
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct IsSpawnerResourceFull;
+
+impl BehaviorNode for IsSpawnerResourceFull {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if arg(self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap_or(false)
+        {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
     }
 }
 
@@ -215,7 +306,11 @@ pub(super) struct FindPathNode;
 
 impl BehaviorNode for FindPathNode {
     fn provided_ports(&self) -> Vec<PortSpec> {
-        vec![PortSpec::new_in("target")]
+        vec![
+            *TARGET_SPEC,
+            PortSpec::new_out("path"),
+            PortSpec::new_out("fail_reason"),
+        ]
     }
 
     fn tick(
@@ -223,11 +318,25 @@ impl BehaviorNode for FindPathNode {
         arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        if let Some(target) = ctx.get::<[f64; 2]>("target") {
-            arg(&FindPathCommand(*target));
-            BehaviorResult::Success
-        } else {
-            BehaviorResult::Fail
+        let path_find_result = ctx
+            .get::<[f64; 2]>(*TARGET)
+            .and_then(|target| arg(&FindPathCommand(*target)))
+            .and_then(|res| {
+                res.downcast::<Result<Vec<QTreePathNode>, PathFindError>>()
+                    .ok()
+            })
+            .expect(
+                "PathFindCommand should always return Result<Vec<QTreePathNode>, PathFindError>",
+            );
+        match *path_find_result {
+            Ok(path) => {
+                ctx.set("path", path);
+                BehaviorResult::Success
+            }
+            Err(err) => {
+                ctx.set("fail_reason", err.to_string());
+                BehaviorResult::Fail
+            }
         }
     }
 }
@@ -247,15 +356,14 @@ impl BehaviorNode for FollowPath {
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         let res = arg(&FollowPathCommand);
-        let res = res
-            .as_ref()
-            .and_then(|res| res.downcast_ref::<FollowPathResult>())
-            .map(|b| *b)
-            .unwrap_or(FollowPathResult::Blocked);
+        let res = res.as_ref().map(|r| {
+            *r.downcast_ref::<MotionResult>()
+                .expect("MotionResult type expected")
+        });
 
-        ctx.set("arrived", matches!(res, FollowPathResult::Arrived));
+        ctx.set("arrived", matches!(res, Some(MotionResult::Arrived)));
 
-        if res.into() {
+        if res.unwrap_or(MotionResult::Following).into() {
             BehaviorResult::Success
         } else {
             // println!("Can't follow path!");
@@ -306,10 +414,12 @@ impl BehaviorNode for MoveToNode {
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
         if let Some(pos) = ctx.get::<[f64; 2]>("pos") {
-            if arg(&MoveToCommand(*pos))
-                .and_then(|res| res.downcast_ref::<bool>().copied())
-                .unwrap_or(false)
-            {
+            if matches!(
+                arg(&MoveToCommand(*pos))
+                    .and_then(|res| res.downcast_ref::<MotionResult>().copied())
+                    .expect("MotionResult type is expected"),
+                MotionResult::Following
+            ) {
                 BehaviorResult::Success
             } else {
                 BehaviorResult::Fail
