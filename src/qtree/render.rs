@@ -10,9 +10,6 @@ use super::{cache_map::FRESH_TICKS, CellState, SearchTree};
 pub(crate) fn paint_qtree(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
     let qtree_searcher = &data.game.borrow().qtree;
 
-    // dbg!(data.global_render_time);
-    // let cur = (data.global_render_time / 1000.).rem_euclid(8.) as usize;
-
     let width = 1;
     const CELL_MARGIN: f64 = 0.1;
 
@@ -41,10 +38,7 @@ pub(crate) fn paint_qtree(ctx: &mut PaintCtx, data: &AppData, view_transform: &A
 
     let qtree = &qtree_searcher.qtree;
 
-    for (level, cells) in qtree.levels.iter().enumerate().take(8) {
-        // let level = cur;
-        // let cells = &qtree.levels[level];
-        // {
+    for (level, cells) in qtree.levels.iter().enumerate() {
         let width = qtree.width(level);
         for (cell, state) in cells
             .iter()
