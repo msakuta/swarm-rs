@@ -63,6 +63,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 .with_child(Checkbox::new("Triangulation").lens(AppData::triangulation_visible))
                 .with_child(Checkbox::new("Unpassable").lens(AppData::unpassable_visible))
                 .with_child(Checkbox::new("Label").lens(AppData::triangle_label_visible))
+                .with_child(Checkbox::new("Label image").lens(AppData::show_label_image))
                 .padding(5.),
         )
         .with_child(

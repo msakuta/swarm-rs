@@ -5,7 +5,9 @@ use druid::{kurbo::BezPath, Point};
 
 use crate::{
     app_data::is_passable_at,
+    dijkstra::label,
     marching_squares::{trace_lines, BoolField},
+    measure_time,
     triangle_utils::{center_of_triangle_obj, label_triangles},
 };
 
@@ -20,6 +22,7 @@ pub(crate) struct Mesh {
     pub triangle_passable: Vec<bool>,
     pub triangle_labels: Vec<i32>,
     pub largest_label: Option<i32>,
+    pub labeled_image: Vec<i32>,
 }
 
 pub(crate) struct MeshResult {
@@ -44,6 +47,9 @@ pub(crate) fn create_mesh(
         board.iter().filter(|c| **c).count(),
         board.iter().filter(|c| !**c).count()
     );
+
+    let (labeled_image, time) = measure_time(|| label(&board, (xs, ys)));
+    println!("Labeled: {:?} in {} s", labeled_image.iter().max(), time);
 
     let shape = (xs as isize, ys as isize);
 
@@ -140,6 +146,7 @@ pub(crate) fn create_mesh(
             triangle_passable,
             triangle_labels,
             largest_label,
+            labeled_image,
         },
     }
 }
