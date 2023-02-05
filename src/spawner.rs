@@ -1,5 +1,11 @@
+mod behavior_nodes;
+
+use behavior_tree_lite::{error::LoadError, Blackboard, Context};
+
+use self::behavior_nodes::{build_tree, SpawnFighter, SpawnWorker};
 use crate::{
     agent::AgentClass,
+    behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource},
     collision::{aabb_intersects, CollisionShape, Obb},
     entity::{Entity, GameEvent},
     game::Game,
@@ -12,7 +18,7 @@ pub(crate) const SPAWNER_RADIUS: f64 = 1.0;
 
 pub(crate) type SpawnerState = [f64; 2];
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct Spawner {
     pub id: usize,
     pub pos: [f64; 2],
@@ -20,20 +26,32 @@ pub(crate) struct Spawner {
     pub active: bool,
     pub health: u32,
     pub resource: i32,
+    behavior_tree: Option<BehaviorTree>,
+    blackboard: Blackboard,
 }
 
 impl Spawner {
-    pub(crate) fn new(id_gen: &mut usize, pos: [f64; 2], team: usize) -> Self {
+    pub(crate) fn new(
+        id_gen: &mut usize,
+        pos: [f64; 2],
+        team: usize,
+        behavior_source: &str,
+    ) -> Result<Self, LoadError> {
         let id = *id_gen;
         *id_gen += 1;
-        Spawner {
+
+        let tree = build_tree(behavior_source)?;
+
+        Ok(Spawner {
             id,
             pos,
             team,
             active: true,
             health: SPAWNER_MAX_HEALTH,
             resource: 0,
-        }
+            behavior_tree: Some(tree),
+            blackboard: Blackboard::new(),
+        })
     }
 
     pub(crate) fn get_health_rate(&self) -> f64 {
@@ -81,9 +99,10 @@ impl Spawner {
             self.resource += 1;
         }
 
-        for class in [AgentClass::Fighter, AgentClass::Worker] {
+        let mut ret = vec![];
+
+        let mut try_spawn = |class: AgentClass| -> Option<Box<dyn std::any::Any>> {
             if class.cost() <= self.resource {
-                let mut ret = vec![];
                 let rng = &mut game.rng;
                 if entities
                     .iter()
@@ -106,11 +125,34 @@ impl Spawner {
                         team: self.team,
                         spawner: self.id,
                         class,
-                    })
+                    });
+                    return Some(Box::new(true));
                 }
-                return ret;
             }
+            Some(Box::new(false))
+        };
+
+        if let Some(mut tree) = self.behavior_tree.take() {
+            let mut ctx = Context::new(std::mem::take(&mut self.blackboard));
+            let mut process = |f: &dyn std::any::Any| {
+                if f.downcast_ref::<GetIdCommand>().is_some() {
+                    return Some(Box::new(self.id) as Box<dyn std::any::Any>);
+                } else if f.downcast_ref::<GetResource>().is_some() {
+                    return Some(Box::new(self.resource));
+                } else if f.downcast_ref::<SpawnFighter>().is_some() {
+                    return try_spawn(AgentClass::Fighter);
+                } else if f.downcast_ref::<SpawnWorker>().is_some() {
+                    return try_spawn(AgentClass::Worker);
+                }
+                None
+            };
+
+            let _res = tree.0.tick(&mut process, &mut ctx);
+
+            self.behavior_tree = Some(tree);
+            self.blackboard = ctx.take_blackboard();
         }
-        vec![]
+
+        ret
     }
 }

@@ -93,7 +93,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 Flex::row()
                     .with_child(Label::new("Avoidance mode:").padding(3.0))
                     .with_child(
-                        RadioGroup::new([
+                        RadioGroup::row([
                             ("Kinematic", AvoidanceMode::Kinematic),
                             ("RRT", AvoidanceMode::Rrt),
                             ("RRT*", AvoidanceMode::RrtStar),
@@ -244,7 +244,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 Flex::row()
                     .with_child(
                         Button::new("Apply").on_click(|_, app_data: &mut AppData, _| {
-                            try_load_behavior_tree(app_data, app_data.source_buffer.clone());
+                            try_load_behavior_tree(app_data, app_data.agent_source_buffer.clone());
                         }),
                     )
                     .with_child(TextBox::new().lens(AppData::source_file))
@@ -255,7 +255,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                             Ok(s) => {
                                 let s = Rc::new(s);
                                 if try_load_behavior_tree(app_data, s.clone()) {
-                                    app_data.source_buffer = s;
+                                    app_data.agent_source_buffer = s;
                                 }
                             }
                             Err(e) => app_data.message = format!("Read file error! {e:?}"),
@@ -267,8 +267,8 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 Scroll::new(
                     TextBox::multiline()
                         .lens(Field::new(
-                            |app_data: &AppData| app_data.source_buffer.as_ref(),
-                            |app_data| Rc::make_mut(&mut app_data.source_buffer),
+                            |app_data: &AppData| app_data.agent_source_buffer.as_ref(),
+                            |app_data| Rc::make_mut(&mut app_data.agent_source_buffer),
                         ))
                         .padding(5.0)
                         .fix_width(BAR_WIDTH),
@@ -316,10 +316,10 @@ fn try_load_behavior_tree(app_data: &mut AppData, src: Rc<String>) -> bool {
     // Check the syntax before applying
     match parse_file(&src) {
         Ok(("", _)) => {
-            app_data.game_params.source = src.clone();
+            app_data.game_params.agent_source = src.clone();
             app_data.message = format!(
                 "Behavior tree applied! {}",
-                Rc::strong_count(&app_data.source_buffer)
+                Rc::strong_count(&app_data.agent_source_buffer)
             );
             true
         }

@@ -50,7 +50,8 @@ pub(crate) struct AppData {
     pub(crate) source_visible: bool,
     pub(crate) source_file: String,
     /// This buffer is not yet applied to the game.
-    pub(crate) source_buffer: Rc<String>,
+    pub(crate) agent_source_buffer: Rc<String>,
+    pub(crate) spawner_source_buffer: Rc<String>,
     pub(crate) global_render_time: f64,
 }
 
@@ -63,10 +64,14 @@ impl AppData {
 
         const SOURCE_FILE: &'static str = "behavior_tree.txt";
 
-        let source_buffer = Rc::new(include_str!("../behavior_tree.txt").to_string());
+        let agent_source_buffer =
+            Rc::new(include_str!("../behavior_tree_config/agent.txt").to_string());
+        let spawner_source_buffer =
+            Rc::new(include_str!("../behavior_tree_config/spawner.txt").to_string());
 
         let mut game_params = GameParams::new();
-        game_params.source = source_buffer.clone();
+        game_params.agent_source = agent_source_buffer.clone();
+        game_params.spawner_source = spawner_source_buffer.clone();
 
         Self {
             rows_text: game.xs.to_string(),
@@ -98,7 +103,8 @@ impl AppData {
             entity_trace_visible: false,
             source_visible: false,
             source_file: SOURCE_FILE.to_string(),
-            source_buffer,
+            agent_source_buffer,
+            spawner_source_buffer,
             global_render_time: 0.,
         }
     }

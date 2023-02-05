@@ -91,7 +91,8 @@ pub(crate) struct GameParams {
     pub(crate) avoidance_mode: AvoidanceMode,
     pub(crate) paused: bool,
     pub(crate) avoidance_expands: f64,
-    pub(crate) source: Rc<String>,
+    pub(crate) agent_source: Rc<String>,
+    pub(crate) spawner_source: Rc<String>,
 }
 
 impl GameParams {
@@ -100,7 +101,8 @@ impl GameParams {
             avoidance_mode: AvoidanceMode::RrtStar,
             paused: false,
             avoidance_expands: 1.,
-            source: Rc::new("".to_string()),
+            agent_source: Rc::new("".to_string()),
+            spawner_source: Rc::new("".to_string()),
         }
     }
 }
@@ -125,7 +127,8 @@ pub(crate) struct Game {
     pub(crate) pixel_profiler: RefCell<Profiler>,
     pub(crate) qtree_profiler: RefCell<Profiler>,
     pub(crate) path_find_profiler: RefCell<Profiler>,
-    pub(crate) source: Rc<String>,
+    pub(crate) agent_source: Rc<String>,
+    pub(crate) spawner_source: Rc<String>,
     pub(crate) qtree: QTreeSearcher,
 }
 
@@ -170,7 +173,8 @@ impl Game {
             pixel_profiler: RefCell::new(Profiler::new()),
             qtree_profiler: RefCell::new(Profiler::new()),
             path_find_profiler: RefCell::new(Profiler::new()),
-            source: Rc::new(String::new()),
+            agent_source: Rc::new(String::new()),
+            spawner_source: Rc::new(String::new()),
             qtree,
         }
     }
@@ -306,7 +310,7 @@ impl Game {
         static_: bool,
         randomness: f64,
     ) -> Option<Entity> {
-        const STATIC_SOURCE_FILE: &str = include_str!("../test_obstacle.txt");
+        const STATIC_SOURCE_FILE: &str = include_str!("../behavior_tree_config/test_obstacle.txt");
         let rng = &mut self.rng;
         let id_gen = &mut self.id_gen;
         let triangle_labels = &self.mesh.triangle_labels;
@@ -350,7 +354,7 @@ impl Game {
                         if static_ {
                             STATIC_SOURCE_FILE
                         } else {
-                            &self.source
+                            &self.agent_source
                         },
                     );
                     match agent {
@@ -399,11 +403,16 @@ impl Game {
             ) {
                 if Some(self.mesh.triangle_labels[tri]) == self.mesh.largest_label {
                     if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
-                        return Some(Entity::Spawner(Spawner::new(
+                        let spawner = Spawner::new(
                             &mut self.id_gen,
                             pos_candidate,
                             team,
-                        )));
+                            &self.spawner_source,
+                        );
+                        match spawner {
+                            Ok(spawner) => return Some(Entity::Spawner(spawner)),
+                            Err(err) => println!("Spawner failed to create!: {err}"),
+                        }
                     }
                 }
             }
@@ -446,7 +455,8 @@ impl Game {
     pub(crate) fn set_params(&mut self, params: &GameParams) {
         self.avoidance_mode = params.avoidance_mode;
         self.avoidance_expands = params.avoidance_expands;
-        self.source = params.source.clone();
+        self.agent_source = params.agent_source.clone();
+        self.spawner_source = params.spawner_source.clone();
     }
 
     pub(crate) fn update(&mut self) {

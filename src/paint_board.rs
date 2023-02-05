@@ -6,7 +6,6 @@ use crate::{
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
     qtree::render::paint_qtree,
-    temp_ents::MAX_TTL,
     triangle_utils::center_of_triangle_obj,
 };
 

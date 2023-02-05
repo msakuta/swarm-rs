@@ -5,7 +5,8 @@ tree main = Sequence {
     if (StringEq(lhs <- class, rhs <- "Fighter")) {
         SetBool(value <- "true", output -> fighter)
     }
-    Print(input <- "Resetting fight: {}, fighter: {}", arg0 <- fight, arg1 <- fighter)
+    GetResource(output -> resource)
+    Print(input <- "Resetting fight: {}, resource: {}", arg0 <- fight, arg1 <- resource)
     Repeat (n <- "10000") {
         if (fight || fighter) {
             # Print(input <- "Fighting")

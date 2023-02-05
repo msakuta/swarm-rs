@@ -11,17 +11,18 @@ pub(crate) use self::{
 };
 use self::{
     behavior_nodes::{
-        build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, ClearPathNode,
-        ClearTarget, CollectResource, DepositResource, DriveCommand, FaceToTargetCommand,
-        FindEnemyCommand, FindPathCommand, FindResource, FindSpawner, FollowPathCommand, GetClass,
-        GetIdCommand, GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode,
-        IsResourceFull, IsSpawnerResourceFull, IsTargetVisibleCommand, MoveToCommand, ShootCommand,
+        build_tree, AvoidanceCommand, ClearAvoidanceCommand, ClearPathNode, ClearTarget,
+        CollectResource, DepositResource, DriveCommand, FaceToTargetCommand, FindEnemyCommand,
+        FindPathCommand, FindResource, FindSpawner, FollowPathCommand, GetClass,
+        GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode, IsResourceFull,
+        IsSpawnerResourceFull, IsTargetVisibleCommand, MoveToCommand, ShootCommand,
         SimpleAvoidanceCommand, TargetIdNode, TargetPosCommand,
     },
     motion::{MotionCommandResult, OrientToResult},
 };
 use crate::{
     app_data::is_passable_at,
+    behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource},
     collision::{aabb_intersects, CollisionShape, Obb},
     entity::Entity,
     game::{Board, Game, Profiler, Resource},
@@ -522,8 +523,8 @@ impl Agent {
         Box::new(res)
     }
 
-    pub fn update<'a, 'b>(
-        &'a mut self,
+    pub fn update(
+        &mut self,
         game: &mut Game,
         entities: &[RefCell<Entity>],
         bullets: &mut Vec<Bullet>,
@@ -542,6 +543,8 @@ impl Agent {
             let mut process = |f: &dyn std::any::Any| {
                 if f.downcast_ref::<GetIdCommand>().is_some() {
                     return Some(Box::new(self.id) as Box<dyn std::any::Any>);
+                } else if f.downcast_ref::<GetResource>().is_some() {
+                    return Some(Box::new(self.resource));
                 } else if let Some(com) = f.downcast_ref::<DriveCommand>() {
                     command = Some(Command::Drive(*com));
                     return MotionCommandResult::as_drive(&self.last_motion_result);
