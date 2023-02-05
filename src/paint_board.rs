@@ -282,7 +282,12 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
         // ctx.stroke(shape, brush, 1.);
 
         if let Some(orient) = agent.get_orient() {
-            let length = 10.;
+            let class = agent.get_class().unwrap_or(AgentClass::Worker);
+            let length = if matches!(class, AgentClass::Fighter) {
+                20.
+            } else {
+                10.
+            };
             let view_pos = *view_transform * pos;
             let dest = Point::new(
                 view_pos.x + orient.cos() * length,
@@ -295,12 +300,15 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                 let rot_transform =
                     *view_transform * Affine::translate(pos.to_vec2()) * Affine::rotate(orient);
                 let mut path = BezPath::new();
-                let class = agent.get_class().unwrap_or(AgentClass::Worker);
-                let (length, width) = class.shape();
-                path.move_to(Point::new(-length, -width));
-                path.line_to(Point::new(length, -width));
-                path.line_to(Point::new(length, width));
-                path.line_to(Point::new(-length, width));
+                let mut first = true;
+                class.vertices(|v| {
+                    if first {
+                        path.move_to(Point::new(v[0], v[1]));
+                        first = false;
+                    } else {
+                        path.line_to(Point::new(v[0], v[1]));
+                    }
+                });
                 path.close_path();
                 ctx.stroke(rot_transform * path, brush, 1.);
             }

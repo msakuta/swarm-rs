@@ -1,10 +1,14 @@
+mod agent_class;
 mod avoidance;
 mod behavior_nodes;
 mod find_path;
 mod interpolation;
 mod motion;
 
-pub(crate) use self::avoidance::{AgentState, AvoidanceRenderParams, PathNode, SearchState};
+pub(crate) use self::{
+    agent_class::AgentClass,
+    avoidance::{AgentState, AvoidanceRenderParams, PathNode, SearchState},
+};
 use self::{
     behavior_nodes::{
         build_tree, AvoidanceCommand, BehaviorTree, ClearAvoidanceCommand, ClearPathNode,
@@ -33,7 +37,6 @@ use behavior_tree_lite::{error::LoadError, BehaviorResult, Blackboard, Lazy};
 use std::{
     cell::RefCell,
     collections::{HashSet, VecDeque},
-    fmt::Display,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Mutex,
@@ -68,76 +71,6 @@ impl Bullet {
 pub(crate) enum AgentTarget {
     Entity(usize),
     Resource([f64; 2]),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AgentClass {
-    Worker,
-    Fighter,
-}
-
-impl Display for AgentClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Worker => "Worker",
-                Self::Fighter => "Fighter",
-            }
-        )
-    }
-}
-
-impl AgentClass {
-    pub(crate) fn cost(&self) -> i32 {
-        match self {
-            Self::Worker => 100,
-            Self::Fighter => 500,
-        }
-    }
-
-    pub(crate) fn health(&self) -> u32 {
-        match self {
-            Self::Worker => AGENT_MAX_HEALTH,
-            Self::Fighter => AGENT_MAX_HEALTH * 3,
-        }
-    }
-
-    pub(crate) fn damage(&self) -> u32 {
-        match self {
-            Self::Worker => BULLET_DAMAGE,
-            Self::Fighter => BULLET_DAMAGE * 10,
-        }
-    }
-
-    pub(crate) fn bullet_speed(&self) -> f64 {
-        match self {
-            Self::Worker => BULLET_SPEED * 0.7,
-            Self::Fighter => BULLET_SPEED,
-        }
-    }
-
-    pub(crate) fn cooldown(&self) -> f64 {
-        match self {
-            Self::Worker => 20.,
-            Self::Fighter => 50.,
-        }
-    }
-
-    pub(crate) fn speed(&self) -> f64 {
-        match self {
-            Self::Worker => AGENT_SPEED,
-            Self::Fighter => AGENT_SPEED * 0.7,
-        }
-    }
-
-    pub(crate) fn shape(&self) -> (f64, f64) {
-        match self {
-            Self::Worker => (AGENT_HALFLENGTH, AGENT_HALFWIDTH),
-            Self::Fighter => (AGENT_HALFLENGTH * 1.5, AGENT_HALFWIDTH * 1.5),
-        }
-    }
 }
 
 #[derive(Debug)]
