@@ -49,7 +49,25 @@ pub(crate) fn create_mesh(
     );
 
     let (labeled_image, time) = measure_time(|| label(&board, (xs, ys)));
-    println!("Labeled: {:?} in {} s", labeled_image.iter().max(), time);
+    let max_labels = labeled_image.iter().max();
+    println!("Labeled: {:?} in {} s", max_labels, time);
+
+    if let Some((largest_label, _)) = max_labels.and_then(|max_labels| {
+        (1..*max_labels)
+            .map(|label| {
+                (
+                    label,
+                    labeled_image.iter().filter(|pix| **pix == label).count(),
+                )
+            })
+            .max_by_key(|(_, count)| *count)
+    }) {
+        for (pix, pix_label) in board.iter_mut().zip(labeled_image.iter()) {
+            if *pix_label != 0 && *pix_label != largest_label {
+                *pix = false;
+            }
+        }
+    }
 
     let shape = (xs as isize, ys as isize);
 
