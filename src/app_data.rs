@@ -48,9 +48,10 @@ pub(crate) struct AppData {
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
     pub(crate) source_visible: bool,
-    pub(crate) source_file: String,
+    pub(crate) agent_source_file: String,
     /// This buffer is not yet applied to the game.
     pub(crate) agent_source_buffer: Rc<String>,
+    pub(crate) spawner_source_file: String,
     pub(crate) spawner_source_buffer: Rc<String>,
     pub(crate) global_render_time: f64,
 }
@@ -62,7 +63,8 @@ impl AppData {
         let scale = WINDOW_HEIGHT / game.ys as f64;
         let maze_expansion = 2000;
 
-        const SOURCE_FILE: &'static str = "behavior_tree.txt";
+        const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
+        const SPAWNER_SOURCE_FILE: &'static str = "behavior_tree_config/spawner.txt";
 
         let agent_source_buffer =
             Rc::new(include_str!("../behavior_tree_config/agent.txt").to_string());
@@ -102,8 +104,9 @@ impl AppData {
             entity_label_visible: true,
             entity_trace_visible: false,
             source_visible: false,
-            source_file: SOURCE_FILE.to_string(),
+            agent_source_file: AGENT_SOURCE_FILE.to_string(),
             agent_source_buffer,
+            spawner_source_file: SPAWNER_SOURCE_FILE.to_string(),
             spawner_source_buffer,
             global_render_time: 0.,
         }
