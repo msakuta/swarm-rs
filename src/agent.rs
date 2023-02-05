@@ -601,7 +601,7 @@ impl Agent {
                     }
                 } else if let Some(com) = f.downcast_ref::<FindPathCommand>() {
                     let found_path = self.find_path(com.0, game);
-                    return Some(Box::new(found_path) as Box<dyn std::any::Any>);
+                    return Some(Box::new(found_path));
                 } else if let Some(cmd) = f.downcast_ref::<FollowPathCommand>() {
                     command = Some(Command::FollowPath(*cmd));
                     return MotionCommandResult::as_follow_path(&self.last_motion_result);

@@ -415,7 +415,7 @@ impl QTree {
                 let Some(cell) = cell else {
                     continue
                 };
-                if !matches!(cell, CellState::Free) {
+                if blocked(*cell) {
                     continue;
                 }
                 let cell_idx = [nei_bottom[0] / nei_width, nei_bottom[1] / nei_width];
@@ -439,23 +439,6 @@ impl QTree {
                         came_from: Some((state.level, state.idx)),
                     },
                 );
-                // } else if 0 < state.level {
-                //     let sup_idx = [nei_idx[0] / 2, nei_idx[1] / 2];
-                //     let new_cost = state.cost + self.width(state.level - 1) as f64;
-                //     println!("Super Neighbor {nei_idx:?} -> {sup_idx:?}: new_cost: {new_cost}");
-                //     if closed_set
-                //         .get(&(state.level - 1, sup_idx))
-                //         .map(|cost| *cost <= new_cost)
-                //         .unwrap_or(false)
-                //     {
-                //         continue;
-                //     }
-                //     open_set.push(OpenState {
-                //         level: state.level - 1,
-                //         idx: sup_idx,
-                //         cost: new_cost,
-                //     });
-                //     closed_set.insert((state.level - 1, sup_idx), new_cost);
             }
         }
 

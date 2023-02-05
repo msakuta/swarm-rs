@@ -146,7 +146,7 @@ pub(crate) enum CellState {
     Mixed,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct QTreePathNode {
     pub pos: [f64; 2],
     pub radius: f64,

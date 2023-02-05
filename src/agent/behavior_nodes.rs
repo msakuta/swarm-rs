@@ -1,6 +1,6 @@
 use crate::{
     behavior_tree_adapt::{common_tree_nodes, BehaviorTree},
-    qtree::qtree::PathFindError,
+    qtree::{qtree::PathFindError, QTreePathNode},
 };
 
 use super::{motion::OrientToResult, AgentClass, AgentState, MotionResult};
@@ -306,7 +306,11 @@ pub(super) struct FindPathNode;
 
 impl BehaviorNode for FindPathNode {
     fn provided_ports(&self) -> Vec<PortSpec> {
-        vec![*TARGET_SPEC, PortSpec::new_out("fail_reason")]
+        vec![
+            *TARGET_SPEC,
+            PortSpec::new_out("path"),
+            PortSpec::new_out("fail_reason"),
+        ]
     }
 
     fn tick(
@@ -314,15 +318,25 @@ impl BehaviorNode for FindPathNode {
         arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        let path_find_err = ctx
+        let path_find_result = ctx
             .get::<[f64; 2]>(*TARGET)
             .and_then(|target| arg(&FindPathCommand(*target)))
-            .and_then(|res| res.downcast_ref::<PathFindError>().copied());
-        if let Some(err) = path_find_err {
-            ctx.set("fail_reason", err.to_string());
-            BehaviorResult::Fail
-        } else {
-            BehaviorResult::Success
+            .and_then(|res| {
+                res.downcast::<Result<Vec<QTreePathNode>, PathFindError>>()
+                    .ok()
+            })
+            .expect(
+                "PathFindCommand should always return Result<Vec<QTreePathNode>, PathFindError>",
+            );
+        match *path_find_result {
+            Ok(path) => {
+                ctx.set("path", path);
+                BehaviorResult::Success
+            }
+            Err(err) => {
+                ctx.set("fail_reason", err.to_string());
+                BehaviorResult::Fail
+            }
         }
     }
 }

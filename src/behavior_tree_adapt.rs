@@ -4,6 +4,8 @@ use behavior_tree_lite::{
     boxify, BehaviorCallback, BehaviorNode, BehaviorResult, PortSpec, Registry,
 };
 
+use crate::qtree::QTreePathNode;
+
 /// Boundary to skip Debug trait from propagating to BehaviorNode trait
 pub(super) struct BehaviorTree(pub Box<dyn BehaviorNode>);
 
@@ -116,6 +118,10 @@ impl BehaviorNode for PrintNode {
                     .or_else(|| ctx.get::<f64>(key).map(|v| v.to_string()))
                     .or_else(|| ctx.get::<[i32; 2]>(key).map(|v| format!("{:?}", v)))
                     .or_else(|| ctx.get::<[f64; 2]>(key).map(|v| format!("{:?}", v)))
+                    .or_else(|| {
+                        ctx.get::<Vec<QTreePathNode>>(key)
+                            .map(|v| format!("{:?}", v))
+                    })
             };
             let arg0 = get_string("arg0");
             let arg1 = get_string("arg1");

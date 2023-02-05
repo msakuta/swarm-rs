@@ -67,12 +67,14 @@ tree TryReverse = ReactiveSequence {
 tree FollowPathAndAvoid = Sequence {
     TargetPos (pos -> target_pos)
     if (!HasPath) {
-        if (!FindPath (target <- target_pos, fail_reason -> failReason)) {
+        if (!FindPath (target <- target_pos, path -> path, fail_reason -> failReason)) {
             Print (input <- "Failed to find path! reason: {}", arg0 <- failReason)
             # If path finding failed because the start is blocked, try back out
             if (StringEq(lhs <- failReason, rhs <- "StartBlocked")) {
                 TryReverse
             }
+        } else {
+            Print(input <- "found path: {}", arg0 <- path)
         }
     }
     if (HasPath) {
