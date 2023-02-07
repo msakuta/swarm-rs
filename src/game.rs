@@ -1,4 +1,5 @@
 mod maze;
+mod rooms;
 
 use cgmath::{InnerSpace, Vector2};
 
@@ -37,6 +38,7 @@ pub(crate) enum BoardType {
     Rect,
     Crank,
     Perlin,
+    Rooms,
     Maze,
 }
 
@@ -236,7 +238,6 @@ impl Game {
                 && !(xs * 2 / 16 < dx && dx < xs * 3 / 16 && dy < ys / 16)
         })
     }
-
     pub(crate) fn new_board(&mut self, board_type: BoardType, params: &BoardParams) {
         self.xs = params.shape.0;
         self.ys = params.shape.0;
@@ -245,6 +246,7 @@ impl Game {
             BoardType::Rect => Self::create_rect_board(&params),
             BoardType::Crank => Self::create_crank_board(&params),
             BoardType::Perlin => Self::create_perlin_board(&params),
+            BoardType::Rooms => Self::create_rooms_board(&params),
             BoardType::Maze => Self::create_maze_board(&params),
         };
 

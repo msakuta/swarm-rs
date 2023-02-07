@@ -22,7 +22,16 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .with_child(Label::new(|data: &AppData, _env: &_| data.message.clone()).padding(5.))
         .with_child(
-            Flex::row()
+            Checkbox::new("Pause")
+                .lens(Field::new(
+                    |app_data: &AppData| &app_data.game_params.paused,
+                    |app_data| &mut app_data.game_params.paused,
+                ))
+                .padding(5.),
+        )
+        .with_child(
+            Flex::column()
+                .cross_axis_alignment(CrossAxisAlignment::Start)
                 .with_child(
                     Button::new("New Game")
                         .on_click(|ctx, data: &mut AppData, _: &Env| {
@@ -31,18 +40,40 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                         })
                         .padding(5.0),
                 )
-                .with_child(Radio::new("Rect", BoardType::Rect).lens(AppData::board_type))
-                .with_child(Radio::new("Crank", BoardType::Crank).lens(AppData::board_type))
-                .with_child(Radio::new("Perlin", BoardType::Perlin).lens(AppData::board_type))
-                .with_child(Radio::new("Maze", BoardType::Maze).lens(AppData::board_type)),
-        )
-        .with_child(
-            Checkbox::new("Pause")
-                .lens(Field::new(
-                    |app_data: &AppData| &app_data.game_params.paused,
-                    |app_data| &mut app_data.game_params.paused,
-                ))
-                .padding(5.),
+                .with_child(
+                    RadioGroup::row([
+                        ("Rect", BoardType::Rect),
+                        ("Crank", BoardType::Crank),
+                        ("Perlin", BoardType::Perlin),
+                        ("Rooms", BoardType::Rooms),
+                        ("Maze", BoardType::Maze),
+                    ])
+                    .lens(AppData::board_type),
+                )
+                .with_child(
+                    Flex::row()
+                        .with_child(Label::new("X size:").padding(3.0))
+                        .with_child(TextBox::new().lens(AppData::rows_text))
+                        .with_child(Label::new("Y size: ").padding(3.0))
+                        .with_child(TextBox::new().lens(AppData::columns_text))
+                        .padding(5.0),
+                )
+                .with_child(
+                    Flex::row()
+                        .with_child(Label::new("Seed: ").padding(3.0))
+                        .with_child(TextBox::new().lens(AppData::seed_text))
+                        .with_child(Label::new("Maze expansion: ").padding(3.0))
+                        .with_child(TextBox::new().lens(AppData::maze_expansions))
+                        .padding(5.0),
+                )
+                .with_child(
+                    Flex::row()
+                        .with_child(Label::new("Simplify: ").padding(3.0))
+                        .with_child(TextBox::new().lens(AppData::simplify_text))
+                        .padding(5.0),
+                )
+                .padding(2.0)
+                .border(Color::GRAY, 2.),
         )
         .with_child(
             Flex::row()
@@ -139,28 +170,6 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             Checkbox::new("Entity trace")
                 .lens(AppData::entity_trace_visible)
                 .padding(5.),
-        )
-        .with_child(
-            Flex::row()
-                .with_child(Label::new("X size:").padding(3.0))
-                .with_child(TextBox::new().lens(AppData::rows_text))
-                .with_child(Label::new("Y size: ").padding(3.0))
-                .with_child(TextBox::new().lens(AppData::columns_text))
-                .padding(5.0),
-        )
-        .with_child(
-            Flex::row()
-                .with_child(Label::new("Seed: ").padding(3.0))
-                .with_child(TextBox::new().lens(AppData::seed_text))
-                .with_child(Label::new("Maze expansion: ").padding(3.0))
-                .with_child(TextBox::new().lens(AppData::maze_expansions))
-                .padding(5.0),
-        )
-        .with_child(
-            Flex::row()
-                .with_child(Label::new("Simplify: ").padding(3.0))
-                .with_child(TextBox::new().lens(AppData::simplify_text))
-                .padding(5.0),
         )
         .with_child(Label::new(|data: &AppData, _: &_| {
             format!("Scale: {}", data.scale)
