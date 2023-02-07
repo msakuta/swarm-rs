@@ -179,10 +179,6 @@ impl Game {
         let terms = gen_terms(&mut xor128, max_octave);
 
         create_mesh(shape, params.simplify, |xi, yi| {
-            // if board[xi + yi * shape.0] {
-            //     return true;
-            // }
-            // false
             let dx = (xi as isize - shape.0 as isize / 2) as f64;
             let dy = (yi as isize - shape.1 as isize / 2) as f64;
             let noise_val =
