@@ -1,9 +1,17 @@
+use std::collections::{HashMap, HashSet};
+
 use crate::{
     mesh::{create_mesh, MeshResult},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
 };
 
 use super::{BoardParams, Game};
+
+type RoomCoord = (usize, usize);
+
+const ROOM_MODULATION: f64 = 1.;
+const NOISE_FACTOR: f64 = 3.;
+const DROPOFF_FACTOR: f64 = 0.15;
 
 impl Game {
     pub fn create_rooms_board(params: &BoardParams) -> MeshResult {
@@ -12,59 +20,112 @@ impl Game {
         let mut xor128 = Xor128::new(params.seed);
 
         let room_rows = shape.0.min(shape.1) * 4 / 128;
+        if room_rows <= 1 {
+            return Self::create_perlin_board(params);
+        }
         let room_size = shape.0.min(shape.1) / 2 / room_rows;
-        let room_sizei = room_size as isize;
         let room_margin = room_size * 2;
         println!("room_rows: {room_rows}, size: {room_size}, margin: {room_margin}");
 
         let mut board = vec![0f64; shape.0 * shape.1];
 
-        let mut rooms: Vec<(usize, usize)> = vec![];
+        let mut rooms = HashMap::<RoomCoord, RoomCoord>::new();
         for iy in 1..room_rows {
-            let yc = (iy * shape.1 / room_rows) as isize;
+            let yc = (iy * shape.1 / room_rows) as i32;
             for ix in 1..room_rows {
-                let xc = (ix * shape.0 / room_rows) as isize;
+                let xc = (ix * shape.0 / room_rows) as i32;
                 for _ in 0..100 {
-                    let x = (xor128.nexti() as usize % (room_size * 2)) as isize - room_sizei + xc;
-                    let y = (xor128.nexti() as usize % (room_size * 2)) as isize - room_sizei + yc;
-                    if !rooms.iter().any(|room| {
-                        let dx = room.0 as isize - x;
-                        let dy = room.1 as isize - y;
+                    let x = (xor128.next() - 0.5) * ROOM_MODULATION * room_size as f64 + xc as f64;
+                    let y = (xor128.next() - 0.5) * ROOM_MODULATION * room_size as f64 + yc as f64;
+                    if !rooms.values().any(|room| {
+                        let dx = room.0 as f64 - x;
+                        let dy = room.1 as f64 - y;
                         let d = dx * dx + dy * dy;
-                        d < (room_margin * room_margin) as isize
+                        d < (room_margin * room_margin) as f64
                     }) {
-                        rooms.push((x as usize, y as usize));
+                        rooms.insert((ix, iy), (x.max(0.) as usize, y.max(0.) as usize));
                         break;
                     }
                 }
             }
         }
 
-        let mut connections: Vec<(usize, usize)> = vec![];
-        for (i, room_i) in rooms.iter().enumerate() {
-            let mut closest_rooms: Vec<_> = rooms
-                .iter()
-                .enumerate()
-                .filter(|&(j, _)| i != j && connections.iter().all(|&(i2, j2)| i2 != i || j2 != j))
-                .map(|(j, room_j)| {
-                    let dx = room_i.0 as isize - room_j.0 as isize;
-                    let dy = room_i.1 as isize - room_j.1 as isize;
-                    let d = dx * dx + dy * dy;
-                    (j, room_j, d as usize)
-                })
+        let mut connections = HashSet::<(RoomCoord, RoomCoord)>::new();
+        let mut open_ends = vec![(room_rows / 2, room_rows / 2)];
+        loop {
+            if open_ends.is_empty() {
+                break;
+            }
+            let Some(&room_i) = open_ends.iter().nth(xor128.nexti() as usize % open_ends.len()) else {
+                break
+            };
+            let xi = room_i.0 as i32;
+            let yi = room_i.1 as i32;
+            const CONNECTION_DIRECTIONS: [[i32; 2]; 4] = [[-1, 0], [0, -1], [1, 0], [0, 1]];
+            let mut available_connection_bits: u32 = 0xf;
+            for &(j1, j2) in &connections {
+                let other = if room_i == j1 { j2 } else { j1 };
+                let xj = other.0 as i32;
+                let yj = other.1 as i32;
+                for (bit, dir) in CONNECTION_DIRECTIONS.iter().enumerate() {
+                    if xi + dir[0] == xj && yi + dir[1] == yj {
+                        available_connection_bits &= !(1 << bit);
+                    }
+                }
+            }
+            for (bit, dir) in CONNECTION_DIRECTIONS.iter().enumerate() {
+                let xj = xi + dir[0];
+                let yj = yi + dir[1];
+                if xj <= 0 || room_rows as i32 <= xj || yj <= 0 || room_rows as i32 <= yj {
+                    available_connection_bits &= !(1 << bit);
+                }
+            }
+            println!(
+                "existing_connections[{room_i:?}] ({:?}): {available_connection_bits}",
+                rooms.get(&room_i)
+            );
+            if available_connection_bits == 0 {
+                if let Some((idx, _)) = open_ends.iter().enumerate().find(|(_, &idx)| idx == room_i)
+                {
+                    open_ends.swap_remove(idx);
+                    continue;
+                } else {
+                    break;
+                }
+            }
+            let available_connections: Vec<_> = (0..4)
+                .filter(|i| available_connection_bits & (1 << i) != 0)
+                .map(|i| CONNECTION_DIRECTIONS[i])
                 .collect();
-            closest_rooms.sort_by_key(|(_, _, d)| *d);
-            let existing_connections = connections.iter().filter(|&&conn| conn.1 == i).count();
-            println!("existing_connections[{i}] ({:?}): {existing_connections}, {:?}", room_i, closest_rooms);
-            for (closest_j, _closest_room, _) in closest_rooms
-                .iter()
-                .take(2usize.saturating_sub(existing_connections))
-            {
-                connections.push((i, *closest_j));
+            let conn_i = xor128.nexti() as usize % available_connections.len();
+            let conn = available_connections[conn_i];
+            let xj = xi + conn[0];
+            let yj = yi + conn[1];
+            let room_j = (xj as usize, yj as usize);
+            if room_i < room_j {
+                connections.insert((room_i, room_j));
+            } else {
+                connections.insert((room_j, room_i));
+            }
+            if !open_ends.iter().any(|&room_k| room_k == room_j) {
+                open_ends.push(room_j);
             }
         }
 
-        for &(x, y) in &rooms {
+        let connection_size = room_size / 3;
+
+        // We need to sort by room key first to get reproduceable map from the seed,
+        // because HashMap has internal randomness that affects iteration order.
+        let mut room_keys = rooms.keys().collect::<Vec<_>>();
+        room_keys.sort();
+
+        for key in room_keys {
+            let room_size = if xor128.next() < 0.5 {
+                connection_size
+            } else {
+                room_size
+            };
+            let &(x, y) = rooms.get(key).unwrap();
             for ix in x.saturating_sub(room_size)..(x + room_size).min(shape.0) {
                 for iy in y.saturating_sub(room_size)..(y + room_size).min(shape.1) {
                     let dx = ix as isize - x as isize;
@@ -91,24 +152,26 @@ impl Game {
             }
         }
 
-        let connection_size = room_size / 3;
-
         for conn in &connections {
-            lerp(rooms[conn.0], rooms[conn.1], |(x, y)| {
-                for ix in x.saturating_sub(connection_size)..(x + connection_size).min(shape.0) {
-                    for iy in y.saturating_sub(connection_size)..(y + connection_size).min(shape.1)
+            if let Some((room_i, room_j)) = rooms.get(&conn.0).zip(rooms.get(&conn.1)) {
+                lerp(*room_i, *room_j, |(x, y)| {
+                    for ix in x.saturating_sub(connection_size)..(x + connection_size).min(shape.0)
                     {
-                        let dx = ix as isize - x as isize;
-                        let dy = iy as isize - y as isize;
-                        let d = dx * dx + dy * dy;
-                        if d < (connection_size * connection_size) as isize {
-                            let val =
-                                2. * (1. - d as f64 / (connection_size * connection_size) as f64);
-                            board[ix + iy * shape.0] = board[ix + iy * shape.0].max(val);
+                        for iy in
+                            y.saturating_sub(connection_size)..(y + connection_size).min(shape.1)
+                        {
+                            let dx = ix as isize - x as isize;
+                            let dy = iy as isize - y as isize;
+                            let d = dx * dx + dy * dy;
+                            if d < (connection_size * connection_size) as isize {
+                                let val = 2.
+                                    * (1. - d as f64 / (connection_size * connection_size) as f64);
+                                board[ix + iy * shape.0] = board[ix + iy * shape.0].max(val);
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
         }
 
         let min_octave = 2;
@@ -125,7 +188,7 @@ impl Game {
             let noise_val =
                 perlin_noise_pixel(xi as f64, yi as f64, min_octave, max_octave, &terms, 0.5);
             let dropoff = (dx * dx + dy * dy).sqrt() / shape.0 as f64;
-            board[xi + yi * shape.0] + 3. * noise_val - 0.15 * dropoff > 0.5
+            board[xi + yi * shape.0] + NOISE_FACTOR * noise_val - DROPOFF_FACTOR * dropoff > 0.5
         })
     }
 }
