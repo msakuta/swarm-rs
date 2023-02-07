@@ -80,10 +80,6 @@ impl Game {
                     available_connection_bits &= !(1 << bit);
                 }
             }
-            println!(
-                "existing_connections[{room_i:?}] ({:?}): {available_connection_bits}",
-                rooms.get(&room_i)
-            );
             if available_connection_bits == 0 {
                 if let Some((idx, _)) = open_ends.iter().enumerate().find(|(_, &idx)| idx == room_i)
                 {
