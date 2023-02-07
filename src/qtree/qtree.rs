@@ -405,7 +405,7 @@ impl QTree {
                     }
                     return (Ok(path), self.build_search_tree(closed_set));
                 }
-                let new_cost = state.cost + self.width(state.level) as f64;
+                let new_cost = state.cost + 1.;
                 let cell = self.levels[nei_level].get(&nei_idx);
                 if state.cost < 10. {
                     // dbg_println!(
