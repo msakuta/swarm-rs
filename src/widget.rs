@@ -22,25 +22,22 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .with_child(Label::new(|data: &AppData, _env: &_| data.message.clone()).padding(5.))
         .with_child(
-            Flex::row()
-                .with_child(
-                    Button::new("New Game")
-                        .on_click(|ctx, data: &mut AppData, _: &Env| {
-                            data.new_game();
-                            ctx.request_paint();
-                        })
-                        .padding(5.0),
-                )
-                .with_child(
-                    RadioGroup::row([
-                        ("Rect", BoardType::Rect),
-                        ("Crank", BoardType::Crank),
-                        ("Perlin", BoardType::Perlin),
-                        ("Rooms", BoardType::Rooms),
-                        ("Maze", BoardType::Maze),
-                    ])
-                    .lens(AppData::board_type),
-                ),
+            Button::new("New Game")
+                .on_click(|ctx, data: &mut AppData, _: &Env| {
+                    data.new_game();
+                    ctx.request_paint();
+                })
+                .padding(5.0),
+        )
+        .with_child(
+            RadioGroup::row([
+                ("Rect", BoardType::Rect),
+                ("Crank", BoardType::Crank),
+                ("Perlin", BoardType::Perlin),
+                ("Rooms", BoardType::Rooms),
+                ("Maze", BoardType::Maze),
+            ])
+            .lens(AppData::board_type),
         )
         .with_child(
             Checkbox::new("Pause")
