@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl Agent {
-    pub fn find_path(
+    pub(crate) fn find_path(
         &mut self,
         target: [f64; 2],
         game: &mut Game,

@@ -10,7 +10,7 @@ mod shape;
 // mod widget;
 #[macro_use]
 mod macros;
-mod agent;
+pub mod agent;
 mod collision;
 mod entity;
 mod game;

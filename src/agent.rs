@@ -75,8 +75,8 @@ pub(crate) enum AgentTarget {
 }
 
 #[derive(Debug)]
-pub(crate) struct Agent {
-    pub target: Option<AgentTarget>,
+pub struct Agent {
+    pub(crate) target: Option<AgentTarget>,
     pub active: bool,
     pub unreachables: HashSet<usize>,
     pub id: usize,
@@ -84,15 +84,15 @@ pub(crate) struct Agent {
     pub orient: f64,
     pub speed: f64,
     pub team: usize,
-    pub class: AgentClass,
+    pub(crate) class: AgentClass,
     cooldown: f64,
     pub health: u32,
     pub resource: i32,
-    pub goal: Option<AgentState>,
+    pub(crate) goal: Option<AgentState>,
     pub search_state: Option<SearchState>,
-    pub search_tree: Option<SearchTree>,
+    pub(crate) search_tree: Option<SearchTree>,
     pub avoidance_plan: Option<Vec<(f64, f64)>>,
-    pub path: QTreePath,
+    pub(crate) path: QTreePath,
     pub trace: VecDeque<[f64; 2]>,
     last_motion_result: Option<MotionCommandResult>,
     last_state: Option<AgentState>,
@@ -101,8 +101,8 @@ pub(crate) struct Agent {
 }
 
 const AGENT_SCALE: f64 = 1.;
-pub(crate) const AGENT_HALFWIDTH: f64 = 0.3 * AGENT_SCALE;
-pub(crate) const AGENT_HALFLENGTH: f64 = 0.6 * AGENT_SCALE;
+pub const AGENT_HALFWIDTH: f64 = 0.3 * AGENT_SCALE;
+pub const AGENT_HALFLENGTH: f64 = 0.6 * AGENT_SCALE;
 pub(crate) const AGENT_SPEED: f64 = 0.125;
 pub(crate) const AGENT_MAX_HEALTH: u32 = 100;
 pub(crate) const AGENT_MAX_RESOURCE: i32 = 100;
@@ -349,7 +349,7 @@ impl Agent {
         }
     }
 
-    pub fn find_resource(&mut self, resources: &[Resource]) -> bool {
+    pub(crate) fn find_resource(&mut self, resources: &[Resource]) -> bool {
         let best_resource = resources
             .iter()
             // .filter_map(|a| a.try_borrow().ok())
@@ -430,7 +430,7 @@ impl Agent {
         BehaviorResult::Success
     }
 
-    pub fn shoot_bullet(&mut self, bullets: &mut Vec<Bullet>, target_pos: [f64; 2]) -> bool {
+    pub(crate) fn shoot_bullet(&mut self, bullets: &mut Vec<Bullet>, target_pos: [f64; 2]) -> bool {
         if 0. < self.cooldown {
             return false;
         }
@@ -523,7 +523,7 @@ impl Agent {
         Box::new(res)
     }
 
-    pub fn update(
+    pub(crate) fn update(
         &mut self,
         game: &mut Game,
         entities: &[RefCell<Entity>],

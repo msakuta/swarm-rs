@@ -9,7 +9,7 @@ use crate::{
 use std::{cell::RefCell, collections::VecDeque};
 
 #[derive(Debug)]
-pub(crate) enum Entity {
+pub enum Entity {
     Agent(Agent),
     Spawner(Spawner),
 }
@@ -31,7 +31,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_team(&self) -> usize {
+    pub fn get_team(&self) -> usize {
         match self {
             Entity::Agent(agent) => agent.team,
             Entity::Spawner(spawner) => spawner.team,
@@ -45,7 +45,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_pos(&self) -> [f64; 2] {
+    pub fn get_pos(&self) -> [f64; 2] {
         match self {
             Entity::Agent(agent) => agent.pos,
             Entity::Spawner(spawner) => spawner.pos,
@@ -106,7 +106,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn is_agent(&self) -> bool {
+    pub fn is_agent(&self) -> bool {
         matches!(self, Entity::Agent(_))
     }
 
@@ -166,14 +166,14 @@ impl Entity {
         }
     }
 
-    pub(crate) fn resource(&self) -> i32 {
+    pub fn resource(&self) -> i32 {
         match self {
             Entity::Agent(agent) => agent.resource,
             Entity::Spawner(spawner) => spawner.resource,
         }
     }
 
-    pub(crate) fn max_resource(&self) -> i32 {
+    pub fn max_resource(&self) -> i32 {
         match self {
             Entity::Agent(_) => AGENT_MAX_RESOURCE,
             Entity::Spawner(_) => SPAWNER_MAX_RESOURCE,

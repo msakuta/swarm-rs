@@ -113,13 +113,13 @@ impl GameParams {
 }
 
 #[derive(Debug)]
-pub(crate) struct Game {
+pub struct Game {
     pub(crate) xs: usize,
     pub(crate) ys: usize,
     pub(crate) simplify: f64,
     pub(crate) board: Board,
     pub(crate) mesh: Mesh,
-    pub(crate) entities: Vec<RefCell<Entity>>,
+    pub entities: Vec<RefCell<Entity>>,
     pub(crate) bullets: Vec<Bullet>,
     pub(crate) resources: Vec<Resource>,
     pub(crate) interval: f64,
@@ -200,7 +200,7 @@ impl Game {
         }
     }
 
-    pub fn create_perlin_board(params: &BoardParams) -> MeshResult {
+    pub(crate) fn create_perlin_board(params: &BoardParams) -> MeshResult {
         let shape = params.shape;
         let min_octave = 2;
         let max_octave = 6;
@@ -216,7 +216,7 @@ impl Game {
         })
     }
 
-    pub fn create_rect_board(params: &BoardParams) -> MeshResult {
+    pub(crate) fn create_rect_board(params: &BoardParams) -> MeshResult {
         let (xs, ys) = (params.shape.0 as isize, params.shape.1 as isize);
         create_mesh(params.shape, params.simplify, |xi, yi| {
             let dx = xi as isize - xs / 2;
@@ -225,7 +225,7 @@ impl Game {
         })
     }
 
-    pub fn create_crank_board(params: &BoardParams) -> MeshResult {
+    pub(crate) fn create_crank_board(params: &BoardParams) -> MeshResult {
         let (xs, ys) = (params.shape.0 as isize, params.shape.1 as isize);
         create_mesh(params.shape, params.simplify, |xi, yi| {
             let dx = xi as isize - xs / 2;
@@ -363,31 +363,21 @@ impl Game {
                 continue;
             }
 
-            if let Some(tri) = find_triangle_at(
-                &self.mesh,
+            let agent = Agent::new(
+                id_gen,
                 state_candidate.into(),
-                &mut self.triangle_profiler.borrow_mut(),
-            ) {
-                if Some(triangle_labels[tri]) == largest_label {
-                    let agent = Agent::new(
-                        id_gen,
-                        state_candidate.into(),
-                        state_candidate.heading,
-                        team,
-                        class,
-                        if static_ {
-                            STATIC_SOURCE_FILE
-                        } else {
-                            &self.agent_source
-                        },
-                    );
-                    match agent {
-                        Ok(agent) => return Some(Entity::Agent(agent)),
-                        Err(e) => println!("Failed to create an Agent! {e}"),
-                    }
-                }
-            } else {
-                println!("Triangle not fonud! {pos:?}");
+                state_candidate.heading,
+                team,
+                class,
+                if static_ {
+                    STATIC_SOURCE_FILE
+                } else {
+                    &self.agent_source
+                },
+            );
+            match agent {
+                Ok(agent) => return Some(Entity::Agent(agent)),
+                Err(e) => println!("Failed to create an Agent! {e}"),
             }
         }
         None
@@ -420,24 +410,16 @@ impl Game {
             if Spawner::qtree_collision(None, pos_candidate, &self.entities) {
                 continue;
             }
-            if let Some(tri) = find_triangle_at(
-                &self.mesh,
-                pos_candidate,
-                &mut self.triangle_profiler.borrow_mut(),
-            ) {
-                if Some(self.mesh.triangle_labels[tri]) == self.mesh.largest_label {
-                    if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
-                        let spawner = Spawner::new(
-                            &mut self.id_gen,
-                            pos_candidate,
-                            team,
-                            &self.spawner_source,
-                        );
-                        match spawner {
-                            Ok(spawner) => return Some(Entity::Spawner(spawner)),
-                            Err(err) => println!("Spawner failed to create!: {err}"),
-                        }
-                    }
+            if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
+                let spawner = Spawner::new(
+                    &mut self.id_gen,
+                    pos_candidate,
+                    team,
+                    &self.spawner_source,
+                );
+                match spawner {
+                    Ok(spawner) => return Some(Entity::Spawner(spawner)),
+                    Err(err) => println!("Spawner failed to create!: {err}"),
                 }
             }
         }

@@ -14,7 +14,7 @@ const NOISE_FACTOR: f64 = 3.;
 const DROPOFF_FACTOR: f64 = 0.15;
 
 impl Game {
-    pub fn create_rooms_board(params: &BoardParams) -> MeshResult {
+    pub(crate) fn create_rooms_board(params: &BoardParams) -> MeshResult {
         let shape = params.shape;
 
         let mut xor128 = Xor128::new(params.seed);

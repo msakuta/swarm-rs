@@ -23,7 +23,7 @@ pub struct AppData {
     pub(crate) seed_text: String,
     pub(crate) maze_expansions: String,
     pub(crate) board_type: BoardType,
-    pub(crate) game: Rc<RefCell<Game>>,
+    pub game: Rc<RefCell<Game>>,
     pub(crate) game_params: GameParams,
     pub(crate) simplify_text: String,
     pub(crate) line_mode: LineMode,
@@ -119,7 +119,7 @@ impl AppData {
         }
     }
 
-    pub(crate) fn update(&mut self) -> (bool, f64) {
+    pub fn update(&mut self) -> (bool, f64) {
         let mut game = self.game.borrow_mut();
         game.set_params(&self.game_params);
         let interval = game.interval;

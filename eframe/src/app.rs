@@ -1,5 +1,7 @@
+use std::time::Duration;
+
 use egui::{Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Vec2};
-use swarm_rs::{AppData, CellState};
+use swarm_rs::{agent::AGENT_HALFLENGTH, AppData, CellState};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -56,7 +58,11 @@ impl eframe::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.request_repaint_after(Duration::from_millis(16));
+
         let Self { label, value, .. } = self;
+
+        self.app_data.update();
 
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
@@ -98,7 +104,9 @@ impl eframe::App for TemplateApp {
 
                 self.img.paint(&response, &painter, &self.app_data);
 
-                paint_qtree(response, &painter, &self.app_data);
+                paint_qtree(&response, &painter, &self.app_data);
+
+                paint_agents(&response, &painter, &self.app_data);
             });
 
             // for y in 0..3 {
@@ -174,7 +182,7 @@ impl MyImage {
     }
 }
 
-pub(crate) fn paint_qtree(response: Response, painter: &Painter, data: &AppData) {
+pub(crate) fn paint_qtree(response: &Response, painter: &Painter, data: &AppData) {
     let to_screen = egui::emath::RectTransform::from_to(
         Rect::from_min_size(Pos2::ZERO, response.rect.size()),
         response.rect,
@@ -247,4 +255,54 @@ pub(crate) fn paint_qtree(response: Response, painter: &Painter, data: &AppData)
             }
         }
     });
+}
+
+fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
+    let to_screen = egui::emath::RectTransform::from_to(
+        Rect::from_min_size(Pos2::ZERO, response.rect.size()),
+        response.rect,
+    );
+
+    const AGENT_COLORS: [Color32; 2] = [
+        Color32::from_rgb(0, 255, 127),
+        Color32::from_rgb(255, 0, 63),
+    ];
+
+    let game = data.game.borrow();
+    let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
+    let entities = &game.entities;
+
+    let to_point = |pos: [f64; 2]| {
+        to_screen.transform_pos(Pos2::new(
+            (pos[0] * data.scale) as f32,
+            (pos[1] * data.scale) as f32,
+        ))
+    };
+
+    for agent in entities.iter() {
+        let agent = agent.borrow();
+        let pos = to_point(agent.get_pos());
+        // let circle = Circle::new(*view_transform * pos, 5.);
+        let brush = AGENT_COLORS[agent.get_team() % AGENT_COLORS.len()];
+        // ctx.fill(circle, brush);
+        painter.circle_filled(pos, 5., brush);
+
+        // if !agent.is_agent() {
+        //     let big_circle = Circle::new(*view_transform * pos, 10.);
+        //     ctx.stroke(big_circle, brush, 3.);
+        // }
+
+        // let resource = agent.resource();
+        // if 0 < resource {
+        //     use std::f64::consts::PI;
+        //     let arc = Arc {
+        //         center: *view_transform * pos,
+        //         radii: Vec2::new(7.5, 7.5),
+        //         start_angle: 0.,
+        //         sweep_angle: resource as f64 * 2. * PI / agent.max_resource() as f64,
+        //         x_rotation: -PI / 2.,
+        //     };
+        //     ctx.stroke(arc, &Color::YELLOW, 2.5);
+        // }
+    }
 }
