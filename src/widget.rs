@@ -53,9 +53,9 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 .with_child(
                     Flex::row()
                         .with_child(Label::new("X size:").padding(3.0))
-                        .with_child(TextBox::new().lens(AppData::rows_text))
+                        .with_child(TextBox::new().lens(AppData::xs_text))
                         .with_child(Label::new("Y size: ").padding(3.0))
-                        .with_child(TextBox::new().lens(AppData::columns_text))
+                        .with_child(TextBox::new().lens(AppData::ys_text))
                         .padding(5.0),
                 )
                 .with_child(

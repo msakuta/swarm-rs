@@ -17,6 +17,8 @@ mod cache_map;
 pub(crate) mod qtree;
 pub mod render;
 
+use std::{error::Error, fmt::Display};
+
 use crate::collision::Aabb;
 
 use self::{
@@ -46,11 +48,14 @@ impl QTreeSearcher {
         }
     }
 
-    pub fn initialize(&mut self, shape: (usize, usize), f: &impl Fn(Rect) -> CellState) {
-        let toplevel = shape.0.max(shape.1);
-        let Some(topbit) = (0..std::mem::size_of::<usize>() * 8).rev().find(|bit| {
-            toplevel & (1 << bit) != 0
-        }) else { return };
+    pub fn initialize(
+        &mut self,
+        shape: (usize, usize),
+        f: &impl Fn(Rect) -> CellState,
+    ) -> Result<(), Box<dyn Error>> {
+        let max_size = shape.0.max(shape.1);
+        let topbit = log2ceil(max_size)?;
+
         self.qtree.toplevel = topbit;
 
         self.cache_map.cache(topbit, shape, f);
@@ -63,6 +68,8 @@ impl QTreeSearcher {
         for (i, cell) in self.qtree.levels.iter().enumerate() {
             dbg_println!("level {i}: {}", cell.len());
         }
+
+        Ok(())
     }
 
     pub fn find(&self, pos: [f64; 2]) -> Option<(usize, CellState)> {
@@ -180,4 +187,33 @@ impl SearchTree {
             edges: vec![],
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Log2CeilError;
+
+impl Display for Log2CeilError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Log2 cannot receive 0")
+    }
+}
+
+impl Error for Log2CeilError {}
+
+fn log2ceil(u: usize) -> Result<usize, Log2CeilError> {
+    if u < 2 {
+        Err(Log2CeilError)
+    } else {
+        Ok(((u - 1).ilog2() + 1) as usize)
+    }
+}
+
+#[test]
+fn log2test() {
+    assert!(log2ceil(0usize).is_err());
+    assert!(log2ceil(1usize).is_err());
+    assert_eq!(log2ceil(2usize), Ok(1));
+    assert_eq!(log2ceil(3usize), Ok(2));
+    assert_eq!(log2ceil(4usize), Ok(2));
+    assert_eq!(log2ceil(5usize), Ok(3));
 }

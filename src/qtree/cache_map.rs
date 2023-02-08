@@ -51,8 +51,8 @@ impl CacheMap {
         self.topbit = topbit;
         self.size = 1 << topbit;
         self.map = vec![0; self.size * self.size];
-        for y in 0..shape.0 {
-            for x in 0..shape.1 {
+        for y in 0..shape.1 {
+            for x in 0..shape.0 {
                 let pix = f([x as i32, y as i32, x as i32 + 1, y as i32 + 1]);
                 if let Some((idx, _)) = self.buf.iter().enumerate().find(|(_, b)| **b == pix) {
                     self.map[x + y * self.size] = idx as u32;

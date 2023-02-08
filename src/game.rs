@@ -240,7 +240,7 @@ impl Game {
     }
     pub(crate) fn new_board(&mut self, board_type: BoardType, params: &BoardParams) {
         self.xs = params.shape.0;
-        self.ys = params.shape.0;
+        self.ys = params.shape.1;
 
         let MeshResult { board, mesh } = match board_type {
             BoardType::Rect => Self::create_rect_board(&params),
@@ -273,7 +273,7 @@ impl Game {
                 (entity.get_id(), entity.get_shape().to_aabb())
             })
             .collect();
-        qtree.initialize(shape, &|rect: Rect| {
+        let init_result = qtree.initialize(shape, &|rect: Rect| {
             let mut has_passable = false;
             let mut has_unpassable = None;
             for x in rect[0]..rect[2] {
@@ -320,7 +320,10 @@ impl Game {
                 CellState::Obstacle
             }
         });
-        println!("calls: {:?} unpassables: {unpassables:?}", calls);
+        match init_result {
+            Ok(_) => println!("calls: {:?} unpassables: {unpassables:?}", calls),
+            Err(e) => println!("Failed to initialize QTree: {e}"),
+        }
         qtree
     }
 

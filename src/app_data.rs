@@ -19,8 +19,8 @@ pub(crate) enum LineMode {
 
 #[derive(Clone, Lens, Data)]
 pub(crate) struct AppData {
-    pub(crate) rows_text: String,
-    pub(crate) columns_text: String,
+    pub(crate) xs_text: String,
+    pub(crate) ys_text: String,
     pub(crate) seed_text: String,
     pub(crate) maze_expansions: String,
     pub(crate) board_type: BoardType,
@@ -82,8 +82,8 @@ impl AppData {
         game.init();
 
         Self {
-            rows_text: game.xs.to_string(),
-            columns_text: game.ys.to_string(),
+            xs_text: game.ys.to_string(),
+            ys_text: game.xs.to_string(),
             seed_text: seed.to_string(),
             maze_expansions: maze_expansion.to_string(),
             board_type: BoardType::Perlin,
@@ -139,8 +139,8 @@ impl AppData {
     }
 
     pub(crate) fn new_game(&mut self) {
-        let xs = self.columns_text.parse().unwrap_or(64);
-        let ys = self.rows_text.parse().unwrap_or(64);
+        let xs = self.xs_text.parse().unwrap_or(64);
+        let ys = self.ys_text.parse().unwrap_or(64);
         let seed = self.seed_text.parse().unwrap_or(1);
         let simplify = self.simplify_text.parse().unwrap_or(1.);
         let params = BoardParams {

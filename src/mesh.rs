@@ -38,7 +38,7 @@ pub(crate) fn create_mesh(
     let mut board = vec![false; xs * ys];
     for (i, cell) in board.iter_mut().enumerate() {
         let xi = i % xs;
-        let yi = i / ys;
+        let yi = i / xs;
         *cell = pixel_proc(xi, yi);
     }
 
