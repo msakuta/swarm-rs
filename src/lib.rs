@@ -20,7 +20,10 @@ mod spawner;
 mod temp_ents;
 mod triangle_utils;
 
-pub use crate::{app_data::AppData};
+pub use crate::{
+    app_data::AppData,
+    qtree::CellState,
+};
 use wasm_bindgen::prelude::*;
 
 const WINDOW_WIDTH: f64 = 1200.;

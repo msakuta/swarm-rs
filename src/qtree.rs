@@ -35,7 +35,7 @@ pub(crate) type Rect = [i32; 4];
 /// It consists of two parts; actual quad tree and bitmap cache to allow updating
 /// existing quad tree quickly.
 #[derive(Debug)]
-pub(crate) struct QTreeSearcher {
+pub struct QTreeSearcher {
     qtree: QTree,
     cache_map: CacheMap,
 }
@@ -48,7 +48,15 @@ impl QTreeSearcher {
         }
     }
 
-    pub fn initialize(
+    pub fn get_cache_map(&self) -> &CacheMap {
+        &self.cache_map
+    }
+
+    pub fn get_qtree(&self) -> &QTree {
+        &self.qtree
+    }
+
+    pub(crate) fn initialize(
         &mut self,
         shape: (usize, usize),
         f: &impl Fn(Rect) -> CellState,
@@ -72,7 +80,7 @@ impl QTreeSearcher {
         Ok(())
     }
 
-    pub fn find(&self, pos: [f64; 2]) -> Option<(usize, CellState)> {
+    pub(crate) fn find(&self, pos: [f64; 2]) -> Option<(usize, CellState)> {
         self.qtree.find(pos)
     }
 
@@ -80,7 +88,7 @@ impl QTreeSearcher {
         self.cache_map.start_update();
     }
 
-    pub fn update(&mut self, pos: [i32; 2], pix: CellState) -> Result<(), String> {
+    pub(crate) fn update(&mut self, pos: [i32; 2], pix: CellState) -> Result<(), String> {
         let res = self.cache_map.update(pos, pix)?;
         if res {
             let mut level = self.qtree.toplevel;
@@ -121,7 +129,7 @@ impl QTreeSearcher {
         self.cache_map.finish_update();
     }
 
-    pub fn path_find(
+    pub(crate) fn path_find(
         &self,
         ignore_id: &[usize],
         start: [f64; 2],
@@ -146,7 +154,7 @@ impl QTreeSearcher {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CellState {
+pub enum CellState {
     Obstacle,
     Occupied(usize),
     Free,

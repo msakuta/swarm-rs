@@ -1,7 +1,7 @@
 use crate::{
     // agent::AvoidanceRenderParams,
     game::{BoardParams, BoardType, Game, GameParams},
-    WINDOW_HEIGHT, perlin_noise::Xor128,
+    WINDOW_HEIGHT, perlin_noise::Xor128, qtree::QTreeSearcher,
 };
 
 use std::{
@@ -33,7 +33,7 @@ pub struct AppData {
     pub(crate) triangle_label_visible: bool,
     pub(crate) show_label_image: bool,
     // pub(crate) origin: Vec2,
-    pub(crate) scale: f64,
+    pub scale: f64,
     pub(crate) message: String,
     pub(crate) big_message: String,
     pub(crate) big_message_time: f64,
@@ -183,6 +183,11 @@ impl AppData {
         .map(|p| label_colors[*p as usize].into_iter())
         .flatten()
         .collect::<Vec<_>>()))
+    }
+
+    pub fn with_qtree(&self, f: impl FnOnce(&QTreeSearcher)) {
+        let game = self.game.borrow();
+        f(&game.qtree);
     }
 }
 

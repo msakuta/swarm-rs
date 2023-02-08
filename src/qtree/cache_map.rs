@@ -9,7 +9,7 @@ use std::{
 /// It has array index indirection to reduce the map size, since CellState tends to be
 /// much larger than u32.
 #[derive(Debug)]
-pub(super) struct CacheMap {
+pub struct CacheMap {
     /// An internal map having the size (2 ^ toplevel) ^ 2, indicating index into [`cache_buf`]
     map: Vec<u32>,
     /// An array of actual values in [`cache_map`], extracted to reduce the pixel size.

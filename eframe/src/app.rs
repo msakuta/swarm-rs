@@ -1,4 +1,5 @@
-use swarm_rs::AppData;
+use egui::{Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Vec2};
+use swarm_rs::{AppData, CellState};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -91,7 +92,35 @@ impl eframe::App for TemplateApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
 
-            self.img.ui(ui, &self.app_data);
+            Frame::canvas(ui.style()).show(ui, |ui| {
+                let (response, painter) =
+                    ui.allocate_painter(ui.available_size(), egui::Sense::hover());
+
+                self.img.paint(&response, &painter, &self.app_data);
+
+                paint_qtree(response, &painter, &self.app_data);
+            });
+
+            // for y in 0..3 {
+            //     let fy = y as f32 * 100. + 200.;
+            //     for x in 0..3 {
+            //         let fx = x as f32 * 100. + 200.;
+            //         ui.painter().rect_stroke(
+            //             Rect {
+            //                 min: Pos2 { x: fx, y: fy },
+            //                 max: Pos2 {
+            //                     x: fx + 90.,
+            //                     y: fy + 90.,
+            //                 },
+            //             },
+            //             0.,
+            //             Stroke {
+            //                 width: 3.0,
+            //                 color: Color32::RED,
+            //             },
+            //         );
+            //     }
+            // }
         });
 
         if false {
@@ -111,23 +140,111 @@ struct MyImage {
 
 impl MyImage {
     fn new() -> Self {
-        Self {
-            texture: None,
-        }
+        Self { texture: None }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, app_data: &AppData) {
+    fn paint(&mut self, response: &Response, painter: &Painter, app_data: &AppData) {
         let texture: &egui::TextureHandle = self.texture.get_or_insert_with(|| {
-            let (size, image) = app_data.labeled_image().unwrap_or_else(|| ([0, 0], vec![]) );
+            let (size, image) = app_data.labeled_image().unwrap_or_else(|| ([0, 0], vec![]));
             // Load the texture only once.
-            ui.ctx().load_texture(
+            painter.ctx().load_texture(
                 "my-image",
                 egui::ColorImage::from_rgb(size, &image),
-                Default::default()
+                Default::default(),
             )
         });
 
-        // Show the image:
-        ui.image(texture, texture.size_vec2() * 10.);
+        let to_screen = egui::emath::RectTransform::from_to(
+            Rect::from_min_size(Pos2::ZERO, response.rect.size()),
+            response.rect,
+        );
+
+        let size = texture.size_vec2() * app_data.scale as f32;
+        let rect = Rect {
+            min: Pos2::ZERO,
+            max: size.to_pos2(),
+        };
+        const UV: Rect = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
+        painter.image(
+            texture.id(),
+            to_screen.transform_rect(rect),
+            UV,
+            Color32::WHITE,
+        );
     }
+}
+
+pub(crate) fn paint_qtree(response: Response, painter: &Painter, data: &AppData) {
+    let to_screen = egui::emath::RectTransform::from_to(
+        Rect::from_min_size(Pos2::ZERO, response.rect.size()),
+        response.rect,
+    );
+
+    data.with_qtree(|qtree_searcher| {
+        let width = 1;
+        const CELL_MARGIN: f32 = 0.1;
+
+        // for (&[x, y], &freshness) in &qtree_searcher.get_cache_map().fresh_cells {
+        //     let rect = Rect::new(
+        //         x as f64 + CELL_MARGIN,
+        //         y as f64 + CELL_MARGIN,
+        //         x as f64 + width as f64 - CELL_MARGIN,
+        //         y as f64 + width as f64 - CELL_MARGIN,
+        //     );
+        //     let rect = rect.to_path(1.);
+        //     let color = match qtree_searcher.cache_map.get([x, y]) {
+        //         CellState::Obstacle => (255, 127, 127),
+        //         CellState::Occupied(_) => (255, 127, 255),
+        //         CellState::Free => (0, 255, 127),
+        //         _ => (255, 0, 255),
+        //     };
+        //     let brush = Color::rgba8(
+        //         color.0,
+        //         color.1,
+        //         color.2,
+        //         (freshness * 127 / FRESH_TICKS) as u8,
+        //     );
+        //     ctx.fill(*view_transform * rect, &brush);
+        // }
+
+        let qtree = qtree_searcher.get_qtree();
+
+        for (level, cells) in qtree.levels.iter().enumerate() {
+            let width = qtree.width(level);
+            for (cell, state) in cells
+                .iter()
+                .filter(|(_, state)| !matches!(state, CellState::Mixed))
+            {
+                let (x, y) = (
+                    cell[0] << (qtree.toplevel - level),
+                    cell[1] << (qtree.toplevel - level),
+                );
+                let rect = Rect {
+                    min: Pos2 {
+                        x: (x as f32 + CELL_MARGIN) * data.scale as f32,
+                        y: (y as f32 + CELL_MARGIN) * data.scale as f32,
+                    },
+                    max: Pos2 {
+                        x: (x as f32 + width as f32 - CELL_MARGIN) * data.scale as f32,
+                        y: (y as f32 + width as f32 - CELL_MARGIN) * data.scale as f32,
+                    },
+                };
+                let rect = to_screen.transform_rect(rect);
+                // let rect = rect.to_path(1.);
+                painter.rect_stroke(
+                    rect,
+                    0.,
+                    Stroke {
+                        width: 1.,
+                        color: match state {
+                            CellState::Obstacle => Color32::from_rgb(255, 127, 127),
+                            CellState::Occupied(_) => Color32::from_rgb(255, 127, 255),
+                            CellState::Free => Color32::from_rgb(0, 255, 127),
+                            _ => Color32::from_rgb(255, 0, 255),
+                        },
+                    },
+                );
+            }
+        }
+    });
 }
