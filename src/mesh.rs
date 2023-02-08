@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use delaunator::{triangulate, Triangulation};
-use druid::{kurbo::BezPath, Point};
+// use druid::{kurbo::BezPath, Point};
 
 use crate::{
     app_data::is_passable_at,
@@ -15,7 +15,7 @@ use crate::{
 /// collision.
 #[derive(Debug)]
 pub(crate) struct Mesh {
-    pub simplified_border: Vec<BezPath>,
+    // pub simplified_border: Vec<BezPath>,
     pub polygons: geo::geometry::MultiPolygon,
     pub points: Vec<delaunator::Point>,
     pub triangulation: Triangulation,
@@ -73,11 +73,11 @@ pub(crate) fn create_mesh(
 
     let field = BoolField::new(&board, shape);
 
-    let mut simplified_border = vec![];
+    // let mut simplified_border = vec![];
     let mut polygons = vec![];
     let mut points = vec![];
 
-    let to_point = |p: [f64; 2]| Point::new(p[0] as f64, p[1] as f64);
+    // let to_point = |p: [f64; 2]| Point::new(p[0] as f64, p[1] as f64);
 
     let lines = trace_lines(&field);
     let mut simplified_vertices = 0;
@@ -107,20 +107,20 @@ pub(crate) fn create_mesh(
             continue;
         }
 
-        if let Some((first, rest)) = simplified.split_first() {
-            let mut bez_path = BezPath::new();
-            bez_path.move_to(to_point(*first));
-            for point in rest {
-                bez_path.line_to(to_point(*point));
-                points.push(delaunator::Point {
-                    x: point[0],
-                    y: point[1],
-                });
-            }
-            bez_path.close_path();
-            simplified_border.push(bez_path);
-            simplified_vertices += simplified.len();
-        }
+        // if let Some((first, rest)) = simplified.split_first() {
+        //     let mut bez_path = BezPath::new();
+        //     bez_path.move_to(to_point(*first));
+        //     for point in rest {
+        //         bez_path.line_to(to_point(*point));
+        //         points.push(delaunator::Point {
+        //             x: point[0],
+        //             y: point[1],
+        //         });
+        //     }
+        //     bez_path.close_path();
+        //     simplified_border.push(bez_path);
+        //     simplified_vertices += simplified.len();
+        // }
 
         let line_string: geo::geometry::LineString = simplified
             .iter()
@@ -129,13 +129,13 @@ pub(crate) fn create_mesh(
             .collect();
         polygons.push(geo::geometry::Polygon::new(line_string, vec![]));
     }
-    println!(
-        "trace_lines: {}, vertices: {}, simplified_border: {} vertices: {}",
-        lines.len(),
-        lines.iter().map(|line| line.len()).sum::<usize>(),
-        simplified_border.len(),
-        simplified_vertices
-    );
+    // println!(
+    //     "trace_lines: {}, vertices: {}, simplified_border: {} vertices: {}",
+    //     lines.len(),
+    //     lines.iter().map(|line| line.len()).sum::<usize>(),
+    //     simplified_border.len(),
+    //     simplified_vertices
+    // );
 
     let triangulation = triangulate(&points);
 
@@ -157,7 +157,7 @@ pub(crate) fn create_mesh(
     MeshResult {
         board,
         mesh: Mesh {
-            simplified_border,
+            // simplified_border,
             polygons: polygons.into_iter().collect(),
             points,
             triangulation,

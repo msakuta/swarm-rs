@@ -1,24 +1,23 @@
 use crate::{
-    agent::AvoidanceRenderParams,
+    // agent::AvoidanceRenderParams,
     game::{BoardParams, BoardType, Game, GameParams},
-    WINDOW_HEIGHT,
+    WINDOW_HEIGHT, perlin_noise::Xor128,
 };
 
-use druid::{Data, Lens, Point, Vec2};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
 
-#[derive(Clone, PartialEq, Eq, Data)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) enum LineMode {
     None,
     Line,
     Polygon,
 }
 
-#[derive(Clone, Lens, Data)]
-pub(crate) struct AppData {
+#[derive(Clone)]
+pub struct AppData {
     pub(crate) xs_text: String,
     pub(crate) ys_text: String,
     pub(crate) seed_text: String,
@@ -33,18 +32,17 @@ pub(crate) struct AppData {
     pub(crate) unpassable_visible: bool,
     pub(crate) triangle_label_visible: bool,
     pub(crate) show_label_image: bool,
-    pub(crate) origin: Vec2,
+    // pub(crate) origin: Vec2,
     pub(crate) scale: f64,
     pub(crate) message: String,
     pub(crate) big_message: String,
     pub(crate) big_message_time: f64,
-    pub(super) mouse_pos: Option<Point>,
+    // pub(super) mouse_pos: Option<Point>,
     pub(crate) get_board_time: f64,
-    #[data(ignore)]
     pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
     pub(crate) path_visible: bool,
-    pub(crate) avoidance_render_params: AvoidanceRenderParams,
+    // pub(crate) avoidance_render_params: AvoidanceRenderParams,
     pub qtree_visible: bool,
     pub qtree_search_visible: bool,
     pub(crate) target_visible: bool,
@@ -60,7 +58,7 @@ pub(crate) struct AppData {
 }
 
 impl AppData {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let mut game = Game::new();
         let seed = 123513;
         let scale = WINDOW_HEIGHT / game.ys as f64;
@@ -96,17 +94,17 @@ impl AppData {
             unpassable_visible: false,
             triangle_label_visible: false,
             show_label_image: false,
-            origin: Vec2::new(0., 0.),
+            // origin: Vec2::new(0., 0.),
             scale,
             message: "".to_string(),
             big_message: "Game Start".to_string(),
             big_message_time: 5000.,
-            mouse_pos: None,
+            // mouse_pos: None,
             render_board_time: Cell::new(0.),
             get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
             path_visible: true,
-            avoidance_render_params: AvoidanceRenderParams::new(),
+            // avoidance_render_params: AvoidanceRenderParams::new(),
             qtree_visible: false,
             qtree_search_visible: false,
             target_visible: false,
@@ -155,6 +153,36 @@ impl AppData {
 
         self.big_message = "Game Start".to_string();
         self.big_message_time = 5000.;
+    }
+
+    pub fn labeled_image(&self) -> Option<([usize; 2], Vec<u8>)> {
+        let game = self.game.borrow();
+
+        let mut rng = Xor128::new(616516);
+        let max_label = *game.mesh.labeled_image.iter().max()? + 1;
+
+        const OBSTACLE_COLOR: u8 = 63u8;
+        const BACKGROUND_COLOR: u8 = 127u8;
+
+        let label_colors = (0..max_label)
+            .map(|label| {
+                if label == 0 {
+                    [OBSTACLE_COLOR, OBSTACLE_COLOR, OBSTACLE_COLOR]
+                } else {
+                    [
+                        (rng.nexti() % 0x80) as u8,
+                        (rng.nexti() % 0x80) as u8,
+                        (rng.nexti() % 0x80) as u8,
+                    ]
+                }
+            })
+            .collect::<Vec<_>>();
+        Some(([game.xs, game.ys], game.mesh
+        .labeled_image
+        .iter()
+        .map(|p| label_colors[*p as usize].into_iter())
+        .flatten()
+        .collect::<Vec<_>>()))
     }
 }
 

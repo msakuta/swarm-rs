@@ -1,4 +1,4 @@
-mod render;
+// mod render;
 mod sampler;
 mod search;
 
@@ -9,7 +9,7 @@ use std::{
 
 use cgmath::{MetricSpace, Vector2};
 
-pub(crate) use self::render::AvoidanceRenderParams;
+// pub(crate) use self::render::AvoidanceRenderParams;
 use self::{
     sampler::{ForwardKinematicSampler, RrtStarSampler, SpaceSampler, StateSampler},
     search::{can_connect_goal, insert_to_grid_map, search, to_cell},

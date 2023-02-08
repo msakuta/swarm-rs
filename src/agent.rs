@@ -7,7 +7,7 @@ mod motion;
 
 pub(crate) use self::{
     agent_class::AgentClass,
-    avoidance::{AgentState, AvoidanceRenderParams, PathNode, SearchState},
+    avoidance::{AgentState, PathNode, SearchState},
 };
 use self::{
     behavior_nodes::{

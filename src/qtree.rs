@@ -15,7 +15,7 @@ macro_rules! dbg_println {
 
 mod cache_map;
 pub(crate) mod qtree;
-pub mod render;
+// pub mod render;
 
 use std::{error::Error, fmt::Display};
 

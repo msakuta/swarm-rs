@@ -1,13 +1,13 @@
 mod app_data;
 mod behavior_tree_adapt;
-mod board_widget;
+// mod board_widget;
 mod dijkstra;
 mod marching_squares;
-mod paint_board;
+// mod paint_board;
 mod perlin_noise;
 mod rdp;
 mod shape;
-mod widget;
+// mod widget;
 #[macro_use]
 mod macros;
 mod agent;
@@ -20,31 +20,24 @@ mod spawner;
 mod temp_ents;
 mod triangle_utils;
 
-use crate::{app_data::AppData, widget::make_widget};
-use druid::widget::prelude::*;
-use druid::{AppLauncher, LocalizedString, WindowDesc};
+use crate::{app_data::AppData};
+// use druid::widget::prelude::*;
+// use druid::{AppLauncher, LocalizedString, WindowDesc};
 
 const WINDOW_WIDTH: f64 = 1200.;
 const WINDOW_HEIGHT: f64 = 800.;
 
-pub fn main() {
-    log::set_max_level(log::LevelFilter::Off);
+// fn main() {
+//     // Log to stdout (if you run with `RUST_LOG=debug`).
+//     // tracing_subscriber::fmt::init();
 
-    let window = WindowDesc::new(make_widget())
-        .window_size(Size {
-            width: WINDOW_WIDTH,
-            height: WINDOW_HEIGHT,
-        })
-        .resizable(true)
-        .title(
-            LocalizedString::new("custom-widget-demo-window-title").with_placeholder("Swarm-rs"),
-        );
-
-    AppLauncher::with_window(window)
-        .log_to_console()
-        .launch(AppData::new())
-        .expect("launch failed");
-}
+//     let native_options = eframe::NativeOptions::default();
+//     eframe::run_native(
+//         "eframe template",
+//         native_options,
+//         Box::new(|cc| Box::new(swarm_rs_eframe::TemplateApp::new(cc))),
+//     );
+// }
 
 fn measure_time<T>(f: impl FnOnce() -> T) -> (T, f64) {
     let start = std::time::Instant::now();

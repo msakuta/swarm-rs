@@ -3,8 +3,6 @@ mod rooms;
 
 use cgmath::{InnerSpace, Vector2};
 
-use druid::Data;
-
 use std::{
     cell::RefCell,
     rc::Rc,
@@ -33,7 +31,7 @@ pub(crate) struct Resource {
 
 pub(crate) type Board = Vec<bool>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Data)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BoardType {
     Rect,
     Crank,
@@ -42,7 +40,7 @@ pub(crate) enum BoardType {
     Maze,
 }
 
-#[derive(Debug, Clone, Data)]
+#[derive(Debug, Clone)]
 pub(crate) struct Profiler {
     total: f64,
     count: usize,
@@ -79,7 +77,7 @@ impl Profiler {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Data)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AvoidanceMode {
     Kinematic,
     Rrt,
@@ -93,7 +91,7 @@ pub(crate) struct BoardParams {
     pub maze_expansions: usize,
 }
 
-#[derive(Clone, Data)]
+#[derive(Clone)]
 pub(crate) struct GameParams {
     pub(crate) avoidance_mode: AvoidanceMode,
     pub(crate) paused: bool,
