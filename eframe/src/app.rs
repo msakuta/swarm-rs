@@ -63,6 +63,25 @@ impl eframe::App for TemplateApp {
         let Self { label, value, .. } = self;
 
         self.app_data.update();
+        let (scroll_delta, pointer, delta) = {
+            let input = ctx.input();
+            (
+                input.scroll_delta,
+                input.pointer.primary_down(),
+                input.pointer.delta(),
+            )
+        };
+        if scroll_delta[1] < 0. {
+            self.app_data.scale *= 1.2;
+        } else if 0. < scroll_delta[1] {
+            self.app_data.scale /= 1.2;
+        }
+        if pointer {
+            self.app_data.origin[0] += delta[0] as f64 / self.app_data.scale;
+            self.app_data.origin[1] += delta[1] as f64 / self.app_data.scale;
+        }
+
+        // println!("scroll_delta: {scroll_delta:?}");
 
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
@@ -168,9 +187,12 @@ impl MyImage {
         );
 
         let size = texture.size_vec2() * app_data.scale as f32;
+        let min =
+            Vec2::new(app_data.origin[0] as f32, app_data.origin[1] as f32) * app_data.scale as f32;
+        let max = min + size;
         let rect = Rect {
-            min: Pos2::ZERO,
-            max: size.to_pos2(),
+            min: min.to_pos2(),
+            max: max.to_pos2(),
         };
         const UV: Rect = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
         painter.image(
@@ -187,6 +209,9 @@ pub(crate) fn paint_qtree(response: &Response, painter: &Painter, data: &AppData
         Rect::from_min_size(Pos2::ZERO, response.rect.size()),
         response.rect,
     );
+
+    let scale = data.scale as f32;
+    let offset = Vec2::new(data.origin[0] as f32, data.origin[1] as f32) * scale;
 
     data.with_qtree(|qtree_searcher| {
         let width = 1;
@@ -227,15 +252,12 @@ pub(crate) fn paint_qtree(response: &Response, painter: &Painter, data: &AppData
                     cell[0] << (qtree.toplevel - level),
                     cell[1] << (qtree.toplevel - level),
                 );
+                let cell_pos = Vec2::new(x as f32, y as f32);
+                let min_margin = Vec2::splat(CELL_MARGIN);
+                let max_margin = Vec2::splat(width as f32 - CELL_MARGIN);
                 let rect = Rect {
-                    min: Pos2 {
-                        x: (x as f32 + CELL_MARGIN) * data.scale as f32,
-                        y: (y as f32 + CELL_MARGIN) * data.scale as f32,
-                    },
-                    max: Pos2 {
-                        x: (x as f32 + width as f32 - CELL_MARGIN) * data.scale as f32,
-                        y: (y as f32 + width as f32 - CELL_MARGIN) * data.scale as f32,
-                    },
+                    min: ((cell_pos + min_margin) * scale + offset).to_pos2(),
+                    max: ((cell_pos + max_margin) * scale + offset).to_pos2(),
                 };
                 let rect = to_screen.transform_rect(rect);
                 // let rect = rect.to_path(1.);
@@ -269,14 +291,14 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
     ];
 
     let game = data.game.borrow();
-    let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
+    // let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
     let entities = &game.entities;
 
+    let offset = Vec2::new(data.origin[0] as f32, data.origin[1] as f32);
+
     let to_point = |pos: [f64; 2]| {
-        to_screen.transform_pos(Pos2::new(
-            (pos[0] * data.scale) as f32,
-            (pos[1] * data.scale) as f32,
-        ))
+        let pos = Vec2::new(pos[0] as f32, pos[1] as f32);
+        to_screen.transform_pos(((pos + offset) * data.scale as f32).to_pos2())
     };
 
     for agent in entities.iter() {
