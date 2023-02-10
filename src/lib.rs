@@ -13,7 +13,7 @@ mod macros;
 pub mod agent;
 mod collision;
 mod entity;
-mod game;
+pub mod game;
 mod mesh;
 mod qtree;
 mod spawner;

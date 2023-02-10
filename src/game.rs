@@ -24,7 +24,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub(crate) struct Resource {
+pub struct Resource {
     pub pos: [f64; 2],
     pub amount: i32,
 }
@@ -121,7 +121,7 @@ pub struct Game {
     pub(crate) mesh: Mesh,
     pub entities: Vec<RefCell<Entity>>,
     pub(crate) bullets: Vec<Bullet>,
-    pub(crate) resources: Vec<Resource>,
+    pub resources: Vec<Resource>,
     pub(crate) interval: f64,
     pub(crate) rng: Xor128,
     pub(crate) id_gen: usize,
@@ -445,19 +445,11 @@ impl Game {
                 continue;
             }
 
-            if let Some(tri) = find_triangle_at(
-                &self.mesh,
-                pos_candidate,
-                &mut self.triangle_profiler.borrow_mut(),
-            ) {
-                if Some(self.mesh.triangle_labels[tri]) == self.mesh.largest_label {
-                    if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
-                        self.resources.push(Resource {
-                            pos: pos_candidate,
-                            amount: (rng.nexti() % 128 + 80) as i32,
-                        });
-                    }
-                }
+            if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
+                self.resources.push(Resource {
+                    pos: pos_candidate,
+                    amount: (rng.nexti() % 128 + 80) as i32,
+                });
             }
         }
     }

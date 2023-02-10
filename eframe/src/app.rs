@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use egui::{Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Vec2};
-use swarm_rs::{agent::AGENT_HALFLENGTH, AppData, CellState};
+use swarm_rs::{agent::AGENT_HALFLENGTH, game::Resource, AppData, CellState};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -72,9 +72,9 @@ impl eframe::App for TemplateApp {
             )
         };
         if scroll_delta[1] < 0. {
-            self.app_data.scale *= 1.2;
-        } else if 0. < scroll_delta[1] {
             self.app_data.scale /= 1.2;
+        } else if 0. < scroll_delta[1] {
+            self.app_data.scale *= 1.2;
         }
         if pointer {
             self.app_data.origin[0] += delta[0] as f64 / self.app_data.scale;
@@ -124,6 +124,8 @@ impl eframe::App for TemplateApp {
                 self.img.paint(&response, &painter, &self.app_data);
 
                 paint_qtree(&response, &painter, &self.app_data);
+
+                paint_resources(&response, &painter, &self.app_data);
 
                 paint_agents(&response, &painter, &self.app_data);
             });
@@ -326,5 +328,35 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
         //     };
         //     ctx.stroke(arc, &Color::YELLOW, 2.5);
         // }
+    }
+}
+
+fn paint_resources(response: &Response, painter: &Painter, data: &AppData) {
+    let to_screen = egui::emath::RectTransform::from_to(
+        Rect::from_min_size(Pos2::ZERO, response.rect.size()),
+        response.rect,
+    );
+
+    const TARGET_PIXELS: f64 = 10.;
+
+    let draw_resource = |resource: &Resource, pos: Pos2| {
+        let radius = ((resource.amount as f64).sqrt() / TARGET_PIXELS * data.scale) as f32;
+        // let circle = Circle::new(pos, radius);
+        // ctx.fill(circle, &Color::YELLOW);
+        // ctx.stroke(circle, &Color::YELLOW, radius / 30.);
+        painter.circle_filled(pos, radius, Color32::YELLOW);
+    };
+
+    let game = data.game.borrow();
+
+    let offset = Vec2::new(data.origin[0] as f32, data.origin[1] as f32);
+
+    let to_point = |pos: [f64; 2]| {
+        let pos = Vec2::new(pos[0] as f32, pos[1] as f32);
+        to_screen.transform_pos(((pos + offset) * data.scale as f32).to_pos2())
+    };
+
+    for resource in &game.resources {
+        draw_resource(resource, to_point(resource.pos));
     }
 }
