@@ -444,8 +444,11 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
                     bez_path.move_to(to_point(first.pos));
                 }
                 for point in rest {
-                    let circle = Circle::new(to_point(point.pos), point.radius);
-                    ctx.stroke(*view_transform * circle, brush, 1.);
+                    // Repurposing circle flag
+                    if data.avoidance_render_params.circle_visible {
+                        let circle = Circle::new(to_point(point.pos), point.radius);
+                        ctx.stroke(*view_transform * circle, brush, 1.);
+                    }
                     bez_path.line_to(to_point(point.pos));
                 }
                 bez_path.line_to(to_point(agent.get_pos()));
