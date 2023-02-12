@@ -312,24 +312,35 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
         painter.circle_filled(pos, 5., brush);
 
         if !agent.is_agent() {
-            painter.circle_stroke(pos, 10., Stroke {
-                color: brush,
-                width: 3.,
-            });
+            painter.circle_stroke(
+                pos,
+                10.,
+                Stroke {
+                    color: brush,
+                    width: 3.,
+                },
+            );
         }
 
-        // let resource = agent.resource();
-        // if 0 < resource {
-        //     use std::f64::consts::PI;
-        //     let arc = Arc {
-        //         center: *view_transform * pos,
-        //         radii: Vec2::new(7.5, 7.5),
-        //         start_angle: 0.,
-        //         sweep_angle: resource as f64 * 2. * PI / agent.max_resource() as f64,
-        //         x_rotation: -PI / 2.,
-        //     };
-        //     ctx.stroke(arc, &Color::YELLOW, 2.5);
-        // }
+        let resource = agent.resource();
+        if 0 < resource {
+            use std::f64::consts::PI;
+            let f = resource as f64 * 2. * PI / agent.max_resource() as f64;
+            let count = 10; // There is no reason to pick this value, but it seems to work fine.
+            for (i0, i1) in (0..count).zip(1..=count) {
+                let theta0 = (i0 as f64 / count as f64 * f) as f32;
+                let theta1 = (i1 as f64 / count as f64 * f) as f32;
+                let p0 = Vec2::new(theta0.cos(), theta0.sin()) * 7.5 + pos.to_vec2();
+                let p1 = Vec2::new(theta1.cos(), theta1.sin()) * 7.5 + pos.to_vec2();
+                painter.line_segment(
+                    [p0.to_pos2(), p1.to_pos2()],
+                    Stroke {
+                        color: Color32::YELLOW,
+                        width: 2.5,
+                    },
+                );
+            }
+        }
     }
 }
 
