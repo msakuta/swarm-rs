@@ -311,10 +311,12 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
         // ctx.fill(circle, brush);
         painter.circle_filled(pos, 5., brush);
 
-        // if !agent.is_agent() {
-        //     let big_circle = Circle::new(*view_transform * pos, 10.);
-        //     ctx.stroke(big_circle, brush, 3.);
-        // }
+        if !agent.is_agent() {
+            painter.circle_stroke(pos, 10., Stroke {
+                color: brush,
+                width: 3.,
+            });
+        }
 
         // let resource = agent.resource();
         // if 0 < resource {
