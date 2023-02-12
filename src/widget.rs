@@ -70,6 +70,8 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                     Flex::row()
                         .with_child(Label::new("Simplify: ").padding(3.0))
                         .with_child(TextBox::new().lens(AppData::simplify_text))
+                        .with_child(Label::new("Agents: ").padding(3.0))
+                        .with_child(TextBox::new().lens(AppData::agent_count_text))
                         .padding(5.0),
                 )
                 .padding(2.0)
