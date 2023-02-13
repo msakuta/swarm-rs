@@ -110,6 +110,11 @@ impl eframe::App for TemplateApp {
                 &mut self.app_data.game_params.paused,
                 "Paused",
             ));
+
+            ui.add(egui::Checkbox::new(
+                &mut self.app_data.qtree_visible,
+                "QTree",
+            ));
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -208,6 +213,9 @@ impl MyImage {
 }
 
 pub(crate) fn paint_qtree(response: &Response, painter: &Painter, data: &AppData) {
+    if !data.qtree_visible {
+        return;
+    }
     let to_screen = egui::emath::RectTransform::from_to(
         Rect::from_min_size(Pos2::ZERO, response.rect.size()),
         response.rect,
