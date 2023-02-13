@@ -1,7 +1,10 @@
 use std::time::Duration;
 
-use cgmath::{Matrix2, Rad, Vector2};
-use egui::{Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Vec2};
+use cgmath::{Matrix2, Matrix3, Point2, Rad, SquareMatrix, Transform, Vector2};
+use egui::{
+    accesskit::kurbo::Affine, Color32, Frame, Painter, Pos2, Rect, Response, Stroke,
+    TextureOptions, Vec2,
+};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH},
     game::Resource,
@@ -24,6 +27,9 @@ pub struct TemplateApp {
 
     #[serde(skip)]
     app_data: AppData,
+
+    #[serde(skip)]
+    canvas_offset: Pos2,
 }
 
 impl Default for TemplateApp {
@@ -34,11 +40,22 @@ impl Default for TemplateApp {
             value: 2.7,
             img: MyImage::new(),
             app_data: AppData::new(),
+            canvas_offset: Pos2::ZERO,
         }
     }
 }
 
 impl TemplateApp {
+    pub(crate) fn view_transform(&self) -> Matrix3<f64> {
+        Matrix3::from_scale(self.app_data.scale)
+            * Matrix3::from_translation(self.app_data.origin.into())
+    }
+
+    pub(crate) fn inverse_view_transform(&self) -> Matrix3<f64> {
+        Matrix3::from_translation(-cgmath::Vector2::from(self.app_data.origin))
+            * Matrix3::from_scale(1. / self.app_data.scale)
+    }
+
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -66,19 +83,34 @@ impl eframe::App for TemplateApp {
         ctx.request_repaint_after(Duration::from_millis(16));
 
         self.app_data.update();
-        let (scroll_delta, pointer, delta) = {
+        let (scroll_delta, pointer, delta, interact_pos) = {
             let input = ctx.input();
+            let interact_pos =
+                input.pointer.interact_pos().unwrap_or(Pos2::ZERO) - self.canvas_offset;
             (
                 input.scroll_delta,
                 input.pointer.primary_down(),
                 input.pointer.delta(),
+                Vector2::new(interact_pos.x as f64, interact_pos.y as f64),
             )
         };
-        if scroll_delta[1] < 0. {
-            self.app_data.scale /= 1.2;
-        } else if 0. < scroll_delta[1] {
-            self.app_data.scale *= 1.2;
+
+        fn transform_vector(m: &Matrix3<f64>, v: Vector2<f64>) -> Vector2<f64> {
+            <Matrix3<f64> as Transform<Point2<f64>>>::transform_vector(m, v)
         }
+
+        if scroll_delta[1] != 0. {
+            let old_offset = transform_vector(&self.inverse_view_transform(), interact_pos);
+            if scroll_delta[1] < 0. {
+                self.app_data.scale /= 1.2;
+            } else if 0. < scroll_delta[1] {
+                self.app_data.scale *= 1.2;
+            }
+            let new_offset = transform_vector(&self.inverse_view_transform(), interact_pos);
+            let diff: Vector2<f64> = new_offset - old_offset;
+            self.app_data.origin = (Vector2::<f64>::from(self.app_data.origin) + diff).into();
+        }
+
         if pointer {
             self.app_data.origin[0] += delta[0] as f64 / self.app_data.scale;
             self.app_data.origin[1] += delta[1] as f64 / self.app_data.scale;
@@ -123,6 +155,8 @@ impl eframe::App for TemplateApp {
             Frame::canvas(ui.style()).show(ui, |ui| {
                 let (response, painter) =
                     ui.allocate_painter(ui.available_size(), egui::Sense::hover());
+
+                self.canvas_offset = response.rect.min;
 
                 self.img.paint(&response, &painter, &self.app_data);
 
