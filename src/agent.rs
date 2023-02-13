@@ -45,7 +45,7 @@ use std::{
 };
 
 #[derive(Clone, Debug)]
-pub(crate) struct Bullet {
+pub struct Bullet {
     pub pos: [f64; 2],
     pub velo: [f64; 2],
     pub team: usize,
@@ -107,7 +107,7 @@ pub(crate) const AGENT_SPEED: f64 = 0.125;
 pub(crate) const AGENT_MAX_HEALTH: u32 = 100;
 pub(crate) const AGENT_MAX_RESOURCE: i32 = 100;
 const AGENT_VISIBLE_DISTANCE: f64 = 30.;
-pub(crate) const BULLET_RADIUS: f64 = 0.15;
+pub const BULLET_RADIUS: f64 = 0.15;
 pub(crate) const BULLET_SPEED: f64 = 2.;
 pub(crate) const BULLET_DAMAGE: u32 = 10;
 

@@ -120,7 +120,7 @@ pub struct Game {
     pub(crate) board: Board,
     pub(crate) mesh: Mesh,
     pub entities: Vec<RefCell<Entity>>,
-    pub(crate) bullets: Vec<Bullet>,
+    pub bullets: Vec<Bullet>,
     pub resources: Vec<Resource>,
     pub(crate) interval: f64,
     pub(crate) rng: Xor128,

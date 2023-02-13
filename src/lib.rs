@@ -25,6 +25,7 @@ pub use crate::{
     qtree::CellState,
 };
 use wasm_bindgen::prelude::*;
+pub use crate::agent::Bullet;
 
 const WINDOW_WIDTH: f64 = 1200.;
 const WINDOW_HEIGHT: f64 = 800.;

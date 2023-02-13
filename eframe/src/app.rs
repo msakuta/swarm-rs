@@ -1,14 +1,12 @@
 use std::time::Duration;
 
-use cgmath::{Matrix2, Matrix3, Point2, Rad, SquareMatrix, Transform, Vector2};
-use egui::{
-    accesskit::kurbo::Affine, Color32, Frame, Painter, Pos2, Rect, Response, Stroke,
-    TextureOptions, Vec2,
-};
+use cgmath::{InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
+use eframe::epaint;
+use egui::{Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Vec2};
 use swarm_rs::{
-    agent::{AgentClass, AGENT_HALFLENGTH},
+    agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
     game::Resource,
-    AppData, CellState,
+    AppData, Bullet, CellState,
 };
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -46,7 +44,7 @@ impl Default for TemplateApp {
 }
 
 impl TemplateApp {
-    pub(crate) fn view_transform(&self) -> Matrix3<f64> {
+    pub(crate) fn _view_transform(&self) -> Matrix3<f64> {
         Matrix3::from_scale(self.app_data.scale)
             * Matrix3::from_translation(self.app_data.origin.into())
     }
@@ -167,6 +165,8 @@ impl eframe::App for TemplateApp {
                 paint_resources(&response, &painter, &self.app_data);
 
                 paint_agents(&response, &painter, &self.app_data);
+
+                paint_bullets(&response, &painter, &self.app_data);
             });
 
             // for y in 0..3 {
@@ -501,6 +501,85 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
                 //     ctx.stroke(*view_transform * circle, brush, 1.);
                 //     bez_path.line_to(to_point(point.pos));
                 // }
+            }
+        }
+    }
+}
+
+fn paint_bullets(response: &Response, painter: &Painter, data: &AppData) {
+    let to_screen = egui::emath::RectTransform::from_to(
+        Rect::from_min_size(Pos2::ZERO, response.rect.size()),
+        response.rect,
+    );
+
+    let offset = Vec2::new(data.origin[0] as f32, data.origin[1] as f32);
+
+    let to_point = |pos: [f64; 2]| {
+        let pos = Vec2::new(pos[0] as f32, pos[1] as f32);
+        to_screen.transform_pos(((pos + offset) * data.scale as f32).to_pos2())
+    };
+
+    let draw_bullet = |painter: &Painter, bullet: &Bullet, radius: f64| {
+        painter.circle(
+            to_point(bullet.pos),
+            radius as f32,
+            if bullet.team == 0 {
+                Color32::WHITE
+            } else {
+                Color32::from_rgb(255, 0, 255)
+            },
+            Stroke {
+                color: Color32::YELLOW,
+                width: 1.,
+            },
+        );
+    };
+
+    const TARGET_PIXELS: f64 = 3.;
+
+    let game = data.game.borrow();
+
+    let draw_small = data.scale < TARGET_PIXELS / BULLET_RADIUS;
+
+    for bullet in game.bullets.iter() {
+        let pos = Vector2::from(bullet.pos);
+        let velo = Vector2::from(bullet.velo).normalize();
+        let length = bullet
+            .traveled
+            .min(2. * Vector2::from(bullet.velo).magnitude());
+        let tail = pos - velo * length;
+        if matches!(bullet.shooter_class, AgentClass::Fighter) {
+            let perp = Vector2::new(velo.y, -velo.x) * BULLET_RADIUS;
+            let trail = epaint::PathShape {
+                points: vec![
+                    to_point((pos + perp).into()),
+                    to_point((pos - perp).into()),
+                    to_point(tail.into()),
+                ],
+                closed: true,
+                fill: Color32::from_rgb(255, 191, 63),
+                stroke: Default::default(),
+            };
+            painter.add(trail);
+            if !draw_small {
+                draw_bullet(painter, bullet, BULLET_RADIUS * data.scale);
+            }
+        } else {
+            let trail = [to_point((pos + velo).into()), to_point((pos - velo).into())];
+            painter.line_segment(
+                trail,
+                Stroke {
+                    color: Color32::from_rgb(255, 191, 63),
+                    width: 0.075 * data.scale as f32,
+                },
+            );
+        };
+    }
+
+    if draw_small {
+        for bullet in game.bullets.iter() {
+            if matches!(bullet.shooter_class, AgentClass::Fighter) {
+                draw_bullet(painter, bullet, TARGET_PIXELS);
             }
         }
     }
