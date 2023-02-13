@@ -221,7 +221,6 @@ pub(crate) fn paint_qtree(response: &Response, painter: &Painter, data: &AppData
     let offset = Vec2::new(data.origin[0] as f32, data.origin[1] as f32) * scale;
 
     data.with_qtree(|qtree_searcher| {
-        let width = 1;
         const CELL_MARGIN: f32 = 0.1;
 
         // for (&[x, y], &freshness) in &qtree_searcher.get_cache_map().fresh_cells {
@@ -348,33 +347,51 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
         }
 
         'rectangle: {
-            if !draw_rectangle {
-                break 'rectangle;
-            };
-            let class = agent.get_class().unwrap_or(AgentClass::Worker);
-            let mut path = vec![];
             let orient = agent.get_orient().unwrap_or(0.);
-            let rotation = Matrix2::from_angle(Rad(orient));
             let agent_pos = agent.get_pos();
             let agent_pos = Vector2::from(agent_pos);
-            class.vertices(|v| {
-                let vertex = rotation * Vector2::from(v) + agent_pos;
-                path.push(to_point(vertex.into()));
-            });
-            let Some(first) = path.first() else {
-                break 'rectangle;
+            let view_pos = to_point(agent_pos.into());
+            let class = agent.get_class().unwrap_or(AgentClass::Worker);
+            let length = if matches!(class, AgentClass::Fighter) {
+                20.
+            } else {
+                10.
             };
-            for (p0, p1) in path
-                .iter()
-                .zip(path.iter().skip(1).chain(std::iter::once(first)))
-            {
-                painter.line_segment(
-                    [*p0, *p1],
-                    Stroke {
-                        color: brush,
-                        width: 1.,
-                    },
-                );
+            let dest = egui::pos2(
+                view_pos.x + (orient.cos() * length) as f32,
+                view_pos.y + (orient.sin() * length) as f32,
+            );
+            let orient_line = [view_pos, dest];
+            painter.line_segment(
+                orient_line,
+                Stroke {
+                    color: brush,
+                    width: 3.,
+                },
+            );
+
+            if draw_rectangle {
+                let mut path = vec![];
+                let rotation = Matrix2::from_angle(Rad(orient));
+                class.vertices(|v| {
+                    let vertex = rotation * Vector2::from(v) + agent_pos;
+                    path.push(to_point(vertex.into()));
+                });
+                let Some(first) = path.first() else {
+                    break 'rectangle;
+                };
+                for (p0, p1) in path
+                    .iter()
+                    .zip(path.iter().skip(1).chain(std::iter::once(first)))
+                {
+                    painter.line_segment(
+                        [*p0, *p1],
+                        Stroke {
+                            color: brush,
+                            width: 1.,
+                        },
+                    );
+                }
             }
         }
     }
