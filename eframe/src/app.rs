@@ -1,7 +1,12 @@
 use std::time::Duration;
 
+use cgmath::{Matrix2, Rad, Vector2};
 use egui::{Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Vec2};
-use swarm_rs::{agent::AGENT_HALFLENGTH, game::Resource, AppData, CellState};
+use swarm_rs::{
+    agent::{AgentClass, AGENT_HALFLENGTH},
+    game::Resource,
+    AppData, CellState,
+};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -293,10 +298,12 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
     ];
 
     let game = data.game.borrow();
-    // let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
+
     let entities = &game.entities;
 
     let offset = Vec2::new(data.origin[0] as f32, data.origin[1] as f32);
+
+    let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
 
     let to_point = |pos: [f64; 2]| {
         let pos = Vec2::new(pos[0] as f32, pos[1] as f32);
@@ -306,9 +313,7 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
     for agent in entities.iter() {
         let agent = agent.borrow();
         let pos = to_point(agent.get_pos());
-        // let circle = Circle::new(*view_transform * pos, 5.);
         let brush = AGENT_COLORS[agent.get_team() % AGENT_COLORS.len()];
-        // ctx.fill(circle, brush);
         painter.circle_filled(pos, 5., brush);
 
         if !agent.is_agent() {
@@ -337,6 +342,37 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
                     Stroke {
                         color: Color32::YELLOW,
                         width: 2.5,
+                    },
+                );
+            }
+        }
+
+        'rectangle: {
+            if !draw_rectangle {
+                break 'rectangle;
+            };
+            let class = agent.get_class().unwrap_or(AgentClass::Worker);
+            let mut path = vec![];
+            let orient = agent.get_orient().unwrap_or(0.);
+            let rotation = Matrix2::from_angle(Rad(orient));
+            let agent_pos = agent.get_pos();
+            let agent_pos = Vector2::from(agent_pos);
+            class.vertices(|v| {
+                let vertex = rotation * Vector2::from(v) + agent_pos;
+                path.push(to_point(vertex.into()));
+            });
+            let Some(first) = path.first() else {
+                break 'rectangle;
+            };
+            for (p0, p1) in path
+                .iter()
+                .zip(path.iter().skip(1).chain(std::iter::once(first)))
+            {
+                painter.line_segment(
+                    [*p0, *p1],
+                    Stroke {
+                        color: brush,
+                        width: 1.,
                     },
                 );
             }

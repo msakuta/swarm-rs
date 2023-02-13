@@ -38,7 +38,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_class(&self) -> Option<AgentClass> {
+    pub fn get_class(&self) -> Option<AgentClass> {
         match self {
             Entity::Agent(agent) => Some(agent.class),
             Entity::Spawner(_) => None,
@@ -110,7 +110,7 @@ impl Entity {
         matches!(self, Entity::Agent(_))
     }
 
-    pub(crate) fn get_orient(&self) -> Option<f64> {
+    pub fn get_orient(&self) -> Option<f64> {
         match self {
             Entity::Agent(agent) => Some(agent.orient),
             _ => None,

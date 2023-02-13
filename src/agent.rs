@@ -6,7 +6,6 @@ mod interpolation;
 mod motion;
 
 pub(crate) use self::{
-    agent_class::AgentClass,
     avoidance::{AgentState, PathNode, SearchState},
 };
 use self::{
@@ -34,6 +33,7 @@ use crate::{
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
 use behavior_tree_lite::{error::LoadError, BehaviorResult, Blackboard, Lazy};
+pub use self::agent_class::AgentClass;
 
 use std::{
     cell::RefCell,
