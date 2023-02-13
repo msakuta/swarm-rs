@@ -143,6 +143,8 @@ impl eframe::App for TemplateApp {
                 "Paused",
             ));
 
+            ui.add(egui::Checkbox::new(&mut self.app_data.path_visible, "Path"));
+
             ui.add(egui::Checkbox::new(
                 &mut self.app_data.qtree_visible,
                 "QTree",
@@ -384,7 +386,7 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
             }
         }
 
-        let render_rectangle = |path: &[Pos2]| {
+        let render_ring = |path: &[Pos2]| {
             if let Some(first) = path.first() {
                 for (p0, p1) in path
                     .iter()
@@ -432,7 +434,7 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
                     let vertex = rotation * Vector2::from(v) + agent_pos;
                     path.push(to_point(vertex.into()));
                 });
-                render_rectangle(&path);
+                render_ring(&path);
             }
         } else {
             let aabb = agent.get_aabb();
@@ -448,6 +450,58 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
                     width: 1.,
                 },
             );
+        }
+
+        let render_line_string = |path: &[Pos2]| {
+            if let Some(first) = path.first() {
+                for (p0, p1) in path.iter().zip(path.iter().skip(1)) {
+                    painter.line_segment(
+                        [*p0, *p1],
+                        Stroke {
+                            color: brush,
+                            width: 1.,
+                        },
+                    );
+                }
+            }
+        };
+
+        if data.path_visible {
+            let avoidance_drawn = 'breaky: {
+                let Some(path) = agent
+                    .get_avoidance_path_array() else {
+                        break 'breaky None;
+                    };
+                if path.len() == 0 {
+                    break 'breaky None;
+                }
+                let path = if let Some(goal) = agent.get_goal() {
+                    path.iter()
+                        .copied()
+                        .chain(std::iter::once([goal.x, goal.y]))
+                        .map(to_point)
+                        .collect::<Vec<Pos2>>()
+                } else {
+                    path.iter().copied().map(to_point).collect::<Vec<Pos2>>()
+                };
+                render_line_string(&path);
+                path.last().copied()
+            };
+            if let Some(path) = agent.get_path() {
+                let mut bez_path = if let Some(first) = avoidance_drawn {
+                    vec![first]
+                } else {
+                    vec![]
+                };
+                bez_path.extend(path.iter().map(|node| to_point(node.pos)));
+                bez_path.push(view_pos);
+                render_line_string(&bez_path);
+                // if draw_circle {
+                //     let circle = Circle::new(to_point(point.pos), point.radius);
+                //     ctx.stroke(*view_transform * circle, brush, 1.);
+                //     bez_path.line_to(to_point(point.pos));
+                // }
+            }
         }
     }
 }

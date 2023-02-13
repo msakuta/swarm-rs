@@ -89,19 +89,29 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_path(&self) -> Option<&[QTreePathNode]> {
+    pub fn get_path(&self) -> Option<&[QTreePathNode]> {
         match self {
             Entity::Agent(agent) => Some(&agent.path),
             Entity::Spawner(_) => None,
         }
     }
 
-    pub(crate) fn get_avoidance_path(&self) -> Option<Vec<PathNode>> {
+    pub fn get_avoidance_path(&self) -> Option<Vec<PathNode>> {
         match self {
             Entity::Agent(agent) => agent
                 .search_state
                 .as_ref()
                 .and_then(|ss| ss.avoidance_path().map(|path| path.collect())),
+            _ => None,
+        }
+    }
+
+    pub fn get_avoidance_path_array(&self) -> Option<Vec<[f64; 2]>> {
+        match self {
+            Entity::Agent(agent) => agent
+                .search_state
+                .as_ref()
+                .and_then(|ss| ss.avoidance_path().map(|path| path.map(|node| [node.x, node.y]).collect())),
             _ => None,
         }
     }
@@ -138,7 +148,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_goal(&self) -> Option<crate::agent::AgentState> {
+    pub fn get_goal(&self) -> Option<crate::agent::AgentState> {
         match self {
             Entity::Agent(agent) => agent.goal,
             _ => None,

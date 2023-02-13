@@ -162,7 +162,7 @@ pub enum CellState {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct QTreePathNode {
+pub struct QTreePathNode {
     pub pos: [f64; 2],
     pub radius: f64,
 }

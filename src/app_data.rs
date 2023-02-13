@@ -41,7 +41,7 @@ pub struct AppData {
     pub(crate) get_board_time: f64,
     pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
-    pub(crate) path_visible: bool,
+    pub path_visible: bool,
     // pub(crate) avoidance_render_params: AvoidanceRenderParams,
     pub qtree_visible: bool,
     pub qtree_search_visible: bool,

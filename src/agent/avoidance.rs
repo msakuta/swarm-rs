@@ -25,7 +25,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct AgentState {
+pub struct AgentState {
     pub x: f64,
     pub y: f64,
     pub heading: f64,
@@ -66,7 +66,7 @@ impl From<AgentState> for Vector2<f64> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PathNode {
+pub struct PathNode {
     pub x: f64,
     pub y: f64,
     pub _backward: bool,
