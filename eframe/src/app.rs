@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use cgmath::{Matrix2, Rad, Vector2};
-use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Vec2};
+use egui::{Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH},
     game::Resource,
@@ -65,8 +65,6 @@ impl eframe::App for TemplateApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(Duration::from_millis(16));
 
-        let Self { label, value, .. } = self;
-
         self.app_data.update();
         let (scroll_delta, pointer, delta) = {
             let input = ctx.input();
@@ -108,15 +106,10 @@ impl eframe::App for TemplateApp {
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
             ui.heading("Side Panel");
 
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(label);
-            });
-
-            ui.add(egui::Slider::new(value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                *value += 1.0;
-            }
+            ui.add(egui::Checkbox::new(
+                &mut self.app_data.game_params.paused,
+                "Paused",
+            ));
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {

@@ -24,7 +24,7 @@ pub struct AppData {
     pub(crate) maze_expansions: String,
     pub(crate) board_type: BoardType,
     pub game: Rc<RefCell<Game>>,
-    pub(crate) game_params: GameParams,
+    pub game_params: GameParams,
     pub(crate) simplify_text: String,
     pub(crate) line_mode: LineMode,
     pub(crate) simplified_visible: bool,

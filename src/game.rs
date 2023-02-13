@@ -92,9 +92,9 @@ pub(crate) struct BoardParams {
 }
 
 #[derive(Clone)]
-pub(crate) struct GameParams {
+pub struct GameParams {
     pub(crate) avoidance_mode: AvoidanceMode,
-    pub(crate) paused: bool,
+    pub paused: bool,
     pub(crate) avoidance_expands: f64,
     pub(crate) agent_source: Rc<String>,
     pub(crate) spawner_source: Rc<String>,
