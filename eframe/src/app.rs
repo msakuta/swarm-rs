@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use cgmath::{Matrix2, Rad, Vector2};
-use egui::{Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Vec2};
+use egui::{Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH},
     game::Resource,
@@ -177,7 +177,10 @@ impl MyImage {
             painter.ctx().load_texture(
                 "my-image",
                 egui::ColorImage::from_rgb(size, &image),
-                Default::default(),
+                TextureOptions {
+                    magnification: egui::TextureFilter::Nearest,
+                    minification: egui::TextureFilter::Linear,
+                },
             )
         });
 
