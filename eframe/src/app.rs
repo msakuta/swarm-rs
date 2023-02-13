@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use cgmath::{Matrix2, Rad, Vector2};
-use egui::{Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Vec2};
+use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH},
     game::Resource,
@@ -346,11 +346,28 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
             }
         }
 
-        'rectangle: {
-            let orient = agent.get_orient().unwrap_or(0.);
-            let agent_pos = agent.get_pos();
-            let agent_pos = Vector2::from(agent_pos);
-            let view_pos = to_point(agent_pos.into());
+        let render_rectangle = |path: &[Pos2]| {
+            if let Some(first) = path.first() {
+                for (p0, p1) in path
+                    .iter()
+                    .zip(path.iter().skip(1).chain(std::iter::once(first)))
+                {
+                    painter.line_segment(
+                        [*p0, *p1],
+                        Stroke {
+                            color: brush,
+                            width: 1.,
+                        },
+                    );
+                }
+            }
+        };
+
+        let agent_pos = agent.get_pos();
+        let agent_pos = Vector2::from(agent_pos);
+        let view_pos = to_point(agent_pos.into());
+
+        if let Some(orient) = agent.get_orient() {
             let class = agent.get_class().unwrap_or(AgentClass::Worker);
             let length = if matches!(class, AgentClass::Fighter) {
                 20.
@@ -377,22 +394,22 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
                     let vertex = rotation * Vector2::from(v) + agent_pos;
                     path.push(to_point(vertex.into()));
                 });
-                let Some(first) = path.first() else {
-                    break 'rectangle;
-                };
-                for (p0, p1) in path
-                    .iter()
-                    .zip(path.iter().skip(1).chain(std::iter::once(first)))
-                {
-                    painter.line_segment(
-                        [*p0, *p1],
-                        Stroke {
-                            color: brush,
-                            width: 1.,
-                        },
-                    );
-                }
+                render_rectangle(&path);
             }
+        } else {
+            let aabb = agent.get_aabb();
+            let rect = Rect {
+                min: to_point([aabb[0], aabb[1]]),
+                max: to_point([aabb[2], aabb[3]]),
+            };
+            painter.rect_stroke(
+                rect,
+                0.,
+                Stroke {
+                    color: brush,
+                    width: 1.,
+                },
+            );
         }
     }
 }

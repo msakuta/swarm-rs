@@ -117,7 +117,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_aabb(&self) -> [f64; 4] {
+    pub fn get_aabb(&self) -> [f64; 4] {
         match self {
             Entity::Agent(agent) => agent.get_shape().to_aabb(),
             Entity::Spawner(spawner) => Spawner::collision_shape(spawner.pos).to_aabb(),
