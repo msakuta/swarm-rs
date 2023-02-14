@@ -162,7 +162,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_search_tree(&self) -> Option<&crate::qtree::SearchTree> {
+    pub fn get_search_tree(&self) -> Option<&crate::qtree::SearchTree> {
         match self {
             Entity::Agent(agent) => agent.search_tree.as_ref(),
             _ => None,

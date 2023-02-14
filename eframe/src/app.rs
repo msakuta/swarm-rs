@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use cgmath::{vec2, InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
+use cgmath::{InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
 use eframe::epaint::{self, PathShape};
 use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Vec2};
 use swarm_rs::{
@@ -163,6 +163,11 @@ impl eframe::App for TemplateApp {
                 &mut self.app_data.qtree_visible,
                 "QTree",
             ));
+
+            ui.add(egui::Checkbox::new(
+                &mut self.app_data.qtree_search_visible,
+                "QTree search",
+            ));
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -176,6 +181,8 @@ impl eframe::App for TemplateApp {
 
                 self.img.paint(&response, &painter, &self.app_data);
 
+                render_search_tree(&self.app_data, &response, &painter);
+
                 paint_qtree(&response, &painter, &self.app_data);
 
                 paint_resources(&response, &painter, &self.app_data);
@@ -184,27 +191,6 @@ impl eframe::App for TemplateApp {
 
                 paint_bullets(&response, &painter, &self.app_data);
             });
-
-            // for y in 0..3 {
-            //     let fy = y as f32 * 100. + 200.;
-            //     for x in 0..3 {
-            //         let fx = x as f32 * 100. + 200.;
-            //         ui.painter().rect_stroke(
-            //             Rect {
-            //                 min: Pos2 { x: fx, y: fy },
-            //                 max: Pos2 {
-            //                     x: fx + 90.,
-            //                     y: fy + 90.,
-            //                 },
-            //             },
-            //             0.,
-            //             Stroke {
-            //                 width: 3.0,
-            //                 color: Color32::RED,
-            //             },
-            //         );
-            //     }
-            // }
         });
 
         if false {
@@ -342,6 +328,45 @@ pub(crate) fn paint_qtree(response: &Response, painter: &Painter, data: &AppData
             }
         }
     });
+}
+
+fn render_search_tree(data: &AppData, response: &Response, painter: &Painter) {
+    if !data.qtree_search_visible {
+        return;
+    }
+
+    let to_screen = egui::emath::RectTransform::from_to(
+        Rect::from_min_size(Pos2::ZERO, response.rect.size()),
+        response.rect,
+    );
+
+    let game = data.game.borrow();
+    let entities = &game.entities;
+    for entity in entities {
+        let Ok(entity) = entity.try_borrow() else {
+            continue;
+        };
+
+        let Some(st) = entity.get_search_tree() else {
+            continue;
+        };
+
+        let offset = Vec2::new(data.origin[0] as f32, data.origin[1] as f32);
+
+        let to_point = |pos: [f64; 2]| {
+            let pos = Vec2::new(pos[0] as f32, pos[1] as f32);
+            to_screen.transform_pos(((pos + offset) * data.scale as f32).to_pos2())
+        };
+
+        let brush = Color32::WHITE;
+        let nodes = st.get_nodes();
+        for [start, end] in st.get_edges() {
+            painter.line_segment(
+                [to_point(nodes[*start]), to_point(nodes[*end])],
+                (1., brush),
+            );
+        }
+    }
 }
 
 fn paint_agents(

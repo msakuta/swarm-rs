@@ -185,7 +185,7 @@ impl QTreePathNode {
 pub(crate) type QTreePath = Vec<QTreePathNode>;
 
 #[derive(Debug)]
-pub(crate) struct SearchTree {
+pub struct SearchTree {
     nodes: Vec<[f64; 2]>,
     edges: Vec<[usize; 2]>,
 }
@@ -196,6 +196,14 @@ impl SearchTree {
             nodes: vec![],
             edges: vec![],
         }
+    }
+
+    pub fn get_nodes(&self) -> &[[f64; 2]] {
+        &self.nodes
+    }
+
+    pub fn get_edges(&self) -> &[[usize; 2]] {
+        &self.edges
     }
 }
 
