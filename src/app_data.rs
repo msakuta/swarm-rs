@@ -26,7 +26,7 @@ pub struct AppData {
     pub game: Rc<RefCell<Game>>,
     pub game_params: GameParams,
     pub(crate) simplify_text: String,
-    pub(crate) agent_count_text: String,
+    pub agent_count_text: String,
     pub(crate) line_mode: LineMode,
     pub(crate) simplified_visible: bool,
     pub(crate) triangulation_visible: bool,

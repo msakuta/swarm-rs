@@ -32,6 +32,7 @@ pub struct TemplateApp {
     xs: usize,
     ys: usize,
     maze_expansions: usize,
+    agent_count: usize,
 
     #[serde(skip)]
     canvas_offset: Pos2,
@@ -49,6 +50,7 @@ impl Default for TemplateApp {
             xs: 128,
             ys: 128,
             maze_expansions: 512,
+            agent_count: 3,
             canvas_offset: Pos2::ZERO,
         }
     }
@@ -120,6 +122,12 @@ impl TemplateApp {
             ui.horizontal(|ui| {
                 ui.label("Maze expansion");
                 ui.add(egui::Slider::new(&mut self.maze_expansions, 32..=1024));
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Agents");
+                ui.add(egui::Slider::new(&mut self.agent_count, 1..=100));
+                self.app_data.agent_count_text = self.agent_count.to_string();
             });
         });
 
