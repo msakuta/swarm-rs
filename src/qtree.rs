@@ -17,6 +17,8 @@ mod cache_map;
 pub(crate) mod qtree;
 // pub mod render;
 
+pub use self::cache_map::FRESH_TICKS;
+
 use std::{error::Error, fmt::Display};
 
 use crate::collision::Aabb;

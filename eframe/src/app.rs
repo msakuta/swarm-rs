@@ -1,11 +1,12 @@
 use std::time::Duration;
 
-use cgmath::{InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
+use cgmath::{vec2, InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
 use eframe::epaint::{self, PathShape};
 use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
     game::Resource,
+    qtree::FRESH_TICKS,
     AppData, Bullet, CellState,
 };
 
@@ -278,28 +279,31 @@ pub(crate) fn paint_qtree(response: &Response, painter: &Painter, data: &AppData
     data.with_qtree(|qtree_searcher| {
         const CELL_MARGIN: f32 = 0.1;
 
-        // for (&[x, y], &freshness) in &qtree_searcher.get_cache_map().fresh_cells {
-        //     let rect = Rect::new(
-        //         x as f64 + CELL_MARGIN,
-        //         y as f64 + CELL_MARGIN,
-        //         x as f64 + width as f64 - CELL_MARGIN,
-        //         y as f64 + width as f64 - CELL_MARGIN,
-        //     );
-        //     let rect = rect.to_path(1.);
-        //     let color = match qtree_searcher.cache_map.get([x, y]) {
-        //         CellState::Obstacle => (255, 127, 127),
-        //         CellState::Occupied(_) => (255, 127, 255),
-        //         CellState::Free => (0, 255, 127),
-        //         _ => (255, 0, 255),
-        //     };
-        //     let brush = Color::rgba8(
-        //         color.0,
-        //         color.1,
-        //         color.2,
-        //         (freshness * 127 / FRESH_TICKS) as u8,
-        //     );
-        //     ctx.fill(*view_transform * rect, &brush);
-        // }
+        let cache_map = qtree_searcher.get_cache_map();
+
+        for (&[x, y], &freshness) in &cache_map.fresh_cells {
+            let width = 1.;
+            let cell_pos = Vec2::new(x as f32, y as f32);
+            let min_margin = Vec2::splat(CELL_MARGIN);
+            let max_margin = Vec2::splat(width as f32 - CELL_MARGIN);
+            let rect = to_screen.transform_rect(Rect {
+                min: ((cell_pos + min_margin) * scale + offset).to_pos2(),
+                max: ((cell_pos + max_margin) * scale + offset).to_pos2(),
+            });
+            let color = match cache_map.get([x, y]) {
+                CellState::Obstacle => (255, 127, 127),
+                CellState::Occupied(_) => (255, 127, 255),
+                CellState::Free => (0, 255, 127),
+                _ => (255, 0, 255),
+            };
+            let brush = Color32::from_rgba_unmultiplied(
+                color.0,
+                color.1,
+                color.2,
+                (freshness * 127 / FRESH_TICKS) as u8,
+            );
+            painter.rect_filled(rect, 0., brush);
+        }
 
         let qtree = qtree_searcher.get_qtree();
 

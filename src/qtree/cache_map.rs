@@ -21,7 +21,7 @@ pub struct CacheMap {
     prev_map: Option<Vec<u32>>,
 }
 
-pub(super) const FRESH_TICKS: usize = 8;
+pub const FRESH_TICKS: usize = 8;
 
 static QUERY_CALLS: AtomicUsize = AtomicUsize::new(0);
 static UNPASSABLES: AtomicUsize = AtomicUsize::new(0);
@@ -38,7 +38,7 @@ impl CacheMap {
         }
     }
 
-    pub(super) fn get(&self, pos: [i32; 2]) -> CellState {
+    pub fn get(&self, pos: [i32; 2]) -> CellState {
         self.buf[self.map[pos[0] as usize + pos[1] as usize * self.size] as usize]
     }
 
