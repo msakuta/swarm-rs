@@ -32,7 +32,7 @@ pub struct Resource {
 pub(crate) type Board = Vec<bool>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum BoardType {
+pub enum BoardType {
     Rect,
     Crank,
     Perlin,

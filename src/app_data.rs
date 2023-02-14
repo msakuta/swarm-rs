@@ -20,9 +20,9 @@ pub(crate) enum LineMode {
 pub struct AppData {
     pub xs_text: String,
     pub ys_text: String,
-    pub(crate) seed_text: String,
-    pub(crate) maze_expansions: String,
-    pub(crate) board_type: BoardType,
+    pub seed_text: String,
+    pub maze_expansions: String,
+    pub board_type: BoardType,
     pub game: Rc<RefCell<Game>>,
     pub game_params: GameParams,
     pub(crate) simplify_text: String,

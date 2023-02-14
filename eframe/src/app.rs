@@ -5,7 +5,7 @@ use eframe::epaint::{self, PathShape};
 use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Ui, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
-    game::Resource,
+    game::{BoardType, Resource},
     qtree::FRESH_TICKS,
     AppData, Bullet, CellState,
 };
@@ -31,6 +31,7 @@ pub struct TemplateApp {
 
     xs: usize,
     ys: usize,
+    maze_expansions: usize,
 
     #[serde(skip)]
     canvas_offset: Pos2,
@@ -47,6 +48,7 @@ impl Default for TemplateApp {
             draw_circle: false,
             xs: 128,
             ys: 128,
+            maze_expansions: 512,
             canvas_offset: Pos2::ZERO,
         }
     }
@@ -91,9 +93,16 @@ impl TemplateApp {
             if ui.button("New game").clicked() {
                 self.app_data.xs_text = self.xs.to_string();
                 self.app_data.ys_text = self.ys.to_string();
+                self.app_data.maze_expansions = self.maze_expansions.to_string();
                 self.app_data.new_game();
                 self.img.texture.take();
             }
+
+            ui.radio_value(&mut self.app_data.board_type, BoardType::Rect, "Rect");
+            ui.radio_value(&mut self.app_data.board_type, BoardType::Crank, "Crank");
+            ui.radio_value(&mut self.app_data.board_type, BoardType::Perlin, "Perlin");
+            ui.radio_value(&mut self.app_data.board_type, BoardType::Rooms, "Rooms");
+            ui.radio_value(&mut self.app_data.board_type, BoardType::Maze, "Maze");
 
             ui.horizontal(|ui| {
                 ui.label("Width: ");
@@ -102,6 +111,15 @@ impl TemplateApp {
             ui.horizontal(|ui| {
                 ui.label("Height: ");
                 ui.add(egui::Slider::new(&mut self.ys, 32..=1024));
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Seed");
+                ui.text_edit_singleline(&mut self.app_data.seed_text);
+            });
+            ui.horizontal(|ui| {
+                ui.label("Maze expansion");
+                ui.add(egui::Slider::new(&mut self.maze_expansions, 32..=1024));
             });
         });
 
@@ -165,7 +183,7 @@ impl eframe::App for TemplateApp {
             });
         });
 
-        egui::SidePanel::left("side_panel").show(ctx, |ui| {
+        egui::SidePanel::right("side_panel").show(ctx, |ui| {
             self.show_panel_ui(ui);
         });
 
