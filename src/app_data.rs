@@ -26,6 +26,7 @@ pub struct AppData {
     pub game: Rc<RefCell<Game>>,
     pub game_params: GameParams,
     pub(crate) simplify_text: String,
+    pub(crate) agent_count_text: String,
     pub(crate) line_mode: LineMode,
     pub(crate) simplified_visible: bool,
     pub(crate) triangulation_visible: bool,
@@ -86,6 +87,7 @@ impl AppData {
             maze_expansions: maze_expansion.to_string(),
             board_type: BoardType::Perlin,
             simplify_text: game.simplify.to_string(),
+            agent_count_text: game.agent_count.to_string(),
             game: Rc::new(RefCell::new(game)),
             game_params,
             line_mode: LineMode::None,
@@ -120,6 +122,7 @@ impl AppData {
     }
 
     pub fn update(&mut self) -> (bool, f64) {
+        self.game_params.agent_count = self.agent_count_text.parse().unwrap_or(3);
         let mut game = self.game.borrow_mut();
         game.set_params(&self.game_params);
         let interval = game.interval;

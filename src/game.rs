@@ -96,6 +96,7 @@ pub struct GameParams {
     pub(crate) avoidance_mode: AvoidanceMode,
     pub paused: bool,
     pub(crate) avoidance_expands: f64,
+    pub(crate) agent_count: usize,
     pub(crate) agent_source: Rc<String>,
     pub(crate) spawner_source: Rc<String>,
 }
@@ -106,6 +107,7 @@ impl GameParams {
             avoidance_mode: AvoidanceMode::RrtStar,
             paused: false,
             avoidance_expands: 1.,
+            agent_count: 3,
             agent_source: Rc::new("".to_string()),
             spawner_source: Rc::new("".to_string()),
         }
@@ -132,6 +134,7 @@ pub struct Game {
     pub(crate) pixel_profiler: RefCell<Profiler>,
     pub(crate) qtree_profiler: RefCell<Profiler>,
     pub(crate) path_find_profiler: RefCell<Profiler>,
+    pub(crate) agent_count: usize,
     pub(crate) agent_source: Rc<String>,
     pub(crate) spawner_source: Rc<String>,
     pub(crate) qtree: QTreeSearcher,
@@ -178,6 +181,7 @@ impl Game {
             pixel_profiler: RefCell::new(Profiler::new()),
             qtree_profiler: RefCell::new(Profiler::new()),
             path_find_profiler: RefCell::new(Profiler::new()),
+            agent_count: 3,
             agent_source: Rc::new(String::new()),
             spawner_source: Rc::new(String::new()),
             qtree,
@@ -457,6 +461,7 @@ impl Game {
     pub(crate) fn set_params(&mut self, params: &GameParams) {
         self.avoidance_mode = params.avoidance_mode;
         self.avoidance_expands = params.avoidance_expands;
+        self.agent_count = params.agent_count;
         self.agent_source = params.agent_source.clone();
         self.spawner_source = params.spawner_source.clone();
     }
