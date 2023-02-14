@@ -26,6 +26,8 @@ pub struct TemplateApp {
     #[serde(skip)]
     app_data: AppData,
 
+    draw_circle: bool,
+
     #[serde(skip)]
     canvas_offset: Pos2,
 }
@@ -38,6 +40,7 @@ impl Default for TemplateApp {
             value: 2.7,
             img: MyImage::new(),
             app_data: AppData::new(),
+            draw_circle: false,
             canvas_offset: Pos2::ZERO,
         }
     }
@@ -149,7 +152,11 @@ impl eframe::App for TemplateApp {
                 "Paused",
             ));
 
-            ui.add(egui::Checkbox::new(&mut self.app_data.path_visible, "Path"));
+            egui::Frame::group(ui.style()).show(ui, |ui| {
+                ui.add(egui::Checkbox::new(&mut self.app_data.path_visible, "Path"));
+
+                ui.add(egui::Checkbox::new(&mut self.draw_circle, "Circle"));
+            });
 
             ui.add(egui::Checkbox::new(
                 &mut self.app_data.qtree_visible,
@@ -172,7 +179,7 @@ impl eframe::App for TemplateApp {
 
                 paint_resources(&response, &painter, &self.app_data);
 
-                paint_agents(&response, &painter, &self.app_data, &self.view_transform());
+                paint_agents(&response, &painter, self, &self.view_transform());
 
                 paint_bullets(&response, &painter, &self.app_data);
             });
@@ -336,9 +343,10 @@ pub(crate) fn paint_qtree(response: &Response, painter: &Painter, data: &AppData
 fn paint_agents(
     response: &Response,
     painter: &Painter,
-    data: &AppData,
+    app: &TemplateApp,
     view_transform: &Matrix3<f64>,
 ) {
+    let data = &app.app_data;
     let to_screen = egui::emath::RectTransform::from_to(
         Rect::from_min_size(Pos2::ZERO, response.rect.size()),
         response.rect,
@@ -472,11 +480,16 @@ fn paint_agents(
             if let Some(global_path) = agent.get_path() {
                 path.extend(global_path.iter().map(|node| to_point(node.pos)));
                 path.push(view_pos);
-                // if draw_circle {
-                //     let circle = Circle::new(to_point(point.pos), point.radius);
-                //     ctx.stroke(*view_transform * circle, brush, 1.);
-                //     bez_path.line_to(to_point(point.pos));
-                // }
+                if app.draw_circle {
+                    for point in global_path {
+                        let circle = to_point(point.pos);
+                        painter.circle_stroke(
+                            circle,
+                            (point.radius * data.scale) as f32,
+                            (1., brush),
+                        );
+                    }
+                }
             }
             painter.add(PathShape::line(path, (1., brush)));
         }
