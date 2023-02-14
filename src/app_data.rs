@@ -18,8 +18,8 @@ pub(crate) enum LineMode {
 
 #[derive(Clone)]
 pub struct AppData {
-    pub(crate) xs_text: String,
-    pub(crate) ys_text: String,
+    pub xs_text: String,
+    pub ys_text: String,
     pub(crate) seed_text: String,
     pub(crate) maze_expansions: String,
     pub(crate) board_type: BoardType,
@@ -136,7 +136,7 @@ impl AppData {
         (self.game_params.paused, interval)
     }
 
-    pub(crate) fn new_game(&mut self) {
+    pub fn new_game(&mut self) {
         let xs = self.xs_text.parse().unwrap_or(64);
         let ys = self.ys_text.parse().unwrap_or(64);
         let seed = self.seed_text.parse().unwrap_or(1);

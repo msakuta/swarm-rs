@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use cgmath::{InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
 use eframe::epaint::{self, PathShape};
-use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Vec2};
+use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Ui, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
     game::Resource,
@@ -29,6 +29,9 @@ pub struct TemplateApp {
 
     draw_circle: bool,
 
+    xs: usize,
+    ys: usize,
+
     #[serde(skip)]
     canvas_offset: Pos2,
 }
@@ -42,6 +45,8 @@ impl Default for TemplateApp {
             img: MyImage::new(),
             app_data: AppData::new(),
             draw_circle: false,
+            xs: 128,
+            ys: 128,
             canvas_offset: Pos2::ZERO,
         }
     }
@@ -71,6 +76,51 @@ impl TemplateApp {
 
         Default::default()
     }
+
+    fn show_panel_ui(&mut self, ui: &mut Ui) {
+        ui.heading("Side Panel");
+
+        ui.add(egui::Checkbox::new(
+            &mut self.app_data.game_params.paused,
+            "Paused",
+        ));
+
+        ui.group(|ui| {
+            ui.label("New game options");
+
+            if ui.button("New game").clicked() {
+                self.app_data.xs_text = self.xs.to_string();
+                self.app_data.ys_text = self.ys.to_string();
+                self.app_data.new_game();
+                self.img.texture.take();
+            }
+
+            ui.horizontal(|ui| {
+                ui.label("Width: ");
+                ui.add(egui::Slider::new(&mut self.xs, 32..=1024));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Height: ");
+                ui.add(egui::Slider::new(&mut self.ys, 32..=1024));
+            });
+        });
+
+        ui.group(|ui| {
+            ui.add(egui::Checkbox::new(&mut self.app_data.path_visible, "Path"));
+
+            ui.add(egui::Checkbox::new(&mut self.draw_circle, "Circle"));
+        });
+
+        ui.add(egui::Checkbox::new(
+            &mut self.app_data.qtree_visible,
+            "QTree",
+        ));
+
+        ui.add(egui::Checkbox::new(
+            &mut self.app_data.qtree_search_visible,
+            "QTree search",
+        ));
+    }
 }
 
 /// Transform a vector (delta). Equivalent to `(m * v.extend(0.)).truncate()`.
@@ -97,36 +147,6 @@ impl eframe::App for TemplateApp {
         ctx.request_repaint_after(Duration::from_millis(16));
 
         self.app_data.update();
-        let (scroll_delta, pointer, delta, interact_pos) = {
-            let input = ctx.input();
-            let interact_pos =
-                input.pointer.interact_pos().unwrap_or(Pos2::ZERO) - self.canvas_offset;
-            (
-                input.scroll_delta,
-                input.pointer.primary_down(),
-                input.pointer.delta(),
-                Vector2::new(interact_pos.x as f64, interact_pos.y as f64),
-            )
-        };
-
-        if scroll_delta[1] != 0. {
-            let old_offset = transform_vector(&self.inverse_view_transform(), interact_pos);
-            if scroll_delta[1] < 0. {
-                self.app_data.scale /= 1.2;
-            } else if 0. < scroll_delta[1] {
-                self.app_data.scale *= 1.2;
-            }
-            let new_offset = transform_vector(&self.inverse_view_transform(), interact_pos);
-            let diff: Vector2<f64> = new_offset - old_offset;
-            self.app_data.origin = (Vector2::<f64>::from(self.app_data.origin) + diff).into();
-        }
-
-        if pointer {
-            self.app_data.origin[0] += delta[0] as f64 / self.app_data.scale;
-            self.app_data.origin[1] += delta[1] as f64 / self.app_data.scale;
-        }
-
-        // println!("scroll_delta: {scroll_delta:?}");
 
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
@@ -146,32 +166,49 @@ impl eframe::App for TemplateApp {
         });
 
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.heading("Side Panel");
-
-            ui.add(egui::Checkbox::new(
-                &mut self.app_data.game_params.paused,
-                "Paused",
-            ));
-
-            egui::Frame::group(ui.style()).show(ui, |ui| {
-                ui.add(egui::Checkbox::new(&mut self.app_data.path_visible, "Path"));
-
-                ui.add(egui::Checkbox::new(&mut self.draw_circle, "Circle"));
-            });
-
-            ui.add(egui::Checkbox::new(
-                &mut self.app_data.qtree_visible,
-                "QTree",
-            ));
-
-            ui.add(egui::Checkbox::new(
-                &mut self.app_data.qtree_search_visible,
-                "QTree search",
-            ));
+            self.show_panel_ui(ui);
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
+            struct UiResult {
+                scroll_delta: Vec2,
+                pointer: bool,
+                delta: Vec2,
+                interact_pos: Vector2<f64>,
+            }
+
+            let ui_result = {
+                let input = ui.input();
+                let interact_pos =
+                    input.pointer.interact_pos().unwrap_or(Pos2::ZERO) - self.canvas_offset;
+                UiResult {
+                    scroll_delta: input.scroll_delta,
+                    pointer: input.pointer.primary_down(),
+                    delta: input.pointer.delta(),
+                    interact_pos: Vector2::new(interact_pos.x as f64, interact_pos.y as f64),
+                }
+            };
+
+            if ui_result.scroll_delta[1] != 0. {
+                let old_offset =
+                    transform_vector(&self.inverse_view_transform(), ui_result.interact_pos);
+                if ui_result.scroll_delta[1] < 0. {
+                    self.app_data.scale /= 1.2;
+                } else if 0. < ui_result.scroll_delta[1] {
+                    self.app_data.scale *= 1.2;
+                }
+                let new_offset =
+                    transform_vector(&self.inverse_view_transform(), ui_result.interact_pos);
+                let diff: Vector2<f64> = new_offset - old_offset;
+                self.app_data.origin = (Vector2::<f64>::from(self.app_data.origin) + diff).into();
+            }
+
+            if ui_result.pointer && ui.ui_contains_pointer() {
+                self.app_data.origin[0] += ui_result.delta[0] as f64 / self.app_data.scale;
+                self.app_data.origin[1] += ui_result.delta[1] as f64 / self.app_data.scale;
+            }
+
+            // println!("scroll_delta: {scroll_delta:?}");
 
             Frame::canvas(ui.style()).show(ui, |ui| {
                 let (response, painter) =
