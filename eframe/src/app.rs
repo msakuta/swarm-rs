@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use cgmath::{InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
-use eframe::epaint;
+use eframe::epaint::{self, PathShape};
 use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
@@ -400,23 +400,6 @@ fn paint_agents(
             }
         }
 
-        let render_ring = |path: &[Pos2]| {
-            if let Some(first) = path.first() {
-                for (p0, p1) in path
-                    .iter()
-                    .zip(path.iter().skip(1).chain(std::iter::once(first)))
-                {
-                    painter.line_segment(
-                        [*p0, *p1],
-                        Stroke {
-                            color: brush,
-                            width: 1.,
-                        },
-                    );
-                }
-            }
-        };
-
         let agent_pos = agent.get_pos();
         let agent_pos = Vector2::from(agent_pos);
         let view_pos = to_point(agent_pos.into());
@@ -448,7 +431,7 @@ fn paint_agents(
                     let vertex = rotation * Vector2::from(v) + agent_pos;
                     path.push(to_point(vertex.into()));
                 });
-                render_ring(&path);
+                painter.add(PathShape::closed_line(path, (1., brush)));
             }
         } else {
             let aabb = agent.get_aabb();
@@ -466,26 +449,14 @@ fn paint_agents(
             );
         }
 
-        let render_line_string = |path: &[Pos2]| {
-            for (p0, p1) in path.iter().zip(path.iter().skip(1)) {
-                painter.line_segment(
-                    [*p0, *p1],
-                    Stroke {
-                        color: brush,
-                        width: 1.,
-                    },
-                );
-            }
-        };
-
         if data.path_visible {
-            let avoidance_drawn = 'breaky: {
+            let mut path = 'avoidance_path: {
                 let Some(path) = agent
                     .get_avoidance_path_array() else {
-                        break 'breaky None;
+                        break 'avoidance_path vec![];
                     };
                 if path.len() == 0 {
-                    break 'breaky None;
+                    break 'avoidance_path vec![];
                 }
                 let path = if let Some(goal) = agent.get_goal() {
                     path.iter()
@@ -496,24 +467,18 @@ fn paint_agents(
                 } else {
                     path.iter().copied().map(to_point).collect::<Vec<Pos2>>()
                 };
-                render_line_string(&path);
-                path.last().copied()
+                path
             };
-            if let Some(path) = agent.get_path() {
-                let mut bez_path = if let Some(first) = avoidance_drawn {
-                    vec![first]
-                } else {
-                    vec![]
-                };
-                bez_path.extend(path.iter().map(|node| to_point(node.pos)));
-                bez_path.push(view_pos);
-                render_line_string(&bez_path);
+            if let Some(global_path) = agent.get_path() {
+                path.extend(global_path.iter().map(|node| to_point(node.pos)));
+                path.push(view_pos);
                 // if draw_circle {
                 //     let circle = Circle::new(to_point(point.pos), point.radius);
                 //     ctx.stroke(*view_transform * circle, brush, 1.);
                 //     bez_path.line_to(to_point(point.pos));
                 // }
             }
+            painter.add(PathShape::line(path, (1., brush)));
         }
 
         if 5. < data.scale {
