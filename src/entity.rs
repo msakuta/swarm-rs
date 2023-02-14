@@ -134,7 +134,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_health_rate(&self) -> f64 {
+    pub fn get_health_rate(&self) -> f64 {
         match self {
             Entity::Agent(agent) => agent.get_health_rate(),
             Entity::Spawner(spawner) => spawner.get_health_rate(),

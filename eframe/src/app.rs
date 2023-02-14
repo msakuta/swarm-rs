@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use cgmath::{InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
 use eframe::epaint;
-use egui::{Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Vec2};
+use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
     game::Resource,
@@ -44,7 +44,7 @@ impl Default for TemplateApp {
 }
 
 impl TemplateApp {
-    pub(crate) fn _view_transform(&self) -> Matrix3<f64> {
+    pub(crate) fn view_transform(&self) -> Matrix3<f64> {
         Matrix3::from_scale(self.app_data.scale)
             * Matrix3::from_translation(self.app_data.origin.into())
     }
@@ -67,6 +67,18 @@ impl TemplateApp {
 
         Default::default()
     }
+}
+
+/// Transform a vector (delta). Equivalent to `(m * v.extend(0.)).truncate()`.
+fn transform_vector(m: &Matrix3<f64>, v: impl Into<Vector2<f64>>) -> Vector2<f64> {
+    // Transform trait is implemented for both Point2 and Point3, so we need to repeat fully qualified method call
+    <Matrix3<f64> as Transform<Point2<f64>>>::transform_vector(m, v.into())
+}
+
+/// Transform a point. Equivalent to `(m * v.extend(1.)).truncate()`.
+fn transform_point(m: &Matrix3<f64>, v: impl Into<Point2<f64>>) -> Point2<f64> {
+    // I don't really get the point of having the vector and the point as different types.
+    <Matrix3<f64> as Transform<Point2<f64>>>::transform_point(m, v.into())
 }
 
 impl eframe::App for TemplateApp {
@@ -92,10 +104,6 @@ impl eframe::App for TemplateApp {
                 Vector2::new(interact_pos.x as f64, interact_pos.y as f64),
             )
         };
-
-        fn transform_vector(m: &Matrix3<f64>, v: Vector2<f64>) -> Vector2<f64> {
-            <Matrix3<f64> as Transform<Point2<f64>>>::transform_vector(m, v)
-        }
 
         if scroll_delta[1] != 0. {
             let old_offset = transform_vector(&self.inverse_view_transform(), interact_pos);
@@ -164,7 +172,7 @@ impl eframe::App for TemplateApp {
 
                 paint_resources(&response, &painter, &self.app_data);
 
-                paint_agents(&response, &painter, &self.app_data);
+                paint_agents(&response, &painter, &self.app_data, &self.view_transform());
 
                 paint_bullets(&response, &painter, &self.app_data);
             });
@@ -325,7 +333,12 @@ pub(crate) fn paint_qtree(response: &Response, painter: &Painter, data: &AppData
     });
 }
 
-fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
+fn paint_agents(
+    response: &Response,
+    painter: &Painter,
+    data: &AppData,
+    view_transform: &Matrix3<f64>,
+) {
     let to_screen = egui::emath::RectTransform::from_to(
         Rect::from_min_size(Pos2::ZERO, response.rect.size()),
         response.rect,
@@ -351,7 +364,8 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
 
     for agent in entities.iter() {
         let agent = agent.borrow();
-        let pos = to_point(agent.get_pos());
+        let agent_pos = agent.get_pos();
+        let pos = to_point(agent_pos);
         let brush = AGENT_COLORS[agent.get_team() % AGENT_COLORS.len()];
         painter.circle_filled(pos, 5., brush);
 
@@ -453,16 +467,14 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
         }
 
         let render_line_string = |path: &[Pos2]| {
-            if let Some(first) = path.first() {
-                for (p0, p1) in path.iter().zip(path.iter().skip(1)) {
-                    painter.line_segment(
-                        [*p0, *p1],
-                        Stroke {
-                            color: brush,
-                            width: 1.,
-                        },
-                    );
-                }
+            for (p0, p1) in path.iter().zip(path.iter().skip(1)) {
+                painter.line_segment(
+                    [*p0, *p1],
+                    Stroke {
+                        color: brush,
+                        width: 1.,
+                    },
+                );
             }
         };
 
@@ -502,6 +514,45 @@ fn paint_agents(response: &Response, painter: &Painter, data: &AppData) {
                 //     bez_path.line_to(to_point(point.pos));
                 // }
             }
+        }
+
+        if 5. < data.scale {
+            let health = agent.get_health_rate() as f32;
+            let view_pos_left =
+                transform_point(view_transform, [agent_pos.x - 1., agent_pos.y - 1.]);
+            let view_pos_right =
+                transform_point(view_transform, [agent_pos.x + 1., agent_pos.y - 1.]);
+            // if matches!(agent.get_class(), Some(AgentClass::Fighter)) {
+            //     let mut cross = BezPath::new();
+            //     let base = view_pos_left + Vec2::new(8., -5.);
+            //     cross.move_to(base + Vec2::new(-8., -25.));
+            //     cross.line_to(base + Vec2::new(0., -20.));
+            //     cross.line_to(base + Vec2::new(8., -25.));
+            //     cross.line_to(base + Vec2::new(8., -20.));
+            //     cross.line_to(base + Vec2::new(0., -15.));
+            //     cross.line_to(base + Vec2::new(-8., -20.));
+            //     cross.close_path();
+            //     ctx.fill(&cross, &Color::YELLOW);
+            //     ctx.stroke(cross, brush, 1.);
+            // }
+            let l = (view_pos_left.x) as f32;
+            let r = (view_pos_right.x) as f32;
+            let t = (view_pos_left.y - 15.) as f32;
+            let b = (view_pos_left.y - 10.) as f32;
+            let rect = Rect {
+                min: pos2(l, t),
+                max: pos2(r, b),
+            };
+            painter.rect_filled(to_screen.transform_rect(rect), 0., Color32::RED);
+            let health_rect = Rect {
+                min: pos2(l, t),
+                max: pos2(l + health * (r - l), b),
+            };
+            painter.rect_filled(
+                to_screen.transform_rect(health_rect),
+                0.,
+                Color32::from_rgb(0, 191, 0),
+            );
         }
     }
 }
@@ -595,9 +646,6 @@ fn paint_resources(response: &Response, painter: &Painter, data: &AppData) {
 
     let draw_resource = |resource: &Resource, pos: Pos2| {
         let radius = ((resource.amount as f64).sqrt() / TARGET_PIXELS * data.scale) as f32;
-        // let circle = Circle::new(pos, radius);
-        // ctx.fill(circle, &Color::YELLOW);
-        // ctx.stroke(circle, &Color::YELLOW, radius / 30.);
         painter.circle_filled(pos, radius, Color32::YELLOW);
     };
 
