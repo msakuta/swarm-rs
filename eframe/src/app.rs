@@ -500,19 +500,29 @@ fn paint_agents(
                 transform_point(view_transform, [agent_pos.x - 1., agent_pos.y - 1.]);
             let view_pos_right =
                 transform_point(view_transform, [agent_pos.x + 1., agent_pos.y - 1.]);
-            // if matches!(agent.get_class(), Some(AgentClass::Fighter)) {
-            //     let mut cross = BezPath::new();
-            //     let base = view_pos_left + Vec2::new(8., -5.);
-            //     cross.move_to(base + Vec2::new(-8., -25.));
-            //     cross.line_to(base + Vec2::new(0., -20.));
-            //     cross.line_to(base + Vec2::new(8., -25.));
-            //     cross.line_to(base + Vec2::new(8., -20.));
-            //     cross.line_to(base + Vec2::new(0., -15.));
-            //     cross.line_to(base + Vec2::new(-8., -20.));
-            //     cross.close_path();
-            //     ctx.fill(&cross, &Color::YELLOW);
-            //     ctx.stroke(cross, brush, 1.);
-            // }
+            if matches!(agent.get_class(), Some(AgentClass::Fighter)) {
+                let base =
+                    pos2(view_pos_left.x as f32, view_pos_left.y as f32) + Vec2::new(8., -5.);
+                let cross = vec![
+                    to_screen.transform_pos(base + Vec2::new(-8., -25.)),
+                    to_screen.transform_pos(base + Vec2::new(0., -20.)),
+                    to_screen.transform_pos(base + Vec2::new(8., -25.)),
+                    to_screen.transform_pos(base + Vec2::new(8., -20.)),
+                    to_screen.transform_pos(base + Vec2::new(0., -15.)),
+                    to_screen.transform_pos(base + Vec2::new(-8., -20.)),
+                ];
+                painter.add(PathShape::convex_polygon(
+                    vec![cross[0], cross[1], cross[4], cross[5]],
+                    brush,
+                    Stroke::NONE,
+                ));
+                painter.add(PathShape::convex_polygon(
+                    vec![cross[1], cross[2], cross[3], cross[4]],
+                    brush,
+                    Stroke::NONE,
+                ));
+                painter.add(PathShape::closed_line(cross, (1., Color32::YELLOW)));
+            }
             let l = (view_pos_left.x) as f32;
             let r = (view_pos_right.x) as f32;
             let t = (view_pos_left.y - 15.) as f32;
