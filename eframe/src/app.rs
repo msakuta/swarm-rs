@@ -10,6 +10,8 @@ use swarm_rs::{
     AppData, Bullet, CellState,
 };
 
+use crate::bg_image::BgImage;
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -22,7 +24,12 @@ pub struct TemplateApp {
     value: f32,
 
     #[serde(skip)]
-    img: MyImage,
+    img_gray: BgImage,
+
+    #[serde(skip)]
+    img_labels: BgImage,
+
+    show_labels: bool,
 
     #[serde(skip)]
     app_data: AppData,
@@ -44,7 +51,9 @@ impl Default for TemplateApp {
             // Example stuff:
             label: "Hello World!".to_owned(),
             value: 2.7,
-            img: MyImage::new(),
+            img_gray: BgImage::new(),
+            img_labels: BgImage::new(),
+            show_labels: false,
             app_data: AppData::new(),
             draw_circle: false,
             xs: 128,
@@ -97,7 +106,8 @@ impl TemplateApp {
                 self.app_data.ys_text = self.ys.to_string();
                 self.app_data.maze_expansions = self.maze_expansions.to_string();
                 self.app_data.new_game();
-                self.img.texture.take();
+                self.img_gray.clear();
+                self.img_labels.clear();
             }
 
             ui.radio_value(&mut self.app_data.board_type, BoardType::Rect, "Rect");
@@ -132,20 +142,26 @@ impl TemplateApp {
         });
 
         ui.group(|ui| {
-            ui.add(egui::Checkbox::new(&mut self.app_data.path_visible, "Path"));
+            ui.label("View options");
 
-            ui.add(egui::Checkbox::new(&mut self.draw_circle, "Circle"));
+            ui.group(|ui| {
+                ui.add(egui::Checkbox::new(&mut self.app_data.path_visible, "Path"));
+
+                ui.add(egui::Checkbox::new(&mut self.draw_circle, "Circle"));
+            });
+
+            ui.add(egui::Checkbox::new(
+                &mut self.app_data.qtree_visible,
+                "QTree",
+            ));
+
+            ui.add(egui::Checkbox::new(
+                &mut self.app_data.qtree_search_visible,
+                "QTree search",
+            ));
+
+            ui.add(egui::Checkbox::new(&mut self.show_labels, "Label image"));
         });
-
-        ui.add(egui::Checkbox::new(
-            &mut self.app_data.qtree_visible,
-            "QTree",
-        ));
-
-        ui.add(egui::Checkbox::new(
-            &mut self.app_data.qtree_search_visible,
-            "QTree search",
-        ));
     }
 }
 
@@ -242,7 +258,27 @@ impl eframe::App for TemplateApp {
 
                 self.canvas_offset = response.rect.min;
 
-                self.img.paint(&response, &painter, &self.app_data);
+                if self.show_labels {
+                    self.img_labels
+                        .paint(&response, &painter, &self.app_data, |app_data| {
+                            let (size, image) =
+                                app_data.labeled_image().unwrap_or_else(|| ([0, 0], vec![]));
+                            egui::ColorImage::from_rgb(size, &image)
+                        });
+                } else {
+                    self.img_gray
+                        .paint(&response, &painter, &self.app_data, |app_data| {
+                            let (size, image) = app_data
+                                .occupancy_image()
+                                .unwrap_or_else(|| ([0, 0], vec![]));
+                            let image = image
+                                .into_iter()
+                                .map(|b| std::iter::repeat(b).take(3))
+                                .flatten()
+                                .collect::<Vec<_>>();
+                            egui::ColorImage::from_rgb(size, &image)
+                        });
+                }
 
                 render_search_tree(&self.app_data, &response, &painter);
 
@@ -264,52 +300,6 @@ impl eframe::App for TemplateApp {
                 ui.label("You would normally choose either panels OR windows.");
             });
         }
-    }
-}
-
-struct MyImage {
-    texture: Option<egui::TextureHandle>,
-}
-
-impl MyImage {
-    fn new() -> Self {
-        Self { texture: None }
-    }
-
-    fn paint(&mut self, response: &Response, painter: &Painter, app_data: &AppData) {
-        let texture: &egui::TextureHandle = self.texture.get_or_insert_with(|| {
-            let (size, image) = app_data.labeled_image().unwrap_or_else(|| ([0, 0], vec![]));
-            // Load the texture only once.
-            painter.ctx().load_texture(
-                "my-image",
-                egui::ColorImage::from_rgb(size, &image),
-                TextureOptions {
-                    magnification: egui::TextureFilter::Nearest,
-                    minification: egui::TextureFilter::Linear,
-                },
-            )
-        });
-
-        let to_screen = egui::emath::RectTransform::from_to(
-            Rect::from_min_size(Pos2::ZERO, response.rect.size()),
-            response.rect,
-        );
-
-        let size = texture.size_vec2() * app_data.scale as f32;
-        let min =
-            Vec2::new(app_data.origin[0] as f32, app_data.origin[1] as f32) * app_data.scale as f32;
-        let max = min + size;
-        let rect = Rect {
-            min: min.to_pos2(),
-            max: max.to_pos2(),
-        };
-        const UV: Rect = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
-        painter.image(
-            texture.id(),
-            to_screen.transform_rect(rect),
-            UV,
-            Color32::WHITE,
-        );
     }
 }
 

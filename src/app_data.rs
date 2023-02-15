@@ -158,6 +158,18 @@ impl AppData {
         self.big_message_time = 5000.;
     }
 
+    pub fn occupancy_image(&self) -> Option<([usize; 2], Vec<u8>)> {
+        const OBSTACLE_COLOR: u8 = 63u8;
+        const BACKGROUND_COLOR: u8 = 127u8;
+
+        let game = self.game.borrow();
+        Some(([game.xs, game.ys], game
+            .board
+            .iter()
+            .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
+                    .collect::<Vec<_>>()))
+        }
+
     pub fn labeled_image(&self) -> Option<([usize; 2], Vec<u8>)> {
         let game = self.game.borrow();
 
