@@ -20,7 +20,7 @@ mod spawner;
 mod temp_ents;
 mod triangle_utils;
 
-use crate::{app_data::AppData};
+use crate::app_data::AppData;
 // use druid::widget::prelude::*;
 // use druid::{AppLauncher, LocalizedString, WindowDesc};
 

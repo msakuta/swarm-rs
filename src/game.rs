@@ -415,12 +415,8 @@ impl Game {
                 continue;
             }
             if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
-                let spawner = Spawner::new(
-                    &mut self.id_gen,
-                    pos_candidate,
-                    team,
-                    &self.spawner_source,
-                );
+                let spawner =
+                    Spawner::new(&mut self.id_gen, pos_candidate, team, &self.spawner_source);
                 match spawner {
                     Ok(spawner) => return Some(Entity::Spawner(spawner)),
                     Err(err) => println!("Spawner failed to create!: {err}"),

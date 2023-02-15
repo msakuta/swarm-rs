@@ -1,7 +1,11 @@
+use behavior_tree_lite::parse_file;
+
 use crate::{
     // agent::AvoidanceRenderParams,
     game::{BoardParams, BoardType, Game, GameParams},
-    WINDOW_HEIGHT, perlin_noise::Xor128, qtree::QTreeSearcher,
+    perlin_noise::Xor128,
+    qtree::QTreeSearcher,
+    WINDOW_HEIGHT,
 };
 
 use std::{
@@ -35,7 +39,7 @@ pub struct AppData {
     pub(crate) show_label_image: bool,
     pub origin: [f64; 2],
     pub scale: f64,
-    pub(crate) message: String,
+    pub message: String,
     pub(crate) big_message: String,
     pub(crate) big_message_time: f64,
     // pub(super) mouse_pos: Option<Point>,
@@ -50,9 +54,9 @@ pub struct AppData {
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
     pub(crate) source_visible: bool,
-    pub(crate) agent_source_file: String,
+    pub agent_source_file: String,
     /// This buffer is not yet applied to the game.
-    pub(crate) agent_source_buffer: Rc<String>,
+    pub agent_source_buffer: Rc<String>,
     pub(crate) spawner_source_file: String,
     pub(crate) spawner_source_buffer: Rc<String>,
     pub(crate) global_render_time: f64,
@@ -163,12 +167,14 @@ impl AppData {
         const BACKGROUND_COLOR: u8 = 127u8;
 
         let game = self.game.borrow();
-        Some(([game.xs, game.ys], game
-            .board
-            .iter()
-            .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
-                    .collect::<Vec<_>>()))
-        }
+        Some((
+            [game.xs, game.ys],
+            game.board
+                .iter()
+                .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
+                .collect::<Vec<_>>(),
+        ))
+    }
 
     pub fn labeled_image(&self) -> Option<([usize; 2], Vec<u8>)> {
         let game = self.game.borrow();
@@ -192,17 +198,63 @@ impl AppData {
                 }
             })
             .collect::<Vec<_>>();
-        Some(([game.xs, game.ys], game.mesh
-        .labeled_image
-        .iter()
-        .map(|p| label_colors[*p as usize].into_iter())
-        .flatten()
-        .collect::<Vec<_>>()))
+        Some((
+            [game.xs, game.ys],
+            game.mesh
+                .labeled_image
+                .iter()
+                .map(|p| label_colors[*p as usize].into_iter())
+                .flatten()
+                .collect::<Vec<_>>(),
+        ))
     }
 
     pub fn with_qtree(&self, f: impl FnOnce(&QTreeSearcher)) {
         let game = self.game.borrow();
         f(&game.qtree);
+    }
+
+    pub fn try_load_behavior_tree(&mut self, src: Rc<String>) -> bool {
+        fn count_newlines(src: &str) -> usize {
+            src.lines().count()
+        }
+
+        // Check the syntax before applying
+        match parse_file(&src) {
+            Ok(("", _)) => {
+                self.game_params.agent_source = src.clone();
+                self.message = format!(
+                    "Behavior tree applied! {}",
+                    Rc::strong_count(&self.agent_source_buffer)
+                );
+                true
+            }
+            Ok((rest, _)) => {
+                let parsed_src = &src[..rest.as_ptr() as usize - src.as_ptr() as usize];
+                self.message = format!(
+                    "Behavior tree source ended unexpectedly at ({}) {:?}",
+                    count_newlines(parsed_src),
+                    rest
+                );
+                false
+            }
+            Err(e) => {
+                self.message = format!("Behavior tree failed to parse: {}", e);
+                false
+            }
+        }
+    }
+
+    pub fn try_load_from_file(&mut self, file: &str, get_mut: fn(&mut AppData) -> &mut Rc<String>) {
+        match std::fs::read_to_string(file) {
+            Ok(s) => {
+                let s = Rc::new(s);
+                if self.try_load_behavior_tree(s.clone()) {
+                    *get_mut(self) = s;
+                }
+            }
+            Err(e) => self.message = format!("Read file error! {e:?}"),
+        }
     }
 }
 

@@ -1,8 +1,8 @@
-use std::time::Duration;
+use std::{rc::Rc, time::Duration};
 
 use cgmath::{InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
 use eframe::epaint::{self, PathShape};
-use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, TextureOptions, Ui, Vec2};
+use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
     game::{BoardType, Resource},
@@ -11,6 +11,12 @@ use swarm_rs::{
 };
 
 use crate::bg_image::BgImage;
+
+#[derive(Debug, PartialEq)]
+enum Panel {
+    Main,
+    Editor,
+}
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -29,6 +35,9 @@ pub struct TemplateApp {
     #[serde(skip)]
     img_labels: BgImage,
 
+    #[serde(skip)]
+    open_panel: Panel,
+
     show_labels: bool,
 
     #[serde(skip)]
@@ -40,6 +49,8 @@ pub struct TemplateApp {
     ys: usize,
     maze_expansions: usize,
     agent_count: usize,
+
+    agent_source_file: String,
 
     #[serde(skip)]
     canvas_offset: Pos2,
@@ -53,6 +64,7 @@ impl Default for TemplateApp {
             value: 2.7,
             img_gray: BgImage::new(),
             img_labels: BgImage::new(),
+            open_panel: Panel::Main,
             show_labels: false,
             app_data: AppData::new(),
             draw_circle: false,
@@ -60,6 +72,7 @@ impl Default for TemplateApp {
             ys: 128,
             maze_expansions: 512,
             agent_count: 3,
+            agent_source_file: "../behavior_tree_config/agent.txt".to_owned(),
             canvas_offset: Pos2::ZERO,
         }
     }
@@ -163,6 +176,36 @@ impl TemplateApp {
             ui.add(egui::Checkbox::new(&mut self.show_labels, "Label image"));
         });
     }
+
+    fn show_editor(&mut self, ui: &mut Ui) {
+        ui.label(&self.app_data.message);
+
+        ui.horizontal(|ui| {
+            if ui.button("Apply").clicked() {
+                self.app_data
+                    .try_load_behavior_tree(self.app_data.agent_source_buffer.clone());
+            }
+            ui.text_edit_singleline(&mut self.agent_source_file);
+            if ui.button("Reload from file").clicked() {
+                self.app_data
+                    .try_load_from_file(&self.agent_source_file, |app_data| {
+                        &mut app_data.agent_source_buffer
+                    });
+            }
+        });
+
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            let source = Rc::make_mut(&mut self.app_data.agent_source_buffer);
+            ui.add(
+                egui::TextEdit::multiline(source)
+                    .font(egui::TextStyle::Monospace)
+                    .code_editor()
+                    .desired_rows(10)
+                    .lock_focus(true)
+                    .desired_width(f32::INFINITY),
+            );
+        });
+    }
 }
 
 /// Transform a vector (delta). Equivalent to `(m * v.extend(0.)).truncate()`.
@@ -208,7 +251,14 @@ impl eframe::App for TemplateApp {
         });
 
         egui::SidePanel::right("side_panel").show(ctx, |ui| {
-            self.show_panel_ui(ui);
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.open_panel, Panel::Main, "Main");
+                ui.selectable_value(&mut self.open_panel, Panel::Editor, "Editor");
+            });
+            match self.open_panel {
+                Panel::Main => self.show_panel_ui(ui),
+                Panel::Editor => self.show_editor(ui),
+            }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -231,23 +281,26 @@ impl eframe::App for TemplateApp {
                 }
             };
 
-            if ui_result.scroll_delta[1] != 0. {
-                let old_offset =
-                    transform_vector(&self.inverse_view_transform(), ui_result.interact_pos);
-                if ui_result.scroll_delta[1] < 0. {
-                    self.app_data.scale /= 1.2;
-                } else if 0. < ui_result.scroll_delta[1] {
-                    self.app_data.scale *= 1.2;
+            if ui.ui_contains_pointer() {
+                if ui_result.scroll_delta[1] != 0. {
+                    let old_offset =
+                        transform_vector(&self.inverse_view_transform(), ui_result.interact_pos);
+                    if ui_result.scroll_delta[1] < 0. {
+                        self.app_data.scale /= 1.2;
+                    } else if 0. < ui_result.scroll_delta[1] {
+                        self.app_data.scale *= 1.2;
+                    }
+                    let new_offset =
+                        transform_vector(&self.inverse_view_transform(), ui_result.interact_pos);
+                    let diff: Vector2<f64> = new_offset - old_offset;
+                    self.app_data.origin =
+                        (Vector2::<f64>::from(self.app_data.origin) + diff).into();
                 }
-                let new_offset =
-                    transform_vector(&self.inverse_view_transform(), ui_result.interact_pos);
-                let diff: Vector2<f64> = new_offset - old_offset;
-                self.app_data.origin = (Vector2::<f64>::from(self.app_data.origin) + diff).into();
-            }
 
-            if ui_result.pointer && ui.ui_contains_pointer() {
-                self.app_data.origin[0] += ui_result.delta[0] as f64 / self.app_data.scale;
-                self.app_data.origin[1] += ui_result.delta[1] as f64 / self.app_data.scale;
+                if ui_result.pointer {
+                    self.app_data.origin[0] += ui_result.delta[0] as f64 / self.app_data.scale;
+                    self.app_data.origin[1] += ui_result.delta[1] as f64 / self.app_data.scale;
+                }
             }
 
             // println!("scroll_delta: {scroll_delta:?}");

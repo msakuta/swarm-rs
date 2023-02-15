@@ -5,9 +5,8 @@ mod find_path;
 mod interpolation;
 mod motion;
 
-pub(crate) use self::{
-    avoidance::{AgentState, PathNode, SearchState},
-};
+pub use self::agent_class::AgentClass;
+pub(crate) use self::avoidance::{AgentState, PathNode, SearchState};
 use self::{
     behavior_nodes::{
         build_tree, AvoidanceCommand, ClearAvoidanceCommand, ClearPathNode, ClearTarget,
@@ -33,7 +32,6 @@ use crate::{
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
 use behavior_tree_lite::{error::LoadError, BehaviorResult, Blackboard, Lazy};
-pub use self::agent_class::AgentClass;
 
 use std::{
     cell::RefCell,

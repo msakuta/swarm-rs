@@ -312,33 +312,3 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
         .with_child(tabs.fix_width(BAR_WIDTH).background(BG))
 }
 
-fn count_newlines(src: &str) -> usize {
-    src.lines().count()
-}
-
-fn try_load_behavior_tree(app_data: &mut AppData, src: Rc<String>) -> bool {
-    // Check the syntax before applying
-    match parse_file(&src) {
-        Ok(("", _)) => {
-            app_data.game_params.agent_source = src.clone();
-            app_data.message = format!(
-                "Behavior tree applied! {}",
-                Rc::strong_count(&app_data.agent_source_buffer)
-            );
-            true
-        }
-        Ok((rest, _)) => {
-            let parsed_src = &src[..rest.as_ptr() as usize - src.as_ptr() as usize];
-            app_data.message = format!(
-                "Behavior tree source ended unexpectedly at ({}) {:?}",
-                count_newlines(parsed_src),
-                rest
-            );
-            false
-        }
-        Err(e) => {
-            app_data.message = format!("Behavior tree failed to parse: {}", e);
-            false
-        }
-    }
-}

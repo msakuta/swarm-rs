@@ -108,10 +108,10 @@ impl Entity {
 
     pub fn get_avoidance_path_array(&self) -> Option<Vec<[f64; 2]>> {
         match self {
-            Entity::Agent(agent) => agent
-                .search_state
-                .as_ref()
-                .and_then(|ss| ss.avoidance_path().map(|path| path.map(|node| [node.x, node.y]).collect())),
+            Entity::Agent(agent) => agent.search_state.as_ref().and_then(|ss| {
+                ss.avoidance_path()
+                    .map(|path| path.map(|node| [node.x, node.y]).collect())
+            }),
             _ => None,
         }
     }
