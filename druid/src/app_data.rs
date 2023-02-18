@@ -7,9 +7,12 @@ use swarm_rs::{
 
 use ::druid::{Data, Lens};
 
-use crate::{agent::avoidance::AvoidanceRenderParams, WINDOW_HEIGHT};
+use crate::agent::avoidance::AvoidanceRenderParams;
 
 use std::{cell::RefCell, rc::Rc};
+
+pub(crate) const WINDOW_WIDTH: f64 = 1200.;
+pub(crate) const WINDOW_HEIGHT: f64 = 800.;
 
 #[derive(Clone, PartialEq, Eq, Data)]
 pub enum LineMode {

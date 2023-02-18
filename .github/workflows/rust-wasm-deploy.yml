@@ -21,11 +21,11 @@ jobs:
         # Optional version of wasm-pack to install (eg. "v0.9.1", "latest")
         #version: # optional, default is latest
     - name: Build
-      run: wasm-pack build --target web
+      run: cd druid && wasm-pack build --target web
     - name: Copy static data
-      run: cp index.html index.js pkg/ && rm pkg/.gitignore
+      run: cd druid && cp index.html index.js pkg/ && rm pkg/.gitignore
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./pkg
+        publish_dir: ./druid/pkg

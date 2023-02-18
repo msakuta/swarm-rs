@@ -28,4 +28,4 @@ jobs:
     - name: Run Rust tests
       run: cargo test --verbose
     - name: Build
-      run: wasm-pack build --target web
+      run: cd druid && wasm-pack build --target web
