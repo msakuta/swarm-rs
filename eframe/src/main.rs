@@ -7,8 +7,8 @@ fn main() {
 
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
-        "eframe template",
+        "swarm-rs application in eframe",
         native_options,
-        Box::new(|cc| Box::new(swarm_rs_eframe::TemplateApp::new(cc))),
+        Box::new(|cc| Box::new(swarm_rs_eframe::SwarmRsApp::new(cc))),
     );
 }

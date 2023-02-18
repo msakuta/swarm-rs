@@ -9,7 +9,7 @@ use swarm_rs::{
     Bullet, CellState,
 };
 
-use super::TemplateApp;
+use super::SwarmRsApp;
 
 /// Transform a vector (delta). Equivalent to `(m * v.extend(0.)).truncate()`.
 fn transform_vector(m: &Matrix3<f64>, v: impl Into<Vector2<f64>>) -> Vector2<f64> {
@@ -23,7 +23,7 @@ fn transform_point(m: &Matrix3<f64>, v: impl Into<Point2<f64>>) -> Point2<f64> {
     <Matrix3<f64> as Transform<Point2<f64>>>::transform_point(m, v.into())
 }
 
-impl TemplateApp {
+impl SwarmRsApp {
     pub(crate) fn paint_game(&mut self, ui: &mut Ui) {
         struct UiResult {
             scroll_delta: Vec2,
@@ -235,7 +235,7 @@ fn render_search_tree(data: &AppData, response: &Response, painter: &Painter) {
 fn paint_agents(
     response: &Response,
     painter: &Painter,
-    app: &TemplateApp,
+    app: &SwarmRsApp,
     view_transform: &Matrix3<f64>,
 ) {
     let data = &app.app_data;

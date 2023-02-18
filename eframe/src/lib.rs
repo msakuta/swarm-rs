@@ -3,4 +3,4 @@
 mod app;
 mod app_data;
 mod bg_image;
-pub use app::TemplateApp;
+pub use app::SwarmRsApp;
