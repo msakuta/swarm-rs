@@ -1,7 +1,7 @@
 use crate::app_data::AppData;
 use cgmath::{InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
 use eframe::epaint::{self, PathShape};
-use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2};
+use egui::{pos2, Align2, Color32, FontId, Frame, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
     game::Resource,
@@ -413,6 +413,15 @@ fn paint_agents(
                 );
                 painter.add(path);
             }
+        }
+
+        if data.entity_label_visible {
+            let text = if let Some(target) = agent.get_target() {
+                format!("{} ({})", agent.get_id(), target)
+            } else {
+                format!("{} (?)", agent.get_id())
+            };
+            painter.text(pos, Align2::CENTER_TOP, text, FontId::monospace(16.), brush);
         }
 
         if 5. < data.scale {

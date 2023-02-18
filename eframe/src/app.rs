@@ -183,6 +183,11 @@ impl TemplateApp {
                 "Trace line",
             ));
 
+            ui.add(egui::Checkbox::new(
+                &mut self.app_data.entity_label_visible,
+                "Entity labels",
+            ));
+
             ui.add(egui::Checkbox::new(&mut self.show_labels, "Label image"));
         });
     }
