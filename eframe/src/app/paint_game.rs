@@ -288,8 +288,8 @@ fn paint_agents(
             for (i0, i1) in (0..count).zip(1..=count) {
                 let theta0 = (i0 as f64 / count as f64 * f) as f32;
                 let theta1 = (i1 as f64 / count as f64 * f) as f32;
-                let p0 = Vec2::new(theta0.cos(), theta0.sin()) * 7.5 + pos.to_vec2();
-                let p1 = Vec2::new(theta1.cos(), theta1.sin()) * 7.5 + pos.to_vec2();
+                let p0 = Vec2::new(theta0.sin(), -theta0.cos()) * 7.5 + pos.to_vec2();
+                let p1 = Vec2::new(theta1.sin(), -theta1.cos()) * 7.5 + pos.to_vec2();
                 painter.line_segment(
                     [p0.to_pos2(), p1.to_pos2()],
                     Stroke {
