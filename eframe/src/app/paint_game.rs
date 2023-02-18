@@ -78,7 +78,6 @@ impl TemplateApp {
                     .paint(&response, &painter, &self.app_data, |app_data| {
                         let (size, image) = app_data
                             .game
-                            .borrow()
                             .labeled_image()
                             .unwrap_or_else(|| ([0, 0], vec![]));
                         egui::ColorImage::from_rgb(size, &image)
@@ -88,7 +87,6 @@ impl TemplateApp {
                     .paint(&response, &painter, &self.app_data, |app_data| {
                         let (size, image) = app_data
                             .game
-                            .borrow()
                             .occupancy_image()
                             .unwrap_or_else(|| ([0, 0], vec![]));
                         let image = image
@@ -203,7 +201,7 @@ fn render_search_tree(data: &AppData, response: &Response, painter: &Painter) {
         response.rect,
     );
 
-    let game = data.game.borrow();
+    let game = &data.game;
     let entities = &game.entities;
     for entity in entities {
         let Ok(entity) = entity.try_borrow() else {
@@ -249,7 +247,7 @@ fn paint_agents(
         Color32::from_rgb(255, 0, 63),
     ];
 
-    let game = data.game.borrow();
+    let game = &data.game;
 
     let entities = &game.entities;
 
@@ -506,7 +504,7 @@ fn paint_bullets(response: &Response, painter: &Painter, data: &AppData) {
 
     const TARGET_PIXELS: f64 = 3.;
 
-    let game = data.game.borrow();
+    let game = &data.game;
 
     let draw_small = data.scale < TARGET_PIXELS / BULLET_RADIUS;
 
@@ -567,7 +565,7 @@ fn paint_resources(response: &Response, painter: &Painter, data: &AppData) {
         painter.circle_filled(pos, radius, Color32::YELLOW);
     };
 
-    let game = data.game.borrow();
+    let game = &data.game;
 
     let offset = Vec2::new(data.origin[0] as f32, data.origin[1] as f32);
 

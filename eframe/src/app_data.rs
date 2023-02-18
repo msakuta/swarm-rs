@@ -4,16 +4,15 @@ use ::swarm_rs::{
     qtree::QTreeSearcher,
 };
 
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
-#[derive(Clone)]
 pub struct AppData {
     pub xs_text: String,
     pub ys_text: String,
     pub seed_text: String,
     pub maze_expansions: String,
     pub board_type: BoardType,
-    pub game: Rc<RefCell<Game>>,
+    pub game: Game,
     pub game_params: GameParams,
     pub(crate) simplify_text: String,
     pub agent_count_text: String,
@@ -62,7 +61,7 @@ impl AppData {
             board_type: BoardType::Perlin,
             simplify_text: game.simplify.to_string(),
             agent_count_text: game.agent_count.to_string(),
-            game: Rc::new(RefCell::new(game)),
+            game,
             game_params,
             origin: [0., 0.],
             scale,
@@ -83,7 +82,7 @@ impl AppData {
 
     pub fn update(&mut self) -> (bool, f64) {
         self.game_params.agent_count = self.agent_count_text.parse().unwrap_or(3);
-        let mut game = self.game.borrow_mut();
+        let game = &mut self.game;
         game.set_params(&self.game_params);
         let interval = game.interval;
         if !self.game_params.paused {
@@ -110,7 +109,7 @@ impl AppData {
             simplify,
             maze_expansions: self.maze_expansions.parse().unwrap_or(1),
         };
-        let mut game = self.game.borrow_mut();
+        let ref mut game = self.game;
         game.new_board(self.board_type, &params);
         game.init();
 
@@ -119,7 +118,7 @@ impl AppData {
     }
 
     pub fn with_qtree(&self, f: impl FnOnce(&QTreeSearcher)) {
-        let game = self.game.borrow();
+        let game = &self.game;
         f(&game.qtree);
     }
 
