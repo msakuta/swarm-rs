@@ -183,6 +183,11 @@ impl TemplateApp {
                 "Target line",
             ));
 
+            ui.add(egui::Checkbox::new(
+                &mut self.app_data.entity_trace_visible,
+                "Trace line",
+            ));
+
             ui.add(egui::Checkbox::new(&mut self.show_labels, "Label image"));
         });
     }
@@ -688,6 +693,20 @@ fn paint_agents(
                 }
             }
             painter.add(PathShape::line(path, (1., brush)));
+        }
+
+        if data.entity_trace_visible {
+            if let Some(deque) = agent.get_trace() {
+                let iter = deque.iter().copied().map(to_point).collect();
+                let path = PathShape::line(
+                    iter,
+                    (
+                        0.5,
+                        Color32::from_rgba_unmultiplied(brush.r(), brush.g(), brush.b(), 127),
+                    ),
+                );
+                painter.add(path);
+            }
         }
 
         if 5. < data.scale {
