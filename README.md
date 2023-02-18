@@ -45,58 +45,31 @@ tree main = Sequence {
 
 ![screenshot](https://msakuta.github.io/images/showcase/swarm-rs02.png)
 
-Honestly, Druid's text editor widget is not very great, but it works, at least for a simple tree.
+## How to run
 
-I may revisit and implement graphical editor for the behavior tree, but for now
-the text editor does its job.
+* Install [Rust](https://www.rust-lang.org/learn/get-started)
+* Run `cargo r -p swarm-rs-eframe`
 
-Now, the behavior tree is getting pretty complex, although I haven't added much to the game.
-The subtree feature of behavior-tree-lite helps a lot to organize the structre.
 
-```
-tree main = Sequence {
-    Fallback {
-        HasTarget (target <- target)
-        FindEnemy
-    }
-    Fallback {
-        Sequence {
-            IsTargetVisible (target <- target)
-            FaceToTarget (target <- target)
-            Shoot
-        }
-        FollowPathAndAvoid
-    }
-}
+## How to build Wasm version
 
-tree FollowPathAndAvoid = Sequence {
-    Fallback {
-        HasPath (has_path <- has_path)
-        FindPath
-    }
-    Sequence {
-        HasPath (has_path <- has_path)
-        Fallback {
-            FollowPath
-            Sequence {
-                ReactiveSequence {
-                    Move (direction <- "backward")
-                    Randomize (max <- "20", value -> timeoutValue)
-                    Timeout (time <- timeoutValue)
-                }
-                Sequence {
-                    PathNextNode (output -> pathNext)
-                    Randomize (min <- "20", max <- "100", value -> timeoutValue)
-                    ReactiveFallback {
-                        Avoidance (goal <- pathNext)
-                        ForceSuccess {
-                            Timeout (time <- timeoutValue)
-                        }
-                    }
-                }
-            }
-        }
-        Shoot
-    }
-}
-```
+You can build the application to WebAssembly and run on the browser.
+
+* Install [wasm-pack](https://rustwasm.github.io/wasm-pack/)
+* Run `cd druid && wasm-pack build --target web`
+* Copy `druid/index.html` and `druid/index.js` to `druid/pkg`
+
+Currently only Druid version is compiled to Wasm.
+
+
+## How to edit the behavior tree
+
+There are tabs to switch the main panel to the editors on right top corner of the window.
+Each tab represents the type of the entities that use the behavior.
+
+You can edit the tree in-place with the integrated text editor, or edit it in a text editor and reload from file.
+If you want to use VSCode to edit, check out the [syntax highlighting extension](https://github.com/msakuta/rusty-behavior-tree-lite/tree/master/vscode-ext).
+
+![editor-screenshot](screenshots/behavior-tree-editors.png)
+
+Currently, loading from file is not supported in Wasm version.

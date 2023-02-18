@@ -67,7 +67,7 @@ fn noise_pixel(ix: f64, iy: f64, x: f64, y: f64, terms: &[f64; 6]) -> f64 {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct Xor128 {
+pub struct Xor128 {
     x: u32,
     y: u32,
     z: u32,

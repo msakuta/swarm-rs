@@ -9,7 +9,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-druid = "0.8.2"
+druid = { version = "0.8.2", optional = true }
 cgmath = "0.18.0"
 delaunator = "1.0.1"
 
@@ -19,6 +19,9 @@ geo = "0.23.0"
 rand = "0.8.5"
 log = "0.4.17"
 
+serde = { version = "1", features = ["derive"], optional = true }
+
+# web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["js"] }
 
@@ -28,3 +31,10 @@ git = "https://github.com/msakuta/rusty-behavior-tree-lite"
 tag = "v0.2.2"
 # commit = "96559722c23d7a637879192f635a785b071d6fb1"
 # branch = "master"
+
+[features]
+druid = [ "dep:druid" ]
+serde = [ "dep:serde" ]
+
+[workspace]
+members = [ "eframe", "druid" ]

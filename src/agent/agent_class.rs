@@ -5,7 +5,7 @@ use super::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AgentClass {
+pub enum AgentClass {
     Worker,
     Fighter,
 }
@@ -73,7 +73,7 @@ impl AgentClass {
         }
     }
 
-    pub(crate) fn vertices(&self, mut f: impl FnMut([f64; 2])) {
+    pub fn vertices(&self, mut f: impl FnMut([f64; 2])) {
         let (length, width) = self.shape();
         // Technically, we could return a reference to static array, since there are only 2 kinds of shapes.
         // However, returning the shape by a callback has an advantage that it can return dynamic shape

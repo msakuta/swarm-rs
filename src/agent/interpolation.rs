@@ -2,7 +2,7 @@ use cgmath::{MetricSpace, Vector2};
 
 use super::{Agent, AgentState};
 
-pub(crate) fn lerp(a: &[f64; 2], b: &[f64; 2], f: f64) -> [f64; 2] {
+pub fn lerp(a: &[f64; 2], b: &[f64; 2], f: f64) -> [f64; 2] {
     [a[0] * (1. - f) + b[0] * f, a[1] * (1. - f) + b[1] * f]
 }
 

@@ -9,7 +9,7 @@ use crate::{
 use std::{cell::RefCell, collections::VecDeque};
 
 #[derive(Debug)]
-pub(crate) enum Entity {
+pub enum Entity {
     Agent(Agent),
     Spawner(Spawner),
 }
@@ -24,28 +24,28 @@ pub(crate) enum GameEvent {
 }
 
 impl Entity {
-    pub(crate) fn get_id(&self) -> usize {
+    pub fn get_id(&self) -> usize {
         match self {
             Entity::Agent(agent) => agent.id,
             Entity::Spawner(spawner) => spawner.id,
         }
     }
 
-    pub(crate) fn get_team(&self) -> usize {
+    pub fn get_team(&self) -> usize {
         match self {
             Entity::Agent(agent) => agent.team,
             Entity::Spawner(spawner) => spawner.team,
         }
     }
 
-    pub(crate) fn get_class(&self) -> Option<AgentClass> {
+    pub fn get_class(&self) -> Option<AgentClass> {
         match self {
             Entity::Agent(agent) => Some(agent.class),
             Entity::Spawner(_) => None,
         }
     }
 
-    pub(crate) fn get_pos(&self) -> [f64; 2] {
+    pub fn get_pos(&self) -> [f64; 2] {
         match self {
             Entity::Agent(agent) => agent.pos,
             Entity::Spawner(spawner) => spawner.pos,
@@ -82,21 +82,21 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_target(&self) -> Option<usize> {
+    pub fn get_target(&self) -> Option<usize> {
         match self {
             Entity::Agent(agent) => agent.get_target(),
             Entity::Spawner(_) => None,
         }
     }
 
-    pub(crate) fn get_path(&self) -> Option<&[QTreePathNode]> {
+    pub fn get_path(&self) -> Option<&[QTreePathNode]> {
         match self {
             Entity::Agent(agent) => Some(&agent.path),
             Entity::Spawner(_) => None,
         }
     }
 
-    pub(crate) fn get_avoidance_path(&self) -> Option<Vec<PathNode>> {
+    pub fn get_avoidance_path(&self) -> Option<Vec<PathNode>> {
         match self {
             Entity::Agent(agent) => agent
                 .search_state
@@ -106,53 +106,63 @@ impl Entity {
         }
     }
 
-    pub(crate) fn is_agent(&self) -> bool {
+    pub fn get_avoidance_path_array(&self) -> Option<Vec<[f64; 2]>> {
+        match self {
+            Entity::Agent(agent) => agent.search_state.as_ref().and_then(|ss| {
+                ss.avoidance_path()
+                    .map(|path| path.map(|node| [node.x, node.y]).collect())
+            }),
+            _ => None,
+        }
+    }
+
+    pub fn is_agent(&self) -> bool {
         matches!(self, Entity::Agent(_))
     }
 
-    pub(crate) fn get_orient(&self) -> Option<f64> {
+    pub fn get_orient(&self) -> Option<f64> {
         match self {
             Entity::Agent(agent) => Some(agent.orient),
             _ => None,
         }
     }
 
-    pub(crate) fn get_aabb(&self) -> [f64; 4] {
+    pub fn get_aabb(&self) -> [f64; 4] {
         match self {
             Entity::Agent(agent) => agent.get_shape().to_aabb(),
             Entity::Spawner(spawner) => Spawner::collision_shape(spawner.pos).to_aabb(),
         }
     }
 
-    pub(crate) fn get_health_rate(&self) -> f64 {
+    pub fn get_health_rate(&self) -> f64 {
         match self {
             Entity::Agent(agent) => agent.get_health_rate(),
             Entity::Spawner(spawner) => spawner.get_health_rate(),
         }
     }
 
-    pub(crate) fn get_trace(&self) -> Option<&VecDeque<[f64; 2]>> {
+    pub fn get_trace(&self) -> Option<&VecDeque<[f64; 2]>> {
         match self {
             Entity::Agent(agent) => Some(&agent.trace),
             _ => None,
         }
     }
 
-    pub(crate) fn get_goal(&self) -> Option<crate::agent::AgentState> {
+    pub fn get_goal(&self) -> Option<crate::agent::AgentState> {
         match self {
             Entity::Agent(agent) => agent.goal,
             _ => None,
         }
     }
 
-    pub(crate) fn get_search_state(&self) -> Option<&crate::agent::SearchState> {
+    pub fn get_search_state(&self) -> Option<&crate::agent::SearchState> {
         match self {
             Entity::Agent(agent) => agent.search_state.as_ref(),
             _ => None,
         }
     }
 
-    pub(crate) fn get_search_tree(&self) -> Option<&crate::qtree::SearchTree> {
+    pub fn get_search_tree(&self) -> Option<&crate::qtree::SearchTree> {
         match self {
             Entity::Agent(agent) => agent.search_tree.as_ref(),
             _ => None,
@@ -166,14 +176,14 @@ impl Entity {
         }
     }
 
-    pub(crate) fn resource(&self) -> i32 {
+    pub fn resource(&self) -> i32 {
         match self {
             Entity::Agent(agent) => agent.resource,
             Entity::Spawner(spawner) => spawner.resource,
         }
     }
 
-    pub(crate) fn max_resource(&self) -> i32 {
+    pub fn max_resource(&self) -> i32 {
         match self {
             Entity::Agent(_) => AGENT_MAX_RESOURCE,
             Entity::Spawner(_) => SPAWNER_MAX_RESOURCE,

@@ -19,7 +19,7 @@ pub(crate) const SPAWNER_RADIUS: f64 = 1.0;
 pub(crate) type SpawnerState = [f64; 2];
 
 #[derive(Debug)]
-pub(crate) struct Spawner {
+pub struct Spawner {
     pub id: usize,
     pub pos: [f64; 2],
     pub team: usize,

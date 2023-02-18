@@ -1,79 +1,81 @@
-use crate::{
-    agent::AvoidanceRenderParams,
+use druid::{Point, Vec2};
+use swarm_rs::{
+    behavior_tree_lite::parse_file,
+    // agent::AvoidanceRenderParams,
     game::{BoardParams, BoardType, Game, GameParams},
-    WINDOW_HEIGHT,
 };
 
-use druid::{Data, Lens, Point, Vec2};
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+use ::druid::{Data, Lens};
+
+use crate::agent::avoidance::AvoidanceRenderParams;
+
+use std::{cell::RefCell, rc::Rc};
+
+pub(crate) const WINDOW_WIDTH: f64 = 1200.;
+pub(crate) const WINDOW_HEIGHT: f64 = 800.;
 
 #[derive(Clone, PartialEq, Eq, Data)]
-pub(crate) enum LineMode {
+pub enum LineMode {
     None,
     Line,
     Polygon,
 }
 
-#[derive(Clone, Lens, Data)]
-pub(crate) struct AppData {
-    pub(crate) xs_text: String,
-    pub(crate) ys_text: String,
-    pub(crate) seed_text: String,
-    pub(crate) maze_expansions: String,
-    pub(crate) board_type: BoardType,
-    pub(crate) game: Rc<RefCell<Game>>,
-    pub(crate) game_params: GameParams,
+#[derive(Clone, Data, Lens)]
+pub struct AppData {
+    pub xs_text: String,
+    pub ys_text: String,
+    pub seed_text: String,
+    pub maze_expansions: String,
+    pub board_type: BoardType,
+    pub game: Rc<RefCell<Game>>,
+    pub game_params: GameParams,
     pub(crate) simplify_text: String,
-    pub(crate) agent_count_text: String,
+    pub agent_count_text: String,
     pub(crate) line_mode: LineMode,
     pub(crate) simplified_visible: bool,
     pub(crate) triangulation_visible: bool,
     pub(crate) unpassable_visible: bool,
     pub(crate) triangle_label_visible: bool,
     pub(crate) show_label_image: bool,
-    pub(crate) origin: Vec2,
-    pub(crate) scale: f64,
-    pub(crate) message: String,
+    pub origin: Vec2,
+    pub scale: f64,
+    pub message: String,
     pub(crate) big_message: String,
-    pub(crate) big_message_time: f64,
+    pub big_message_time: f64,
     pub(super) mouse_pos: Option<Point>,
     pub(crate) get_board_time: f64,
-    #[data(ignore)]
-    pub(crate) render_board_time: Cell<f64>,
+    // pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
-    pub(crate) path_visible: bool,
+    pub path_visible: bool,
     pub(crate) avoidance_render_params: AvoidanceRenderParams,
     pub qtree_visible: bool,
     pub qtree_search_visible: bool,
-    pub(crate) target_visible: bool,
+    pub target_visible: bool,
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
-    pub(crate) source_visible: bool,
-    pub(crate) agent_source_file: String,
+    pub agent_source_file: String,
     /// This buffer is not yet applied to the game.
-    pub(crate) agent_source_buffer: Rc<String>,
+    pub agent_source_buffer: Rc<String>,
     pub(crate) spawner_source_file: String,
-    pub(crate) spawner_source_buffer: Rc<String>,
+    pub spawner_source_buffer: Rc<String>,
     pub(crate) global_render_time: f64,
 }
 
 impl AppData {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let mut game = Game::new();
         let seed = 123513;
-        let scale = WINDOW_HEIGHT / game.ys as f64;
+        let scale = WINDOW_HEIGHT / game.shape().1 as f64;
         let maze_expansion = 2000;
 
         const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
         const SPAWNER_SOURCE_FILE: &'static str = "behavior_tree_config/spawner.txt";
 
         let agent_source_buffer =
-            Rc::new(include_str!("../behavior_tree_config/agent.txt").to_string());
+            Rc::new(include_str!("../../behavior_tree_config/agent.txt").to_string());
         let spawner_source_buffer =
-            Rc::new(include_str!("../behavior_tree_config/spawner.txt").to_string());
+            Rc::new(include_str!("../../behavior_tree_config/spawner.txt").to_string());
 
         let mut game_params = GameParams::new();
         game_params.agent_source = agent_source_buffer.clone();
@@ -83,11 +85,11 @@ impl AppData {
         game.init();
 
         Self {
-            xs_text: game.ys.to_string(),
-            ys_text: game.xs.to_string(),
+            xs_text: game.shape().0.to_string(),
+            ys_text: game.shape().1.to_string(),
             seed_text: seed.to_string(),
             maze_expansions: maze_expansion.to_string(),
-            board_type: BoardType::Perlin,
+            board_type: BoardType::Rooms,
             simplify_text: game.simplify.to_string(),
             agent_count_text: game.agent_count.to_string(),
             game: Rc::new(RefCell::new(game)),
@@ -98,13 +100,13 @@ impl AppData {
             unpassable_visible: false,
             triangle_label_visible: false,
             show_label_image: false,
-            origin: Vec2::new(0., 0.),
+            origin: Vec2::ZERO,
             scale,
             message: "".to_string(),
             big_message: "Game Start".to_string(),
             big_message_time: 5000.,
             mouse_pos: None,
-            render_board_time: Cell::new(0.),
+            // render_board_time: Cell::new(0.),
             get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
             path_visible: true,
@@ -114,7 +116,6 @@ impl AppData {
             target_visible: false,
             entity_label_visible: true,
             entity_trace_visible: false,
-            source_visible: false,
             agent_source_file: AGENT_SOURCE_FILE.to_string(),
             agent_source_buffer,
             spawner_source_file: SPAWNER_SOURCE_FILE.to_string(),
@@ -123,14 +124,14 @@ impl AppData {
         }
     }
 
-    pub(crate) fn update(&mut self) -> (bool, f64) {
+    pub fn update(&mut self) -> (bool, f64) {
         self.game_params.agent_count = self.agent_count_text.parse().unwrap_or(3);
         let mut game = self.game.borrow_mut();
         game.set_params(&self.game_params);
         let interval = game.interval;
         if !self.game_params.paused {
             let update_res = game.update();
-            if let crate::game::UpdateResult::TeamWon(team) = update_res {
+            if let swarm_rs::game::UpdateResult::TeamWon(team) = update_res {
                 drop(game);
                 self.new_game();
                 self.big_message = ["Green team won!!", "Red team won!!"][team].to_string();
@@ -141,7 +142,7 @@ impl AppData {
         (self.game_params.paused, interval)
     }
 
-    pub(crate) fn new_game(&mut self) {
+    pub fn new_game(&mut self) {
         let xs = self.xs_text.parse().unwrap_or(64);
         let ys = self.ys_text.parse().unwrap_or(64);
         let seed = self.seed_text.parse().unwrap_or(1);
@@ -159,14 +160,39 @@ impl AppData {
         self.big_message = "Game Start".to_string();
         self.big_message_time = 5000.;
     }
-}
 
-pub(crate) fn is_passable_at(board: &[bool], shape: (usize, usize), pos: [f64; 2]) -> bool {
-    let pos = [pos[0] as isize, pos[1] as isize];
-    if pos[0] < 0 || shape.0 as isize <= pos[0] || pos[1] < 0 || shape.1 as isize <= pos[1] {
-        false
-    } else {
-        let pos = [pos[0] as usize, pos[1] as usize];
-        board[pos[0] + shape.0 * pos[1]]
+    pub fn try_load_behavior_tree(
+        &mut self,
+        src: Rc<String>,
+        setter: fn(&mut GameParams) -> &mut Rc<String>,
+    ) -> bool {
+        fn count_newlines(src: &str) -> usize {
+            src.lines().count()
+        }
+
+        // Check the syntax before applying
+        match parse_file(&src) {
+            Ok(("", _)) => {
+                *setter(&mut self.game_params) = src.clone();
+                self.message = format!(
+                    "Behavior tree applied! {}",
+                    Rc::strong_count(&self.agent_source_buffer)
+                );
+                true
+            }
+            Ok((rest, _)) => {
+                let parsed_src = &src[..rest.as_ptr() as usize - src.as_ptr() as usize];
+                self.message = format!(
+                    "Behavior tree source ended unexpectedly at ({}) {:?}",
+                    count_newlines(parsed_src),
+                    rest
+                );
+                false
+            }
+            Err(e) => {
+                self.message = format!("Behavior tree failed to parse: {}", e);
+                false
+            }
+        }
     }
 }

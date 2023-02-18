@@ -9,7 +9,7 @@ use super::{CellState, QTreePath, QTreePathNode, Rect, SearchTree};
 ///
 /// It is not actually a quad tree data structure. The algorithm is.
 #[derive(Debug)]
-pub(super) struct QTree {
+pub struct QTree {
     pub toplevel: usize,
     pub levels: Vec<HashMap<[i32; 2], CellState>>,
 }
@@ -284,7 +284,7 @@ impl Display for PathFindError {
 }
 
 impl QTree {
-    pub fn path_find(
+    pub(crate) fn path_find(
         &self,
         ignore_id: &[usize],
         start: [f64; 2],

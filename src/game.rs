@@ -3,8 +3,6 @@ mod rooms;
 
 use cgmath::{InnerSpace, Vector2};
 
-use druid::Data;
-
 use std::{
     cell::RefCell,
     rc::Rc,
@@ -13,7 +11,6 @@ use std::{
 
 use crate::{
     agent::{Agent, AgentClass, AgentState, Bullet},
-    app_data::is_passable_at,
     collision::CollisionShape,
     entity::{Entity, GameEvent},
     measure_time,
@@ -22,19 +19,24 @@ use crate::{
     qtree::{CellState, QTreeSearcher, Rect},
     spawner::Spawner,
     temp_ents::TempEnt,
-    triangle_utils::{check_shape_in_mesh, find_triangle_at},
+    triangle_utils::check_shape_in_mesh,
 };
 
+#[cfg(feature = "druid")]
+use druid::Data;
+
 #[derive(Clone, Debug)]
-pub(crate) struct Resource {
+pub struct Resource {
     pub pos: [f64; 2],
     pub amount: i32,
 }
 
 pub(crate) type Board = Vec<bool>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Data)]
-pub(crate) enum BoardType {
+#[cfg_attr(feature = "druid", derive(Data))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoardType {
     Rect,
     Crank,
     Perlin,
@@ -42,13 +44,13 @@ pub(crate) enum BoardType {
     Maze,
 }
 
-#[derive(Debug, Clone, Data)]
-pub(crate) struct Profiler {
+#[derive(Debug, Clone)]
+pub struct Profiler {
     total: f64,
     count: usize,
 }
 
-pub(crate) enum UpdateResult {
+pub enum UpdateResult {
     Running,
     TeamWon(usize),
 }
@@ -61,7 +63,7 @@ impl Profiler {
         }
     }
 
-    pub(crate) fn get_average(&self) -> f64 {
+    pub fn get_average(&self) -> f64 {
         if self.count == 0 {
             0.
         } else {
@@ -69,7 +71,7 @@ impl Profiler {
         }
     }
 
-    pub(crate) fn get_count(&self) -> usize {
+    pub fn get_count(&self) -> usize {
         self.count
     }
 
@@ -79,28 +81,30 @@ impl Profiler {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Data)]
-pub(crate) enum AvoidanceMode {
+#[cfg_attr(feature = "druid", derive(Data))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AvoidanceMode {
     Kinematic,
     Rrt,
     RrtStar,
 }
 
-pub(crate) struct BoardParams {
+pub struct BoardParams {
     pub shape: (usize, usize),
     pub seed: u32,
     pub simplify: f64,
     pub maze_expansions: usize,
 }
 
-#[derive(Clone, Data)]
-pub(crate) struct GameParams {
-    pub(crate) avoidance_mode: AvoidanceMode,
-    pub(crate) paused: bool,
-    pub(crate) avoidance_expands: f64,
-    pub(crate) agent_count: usize,
-    pub(crate) agent_source: Rc<String>,
-    pub(crate) spawner_source: Rc<String>,
+#[cfg_attr(feature = "druid", derive(Data))]
+#[derive(Clone)]
+pub struct GameParams {
+    pub avoidance_mode: AvoidanceMode,
+    pub paused: bool,
+    pub avoidance_expands: f64,
+    pub agent_count: usize,
+    pub agent_source: Rc<String>,
+    pub spawner_source: Rc<String>,
 }
 
 impl GameParams {
@@ -117,40 +121,40 @@ impl GameParams {
 }
 
 #[derive(Debug)]
-pub(crate) struct Game {
+pub struct Game {
     pub(crate) xs: usize,
     pub(crate) ys: usize,
-    pub(crate) simplify: f64,
-    pub(crate) board: Board,
-    pub(crate) mesh: Mesh,
-    pub(crate) entities: Vec<RefCell<Entity>>,
-    pub(crate) bullets: Vec<Bullet>,
-    pub(crate) resources: Vec<Resource>,
-    pub(crate) interval: f64,
+    pub simplify: f64,
+    pub board: Board,
+    pub mesh: Mesh,
+    pub entities: Vec<RefCell<Entity>>,
+    pub bullets: Vec<Bullet>,
+    pub resources: Vec<Resource>,
+    pub interval: f64,
     pub(crate) rng: Xor128,
     pub(crate) id_gen: usize,
     pub(crate) avoidance_mode: AvoidanceMode,
     pub(crate) avoidance_expands: f64,
-    pub(crate) temp_ents: Vec<TempEnt>,
-    pub(crate) triangle_profiler: RefCell<Profiler>,
-    pub(crate) pixel_profiler: RefCell<Profiler>,
-    pub(crate) qtree_profiler: RefCell<Profiler>,
-    pub(crate) path_find_profiler: RefCell<Profiler>,
-    pub(crate) agent_count: usize,
+    pub temp_ents: Vec<TempEnt>,
+    pub triangle_profiler: RefCell<Profiler>,
+    pub pixel_profiler: RefCell<Profiler>,
+    pub qtree_profiler: RefCell<Profiler>,
+    pub path_find_profiler: RefCell<Profiler>,
+    pub agent_count: usize,
     pub(crate) agent_source: Rc<String>,
     pub(crate) spawner_source: Rc<String>,
-    pub(crate) qtree: QTreeSearcher,
+    pub qtree: QTreeSearcher,
 }
 
 impl Game {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let seed = 123513;
         let simplify = 1.;
 
         let xs = 128;
         let ys = 128;
 
-        let MeshResult { board, mesh } = Self::create_perlin_board(&BoardParams {
+        let MeshResult { board, mesh } = Self::create_rooms_board(&BoardParams {
             shape: (xs, ys),
             seed,
             simplify,
@@ -190,7 +194,11 @@ impl Game {
         }
     }
 
-    pub(crate) fn init(&mut self) {
+    pub fn shape(&self) -> (usize, usize) {
+        (self.xs, self.ys)
+    }
+
+    pub fn init(&mut self) {
         for team in 0..2 {
             if !self
                 .entities
@@ -206,7 +214,7 @@ impl Game {
         }
     }
 
-    pub fn create_perlin_board(params: &BoardParams) -> MeshResult {
+    pub(crate) fn create_perlin_board(params: &BoardParams) -> MeshResult {
         let shape = params.shape;
         let min_octave = 2;
         let max_octave = 6;
@@ -222,7 +230,7 @@ impl Game {
         })
     }
 
-    pub fn create_rect_board(params: &BoardParams) -> MeshResult {
+    pub(crate) fn create_rect_board(params: &BoardParams) -> MeshResult {
         let (xs, ys) = (params.shape.0 as isize, params.shape.1 as isize);
         create_mesh(params.shape, params.simplify, |xi, yi| {
             let dx = xi as isize - xs / 2;
@@ -231,7 +239,7 @@ impl Game {
         })
     }
 
-    pub fn create_crank_board(params: &BoardParams) -> MeshResult {
+    pub(crate) fn create_crank_board(params: &BoardParams) -> MeshResult {
         let (xs, ys) = (params.shape.0 as isize, params.shape.1 as isize);
         create_mesh(params.shape, params.simplify, |xi, yi| {
             let dx = xi as isize - xs / 2;
@@ -242,7 +250,7 @@ impl Game {
                 && !(xs * 2 / 16 < dx && dx < xs * 3 / 16 && dy < ys / 16)
         })
     }
-    pub(crate) fn new_board(&mut self, board_type: BoardType, params: &BoardParams) {
+    pub fn new_board(&mut self, board_type: BoardType, params: &BoardParams) {
         self.xs = params.shape.0;
         self.ys = params.shape.1;
 
@@ -343,8 +351,8 @@ impl Game {
         const STATIC_SOURCE_FILE: &str = include_str!("../behavior_tree_config/test_obstacle.txt");
         let rng = &mut self.rng;
         let id_gen = &mut self.id_gen;
-        let triangle_labels = &self.mesh.triangle_labels;
-        let largest_label = self.mesh.largest_label;
+        // let triangle_labels = &self.mesh.triangle_labels;
+        // let largest_label = self.mesh.largest_label;
 
         for _ in 0..10 {
             let state_candidate = AgentState {
@@ -369,31 +377,21 @@ impl Game {
                 continue;
             }
 
-            if let Some(tri) = find_triangle_at(
-                &self.mesh,
+            let agent = Agent::new(
+                id_gen,
                 state_candidate.into(),
-                &mut self.triangle_profiler.borrow_mut(),
-            ) {
-                if Some(triangle_labels[tri]) == largest_label {
-                    let agent = Agent::new(
-                        id_gen,
-                        state_candidate.into(),
-                        state_candidate.heading,
-                        team,
-                        class,
-                        if static_ {
-                            STATIC_SOURCE_FILE
-                        } else {
-                            &self.agent_source
-                        },
-                    );
-                    match agent {
-                        Ok(agent) => return Some(Entity::Agent(agent)),
-                        Err(e) => println!("Failed to create an Agent! {e}"),
-                    }
-                }
-            } else {
-                println!("Triangle not fonud! {pos:?}");
+                state_candidate.heading,
+                team,
+                class,
+                if static_ {
+                    STATIC_SOURCE_FILE
+                } else {
+                    &self.agent_source
+                },
+            );
+            match agent {
+                Ok(agent) => return Some(Entity::Agent(agent)),
+                Err(e) => println!("Failed to create an Agent! {e}"),
             }
         }
         None
@@ -426,24 +424,12 @@ impl Game {
             if Spawner::qtree_collision(None, pos_candidate, &self.entities) {
                 continue;
             }
-            if let Some(tri) = find_triangle_at(
-                &self.mesh,
-                pos_candidate,
-                &mut self.triangle_profiler.borrow_mut(),
-            ) {
-                if Some(self.mesh.triangle_labels[tri]) == self.mesh.largest_label {
-                    if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
-                        let spawner = Spawner::new(
-                            &mut self.id_gen,
-                            pos_candidate,
-                            team,
-                            &self.spawner_source,
-                        );
-                        match spawner {
-                            Ok(spawner) => return Some(Entity::Spawner(spawner)),
-                            Err(err) => println!("Spawner failed to create!: {err}"),
-                        }
-                    }
+            if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
+                let spawner =
+                    Spawner::new(&mut self.id_gen, pos_candidate, team, &self.spawner_source);
+                match spawner {
+                    Ok(spawner) => return Some(Entity::Spawner(spawner)),
+                    Err(err) => println!("Spawner failed to create!: {err}"),
                 }
             }
         }
@@ -469,24 +455,16 @@ impl Game {
                 continue;
             }
 
-            if let Some(tri) = find_triangle_at(
-                &self.mesh,
-                pos_candidate,
-                &mut self.triangle_profiler.borrow_mut(),
-            ) {
-                if Some(self.mesh.triangle_labels[tri]) == self.mesh.largest_label {
-                    if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
-                        self.resources.push(Resource {
-                            pos: pos_candidate,
-                            amount: (rng.nexti() % 128 + 80) as i32,
-                        });
-                    }
-                }
+            if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
+                self.resources.push(Resource {
+                    pos: pos_candidate,
+                    amount: (rng.nexti() % 128 + 80) as i32,
+                });
             }
         }
     }
 
-    pub(crate) fn set_params(&mut self, params: &GameParams) {
+    pub fn set_params(&mut self, params: &GameParams) {
         self.avoidance_mode = params.avoidance_mode;
         self.avoidance_expands = params.avoidance_expands;
         self.agent_count = params.agent_count;
@@ -494,7 +472,7 @@ impl Game {
         self.spawner_source = params.spawner_source.clone();
     }
 
-    pub(crate) fn update(&mut self) -> UpdateResult {
+    pub fn update(&mut self) -> UpdateResult {
         let mut entities = std::mem::take(&mut self.entities);
         let mut bullets = std::mem::take(&mut self.bullets);
         let mut events = vec![];
@@ -697,6 +675,49 @@ impl Game {
     //         board[pos[0] as usize + pos[1] as usize * shape.0]
     //     }
     // }
+
+    pub fn occupancy_image(&self) -> Option<([usize; 2], Vec<u8>)> {
+        const OBSTACLE_COLOR: u8 = 63u8;
+        const BACKGROUND_COLOR: u8 = 127u8;
+
+        Some((
+            [self.xs, self.ys],
+            self.board
+                .iter()
+                .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
+                .collect::<Vec<_>>(),
+        ))
+    }
+
+    pub fn labeled_image(&self) -> Option<([usize; 2], Vec<u8>)> {
+        let mut rng = Xor128::new(616516);
+        let max_label = *self.mesh.labeled_image.iter().max()? + 1;
+
+        const OBSTACLE_COLOR: u8 = 63u8;
+
+        let label_colors = (0..max_label)
+            .map(|label| {
+                if label == 0 {
+                    [OBSTACLE_COLOR, OBSTACLE_COLOR, OBSTACLE_COLOR]
+                } else {
+                    [
+                        (rng.nexti() % 0x80) as u8,
+                        (rng.nexti() % 0x80) as u8,
+                        (rng.nexti() % 0x80) as u8,
+                    ]
+                }
+            })
+            .collect::<Vec<_>>();
+        Some((
+            [self.xs, self.ys],
+            self.mesh
+                .labeled_image
+                .iter()
+                .map(|p| label_colors[*p as usize].into_iter())
+                .flatten()
+                .collect::<Vec<_>>(),
+        ))
+    }
 }
 
 /// Separating axis theorem is relatively fast algorithm to detect collision between convex polygons,
@@ -721,5 +742,15 @@ pub(crate) fn separating_axis(
         0. < bbox[2] && bbox[0] < dir.magnitude() && 0. < bbox[3] && bbox[1] < 0.
     } else {
         false
+    }
+}
+
+pub fn is_passable_at(board: &[bool], shape: (usize, usize), pos: [f64; 2]) -> bool {
+    let pos = [pos[0] as isize, pos[1] as isize];
+    if pos[0] < 0 || shape.0 as isize <= pos[0] || pos[1] < 0 || shape.1 as isize <= pos[1] {
+        false
+    } else {
+        let pos = [pos[0] as usize, pos[1] as usize];
+        board[pos[0] + shape.0 * pos[1]]
     }
 }

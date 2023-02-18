@@ -11,7 +11,7 @@ impl Game {
     /// It ensures the free map as one connected region, unlike the one with Perlin noise.
     /// It uses multiple resolution and distance map to create a maze-like structure and randomness on the border.
     /// The resolutions are power of 2 to make it better fit to QTree.
-    pub fn create_maze_board(params: &BoardParams) -> MeshResult {
+    pub(crate) fn create_maze_board(params: &BoardParams) -> MeshResult {
         let shape = params.shape;
         let mut board = vec![false; shape.0 * shape.1];
         for resolution in [8, 4, 2, 1] {

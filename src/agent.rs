@@ -1,14 +1,12 @@
 mod agent_class;
-mod avoidance;
+pub mod avoidance;
 mod behavior_nodes;
 mod find_path;
-mod interpolation;
+pub mod interpolation;
 mod motion;
 
-pub(crate) use self::{
-    agent_class::AgentClass,
-    avoidance::{AgentState, AvoidanceRenderParams, PathNode, SearchState},
-};
+pub use self::agent_class::AgentClass;
+pub(crate) use self::avoidance::{AgentState, PathNode, SearchState};
 use self::{
     behavior_nodes::{
         build_tree, AvoidanceCommand, ClearAvoidanceCommand, ClearPathNode, ClearTarget,
@@ -21,15 +19,14 @@ use self::{
     motion::{MotionCommandResult, OrientToResult},
 };
 use crate::{
-    app_data::is_passable_at,
     behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource},
     collision::{aabb_intersects, CollisionShape, Obb},
     entity::Entity,
+    game::is_passable_at,
     game::{Board, Game, Profiler, Resource},
     measure_time,
     qtree::{QTreePath, SearchTree},
     spawner::{SPAWNER_MAX_RESOURCE, SPAWNER_RADIUS},
-    triangle_utils::find_triangle_at,
 };
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
@@ -45,7 +42,7 @@ use std::{
 };
 
 #[derive(Clone, Debug)]
-pub(crate) struct Bullet {
+pub struct Bullet {
     pub pos: [f64; 2],
     pub velo: [f64; 2],
     pub team: usize,
@@ -75,8 +72,8 @@ pub(crate) enum AgentTarget {
 }
 
 #[derive(Debug)]
-pub(crate) struct Agent {
-    pub target: Option<AgentTarget>,
+pub struct Agent {
+    pub(crate) target: Option<AgentTarget>,
     pub active: bool,
     pub unreachables: HashSet<usize>,
     pub id: usize,
@@ -84,15 +81,15 @@ pub(crate) struct Agent {
     pub orient: f64,
     pub speed: f64,
     pub team: usize,
-    pub class: AgentClass,
+    pub(crate) class: AgentClass,
     cooldown: f64,
     pub health: u32,
     pub resource: i32,
-    pub goal: Option<AgentState>,
+    pub(crate) goal: Option<AgentState>,
     pub search_state: Option<SearchState>,
-    pub search_tree: Option<SearchTree>,
+    pub(crate) search_tree: Option<SearchTree>,
     pub avoidance_plan: Option<Vec<(f64, f64)>>,
-    pub path: QTreePath,
+    pub(crate) path: QTreePath,
     pub trace: VecDeque<[f64; 2]>,
     last_motion_result: Option<MotionCommandResult>,
     last_state: Option<AgentState>,
@@ -101,13 +98,13 @@ pub(crate) struct Agent {
 }
 
 const AGENT_SCALE: f64 = 1.;
-pub(crate) const AGENT_HALFWIDTH: f64 = 0.3 * AGENT_SCALE;
-pub(crate) const AGENT_HALFLENGTH: f64 = 0.6 * AGENT_SCALE;
+pub const AGENT_HALFWIDTH: f64 = 0.3 * AGENT_SCALE;
+pub const AGENT_HALFLENGTH: f64 = 0.6 * AGENT_SCALE;
 pub(crate) const AGENT_SPEED: f64 = 0.125;
 pub(crate) const AGENT_MAX_HEALTH: u32 = 100;
 pub(crate) const AGENT_MAX_RESOURCE: i32 = 100;
 const AGENT_VISIBLE_DISTANCE: f64 = 30.;
-pub(crate) const BULLET_RADIUS: f64 = 0.15;
+pub const BULLET_RADIUS: f64 = 0.15;
 pub(crate) const BULLET_SPEED: f64 = 2.;
 pub(crate) const BULLET_DAMAGE: u32 = 10;
 
@@ -349,7 +346,7 @@ impl Agent {
         }
     }
 
-    pub fn find_resource(&mut self, resources: &[Resource]) -> bool {
+    pub(crate) fn find_resource(&mut self, resources: &[Resource]) -> bool {
         let best_resource = resources
             .iter()
             // .filter_map(|a| a.try_borrow().ok())
@@ -430,7 +427,7 @@ impl Agent {
         BehaviorResult::Success
     }
 
-    pub fn shoot_bullet(&mut self, bullets: &mut Vec<Bullet>, target_pos: [f64; 2]) -> bool {
+    pub(crate) fn shoot_bullet(&mut self, bullets: &mut Vec<Bullet>, target_pos: [f64; 2]) -> bool {
         if 0. < self.cooldown {
             return false;
         }
@@ -452,7 +449,7 @@ impl Agent {
         true
     }
 
-    pub(super) fn get_avoidance_state(&self, (drive, steer): (f64, f64)) -> Vector2<f64> {
+    pub fn get_avoidance_state(&self, (drive, steer): (f64, f64)) -> Vector2<f64> {
         let desired_angle = wrap_angle(self.orient + steer);
         drive * Vector2::new(desired_angle.cos(), desired_angle.sin()) + Vector2::from(self.pos)
     }
@@ -523,7 +520,7 @@ impl Agent {
         Box::new(res)
     }
 
-    pub fn update(
+    pub(crate) fn update(
         &mut self,
         game: &mut Game,
         entities: &[RefCell<Entity>],
@@ -625,19 +622,6 @@ impl Agent {
                     return Some(Box::new(self.to_state()));
                 } else if let Some(com) = f.downcast_ref::<IsTargetVisibleCommand>() {
                     let target_pos = com.0;
-                    let target_triangle = find_triangle_at(
-                        &game.mesh,
-                        target_pos,
-                        &mut game.triangle_profiler.borrow_mut(),
-                    );
-                    let self_triangle = find_triangle_at(
-                        &game.mesh,
-                        self.pos,
-                        &mut game.triangle_profiler.borrow_mut(),
-                    );
-                    if target_triangle == self_triangle {
-                        return Some(Box::new(true));
-                    }
                     let ret = Box::new(self.is_position_visible(
                         target_pos,
                         &game.board,

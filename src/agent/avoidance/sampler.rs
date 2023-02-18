@@ -339,7 +339,7 @@ fn find_closest_node<'a, 'b>(
 }
 
 /// Rewiring distance has to be long enough to make RRT* effective
-pub(super) const REWIRE_DISTANCE: f64 = DIST_RADIUS * 5.;
+pub const REWIRE_DISTANCE: f64 = DIST_RADIUS * 5.;
 
 /// RRT* sampler, awkward capitalization in Rust convention
 pub(super) struct RrtStarSampler;

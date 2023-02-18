@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
 use delaunator::{triangulate, Triangulation};
+#[cfg(feature = "druid")]
 use druid::{kurbo::BezPath, Point};
 
 use crate::{
-    app_data::is_passable_at,
     dijkstra::label,
+    game::is_passable_at,
     marching_squares::{trace_lines, BoolField},
     measure_time,
     triangle_utils::{center_of_triangle_obj, label_triangles},
@@ -14,7 +15,8 @@ use crate::{
 /// The Mesh is a data structure to allow AI controlled agents to navigate or help detection
 /// collision.
 #[derive(Debug)]
-pub(crate) struct Mesh {
+pub struct Mesh {
+    #[cfg(feature = "druid")]
     pub simplified_border: Vec<BezPath>,
     pub polygons: geo::geometry::MultiPolygon,
     pub points: Vec<delaunator::Point>,
@@ -73,14 +75,17 @@ pub(crate) fn create_mesh(
 
     let field = BoolField::new(&board, shape);
 
+    #[cfg(feature = "druid")]
     let mut simplified_border = vec![];
     let mut polygons = vec![];
     let mut points = vec![];
 
+    #[cfg(feature = "druid")]
     let to_point = |p: [f64; 2]| Point::new(p[0] as f64, p[1] as f64);
 
     let lines = trace_lines(&field);
-    let mut simplified_vertices = 0;
+    #[cfg(feature = "druid")]
+    let mut _simplified_vertices = 0;
     for line in &lines {
         let simplified = if simplify_epsilon == 0. {
             line.iter().map(|p| [p[0] as f64, p[1] as f64]).collect()
@@ -107,6 +112,7 @@ pub(crate) fn create_mesh(
             continue;
         }
 
+        #[cfg(feature = "druid")]
         if let Some((first, rest)) = simplified.split_first() {
             let mut bez_path = BezPath::new();
             bez_path.move_to(to_point(*first));
@@ -119,7 +125,7 @@ pub(crate) fn create_mesh(
             }
             bez_path.close_path();
             simplified_border.push(bez_path);
-            simplified_vertices += simplified.len();
+            _simplified_vertices += simplified.len();
         }
 
         let line_string: geo::geometry::LineString = simplified
@@ -129,13 +135,13 @@ pub(crate) fn create_mesh(
             .collect();
         polygons.push(geo::geometry::Polygon::new(line_string, vec![]));
     }
-    println!(
-        "trace_lines: {}, vertices: {}, simplified_border: {} vertices: {}",
-        lines.len(),
-        lines.iter().map(|line| line.len()).sum::<usize>(),
-        simplified_border.len(),
-        simplified_vertices
-    );
+    // println!(
+    //     "trace_lines: {}, vertices: {}, simplified_border: {} vertices: {}",
+    //     lines.len(),
+    //     lines.iter().map(|line| line.len()).sum::<usize>(),
+    //     simplified_border.len(),
+    //     _simplified_vertices
+    // );
 
     let triangulation = triangulate(&points);
 
@@ -157,6 +163,7 @@ pub(crate) fn create_mesh(
     MeshResult {
         board,
         mesh: Mesh {
+            #[cfg(feature = "druid")]
             simplified_border,
             polygons: polygons.into_iter().collect(),
             points,

@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use cgmath::{InnerSpace, Vector2};
 
-use crate::{app_data::is_passable_at, entity::Entity, game::Game};
+use crate::{entity::Entity, game::is_passable_at, game::Game};
 
 use super::{wrap_angle, Agent, AgentState, MotionResult};
 

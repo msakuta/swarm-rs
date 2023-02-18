@@ -13,9 +13,11 @@ macro_rules! dbg_println {
     };
 }
 
-mod cache_map;
-pub(crate) mod qtree;
-pub mod render;
+pub mod cache_map;
+pub mod qtree;
+// pub mod render;
+
+pub use self::cache_map::FRESH_TICKS;
 
 use std::{error::Error, fmt::Display};
 
@@ -35,7 +37,7 @@ pub(crate) type Rect = [i32; 4];
 /// It consists of two parts; actual quad tree and bitmap cache to allow updating
 /// existing quad tree quickly.
 #[derive(Debug)]
-pub(crate) struct QTreeSearcher {
+pub struct QTreeSearcher {
     qtree: QTree,
     cache_map: CacheMap,
 }
@@ -48,7 +50,15 @@ impl QTreeSearcher {
         }
     }
 
-    pub fn initialize(
+    pub fn get_cache_map(&self) -> &CacheMap {
+        &self.cache_map
+    }
+
+    pub fn get_qtree(&self) -> &QTree {
+        &self.qtree
+    }
+
+    pub(crate) fn initialize(
         &mut self,
         shape: (usize, usize),
         f: &impl Fn(Rect) -> CellState,
@@ -72,7 +82,7 @@ impl QTreeSearcher {
         Ok(())
     }
 
-    pub fn find(&self, pos: [f64; 2]) -> Option<(usize, CellState)> {
+    pub(crate) fn find(&self, pos: [f64; 2]) -> Option<(usize, CellState)> {
         self.qtree.find(pos)
     }
 
@@ -80,7 +90,7 @@ impl QTreeSearcher {
         self.cache_map.start_update();
     }
 
-    pub fn update(&mut self, pos: [i32; 2], pix: CellState) -> Result<(), String> {
+    pub(crate) fn update(&mut self, pos: [i32; 2], pix: CellState) -> Result<(), String> {
         let res = self.cache_map.update(pos, pix)?;
         if res {
             let mut level = self.qtree.toplevel;
@@ -121,7 +131,7 @@ impl QTreeSearcher {
         self.cache_map.finish_update();
     }
 
-    pub fn path_find(
+    pub(crate) fn path_find(
         &self,
         ignore_id: &[usize],
         start: [f64; 2],
@@ -146,7 +156,7 @@ impl QTreeSearcher {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum CellState {
+pub enum CellState {
     Obstacle,
     Occupied(usize),
     Free,
@@ -154,7 +164,7 @@ pub(crate) enum CellState {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct QTreePathNode {
+pub struct QTreePathNode {
     pub pos: [f64; 2],
     pub radius: f64,
 }
@@ -175,9 +185,9 @@ impl QTreePathNode {
 pub(crate) type QTreePath = Vec<QTreePathNode>;
 
 #[derive(Debug)]
-pub(crate) struct SearchTree {
-    nodes: Vec<[f64; 2]>,
-    edges: Vec<[usize; 2]>,
+pub struct SearchTree {
+    pub nodes: Vec<[f64; 2]>,
+    pub edges: Vec<[usize; 2]>,
 }
 
 impl SearchTree {
@@ -186,6 +196,14 @@ impl SearchTree {
             nodes: vec![],
             edges: vec![],
         }
+    }
+
+    pub fn get_nodes(&self) -> &[[f64; 2]] {
+        &self.nodes
+    }
+
+    pub fn get_edges(&self) -> &[[usize; 2]] {
+        &self.edges
     }
 }
 

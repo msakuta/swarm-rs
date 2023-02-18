@@ -1,5 +1,5 @@
-mod render;
-mod sampler;
+// mod render;
+pub mod sampler;
 mod search;
 
 use std::{
@@ -9,7 +9,7 @@ use std::{
 
 use cgmath::{MetricSpace, Vector2};
 
-pub(crate) use self::render::AvoidanceRenderParams;
+// pub(crate) use self::render::AvoidanceRenderParams;
 use self::{
     sampler::{ForwardKinematicSampler, RrtStarSampler, SpaceSampler, StateSampler},
     search::{can_connect_goal, insert_to_grid_map, search, to_cell},
@@ -25,7 +25,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct AgentState {
+pub struct AgentState {
     pub x: f64,
     pub y: f64,
     pub heading: f64,
@@ -36,7 +36,7 @@ impl AgentState {
         Self { x, y, heading }
     }
 
-    pub(crate) fn collision_shape(&self, class: AgentClass) -> CollisionShape {
+    pub fn collision_shape(&self, class: AgentClass) -> CollisionShape {
         let shape = class.shape();
         CollisionShape::BBox(Obb {
             center: Vector2::new(self.x, self.y),
@@ -66,7 +66,7 @@ impl From<AgentState> for Vector2<f64> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) struct PathNode {
+pub struct PathNode {
     pub x: f64,
     pub y: f64,
     pub _backward: bool,
@@ -105,19 +105,19 @@ impl From<PathNode> for Vector2<f64> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct SearchNode {
-    state: AgentState,
-    cost: f64,
-    speed: f64,
-    id: usize,
+pub struct SearchNode {
+    pub state: AgentState,
+    pub cost: f64,
+    pub speed: f64,
+    pub id: usize,
     steer: f64,
     /// The maximum recursion level to determine collision. Used for debugging
-    max_level: usize,
-    from: Option<usize>,
-    cycle: bool,
+    pub max_level: usize,
+    pub from: Option<usize>,
+    pub cycle: bool,
     to: Vec<usize>,
-    pruned: bool,
-    blocked: bool,
+    pub pruned: bool,
+    pub blocked: bool,
 }
 
 impl SearchNode {
@@ -158,7 +158,7 @@ fn compare_distance(s1: &AgentState, s2: &AgentState, threshold: f64) -> bool {
 }
 
 const MAX_STEER: f64 = std::f64::consts::PI / 3.;
-const CELL_SIZE: f64 = 2. * AGENT_SCALE;
+pub const CELL_SIZE: f64 = 2. * AGENT_SCALE;
 const MAX_CELL_COUNT: usize = 10;
 
 /// We use a grid of cells with fixed sizes to query nodes in a search tree.
@@ -182,6 +182,14 @@ impl SearchState {
         self.found_path
             .as_ref()
             .map(|path| path.iter().map(|node| (&self.search_tree[*node]).into()))
+    }
+
+    pub fn get_search_tree(&self) -> &[SearchNode] {
+        &self.search_tree
+    }
+
+    pub fn get_grid_map(&self) -> &GridMap {
+        &self.grid_map
     }
 }
 
