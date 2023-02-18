@@ -1,4 +1,3 @@
-mod app_data;
 mod behavior_tree_adapt;
 // mod board_widget;
 mod dijkstra;
@@ -21,10 +20,7 @@ mod temp_ents;
 pub mod triangle_utils;
 
 pub use crate::agent::Bullet;
-pub use crate::{
-    app_data::{AppData, LineMode},
-    qtree::CellState,
-};
+pub use crate::qtree::CellState;
 pub use behavior_tree_lite;
 
 // #[wasm_bindgen]

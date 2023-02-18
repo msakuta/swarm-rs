@@ -5,8 +5,8 @@ use delaunator::{triangulate, Triangulation};
 use druid::{kurbo::BezPath, Point};
 
 use crate::{
-    app_data::is_passable_at,
     dijkstra::label,
+    game::is_passable_at,
     marching_squares::{trace_lines, BoolField},
     measure_time,
     triangle_utils::{center_of_triangle_obj, label_triangles},

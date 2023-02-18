@@ -1,7 +1,7 @@
 //! A widget for background image.
 
+use crate::app_data::AppData;
 use egui::{Color32, Painter, Pos2, Rect, Response, TextureOptions, Vec2};
-use swarm_rs::AppData;
 
 pub(crate) struct BgImage {
     texture: Option<egui::TextureHandle>,

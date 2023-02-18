@@ -19,10 +19,10 @@ use self::{
     motion::{MotionCommandResult, OrientToResult},
 };
 use crate::{
-    app_data::is_passable_at,
     behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource},
     collision::{aabb_intersects, CollisionShape, Obb},
     entity::Entity,
+    game::is_passable_at,
     game::{Board, Game, Profiler, Resource},
     measure_time,
     qtree::{QTreePath, SearchTree},

@@ -1,9 +1,7 @@
-use behavior_tree_lite::parse_file;
-
-use crate::{
+use ::swarm_rs::{
+    behavior_tree_lite::parse_file,
     // agent::AvoidanceRenderParams,
     game::{BoardParams, BoardType, Game, GameParams},
-    perlin_noise::Xor128,
     qtree::QTreeSearcher,
 };
 
@@ -65,16 +63,16 @@ impl AppData {
     pub fn new(window_height: f64) -> Self {
         let mut game = Game::new();
         let seed = 123513;
-        let scale = window_height / game.ys as f64;
+        let scale = window_height / game.shape().1 as f64;
         let maze_expansion = 2000;
 
         const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
         const SPAWNER_SOURCE_FILE: &'static str = "behavior_tree_config/spawner.txt";
 
         let agent_source_buffer =
-            Rc::new(include_str!("../behavior_tree_config/agent.txt").to_string());
+            Rc::new(include_str!("../../behavior_tree_config/agent.txt").to_string());
         let spawner_source_buffer =
-            Rc::new(include_str!("../behavior_tree_config/spawner.txt").to_string());
+            Rc::new(include_str!("../../behavior_tree_config/spawner.txt").to_string());
 
         let mut game_params = GameParams::new();
         game_params.agent_source = agent_source_buffer.clone();
@@ -84,8 +82,8 @@ impl AppData {
         game.init();
 
         Self {
-            xs_text: game.ys.to_string(),
-            ys_text: game.xs.to_string(),
+            xs_text: game.shape().0.to_string(),
+            ys_text: game.shape().1.to_string(),
             seed_text: seed.to_string(),
             maze_expansions: maze_expansion.to_string(),
             board_type: BoardType::Perlin,
@@ -131,7 +129,7 @@ impl AppData {
         let interval = game.interval;
         if !self.game_params.paused {
             let update_res = game.update();
-            if let crate::game::UpdateResult::TeamWon(team) = update_res {
+            if let swarm_rs::game::UpdateResult::TeamWon(team) = update_res {
                 drop(game);
                 self.new_game();
                 self.big_message = ["Green team won!!", "Red team won!!"][team].to_string();
@@ -159,53 +157,6 @@ impl AppData {
 
         self.big_message = "Game Start".to_string();
         self.big_message_time = 5000.;
-    }
-
-    pub fn occupancy_image(&self) -> Option<([usize; 2], Vec<u8>)> {
-        const OBSTACLE_COLOR: u8 = 63u8;
-        const BACKGROUND_COLOR: u8 = 127u8;
-
-        let game = self.game.borrow();
-        Some((
-            [game.xs, game.ys],
-            game.board
-                .iter()
-                .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
-                .collect::<Vec<_>>(),
-        ))
-    }
-
-    pub fn labeled_image(&self) -> Option<([usize; 2], Vec<u8>)> {
-        let game = self.game.borrow();
-
-        let mut rng = Xor128::new(616516);
-        let max_label = *game.mesh.labeled_image.iter().max()? + 1;
-
-        const OBSTACLE_COLOR: u8 = 63u8;
-        const BACKGROUND_COLOR: u8 = 127u8;
-
-        let label_colors = (0..max_label)
-            .map(|label| {
-                if label == 0 {
-                    [OBSTACLE_COLOR, OBSTACLE_COLOR, OBSTACLE_COLOR]
-                } else {
-                    [
-                        (rng.nexti() % 0x80) as u8,
-                        (rng.nexti() % 0x80) as u8,
-                        (rng.nexti() % 0x80) as u8,
-                    ]
-                }
-            })
-            .collect::<Vec<_>>();
-        Some((
-            [game.xs, game.ys],
-            game.mesh
-                .labeled_image
-                .iter()
-                .map(|p| label_colors[*p as usize].into_iter())
-                .flatten()
-                .collect::<Vec<_>>(),
-        ))
     }
 
     pub fn with_qtree(&self, f: impl FnOnce(&QTreeSearcher)) {
@@ -263,15 +214,5 @@ impl AppData {
             }
             Err(e) => self.message = format!("Read file error! {e:?}"),
         }
-    }
-}
-
-pub(crate) fn is_passable_at(board: &[bool], shape: (usize, usize), pos: [f64; 2]) -> bool {
-    let pos = [pos[0] as isize, pos[1] as isize];
-    if pos[0] < 0 || shape.0 as isize <= pos[0] || pos[1] < 0 || shape.1 as isize <= pos[1] {
-        false
-    } else {
-        let pos = [pos[0] as usize, pos[1] as usize];
-        board[pos[0] + shape.0 * pos[1]]
     }
 }

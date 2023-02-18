@@ -7,10 +7,10 @@ use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
     game::{BoardType, GameParams, Resource},
     qtree::FRESH_TICKS,
-    AppData, Bullet, CellState,
+    Bullet, CellState,
 };
 
-use crate::bg_image::BgImage;
+use crate::{app_data::AppData, bg_image::BgImage};
 
 const WINDOW_HEIGHT: f64 = 800.;
 
@@ -355,14 +355,19 @@ impl eframe::App for TemplateApp {
                 if self.show_labels {
                     self.img_labels
                         .paint(&response, &painter, &self.app_data, |app_data| {
-                            let (size, image) =
-                                app_data.labeled_image().unwrap_or_else(|| ([0, 0], vec![]));
+                            let (size, image) = app_data
+                                .game
+                                .borrow()
+                                .labeled_image()
+                                .unwrap_or_else(|| ([0, 0], vec![]));
                             egui::ColorImage::from_rgb(size, &image)
                         });
                 } else {
                     self.img_gray
                         .paint(&response, &painter, &self.app_data, |app_data| {
                             let (size, image) = app_data
+                                .game
+                                .borrow()
                                 .occupancy_image()
                                 .unwrap_or_else(|| ([0, 0], vec![]));
                             let image = image

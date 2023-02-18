@@ -11,7 +11,6 @@ use std::{
 
 use crate::{
     agent::{Agent, AgentClass, AgentState, Bullet},
-    app_data::is_passable_at,
     collision::CollisionShape,
     entity::{Entity, GameEvent},
     measure_time,
@@ -675,6 +674,49 @@ impl Game {
     //         board[pos[0] as usize + pos[1] as usize * shape.0]
     //     }
     // }
+
+    pub fn occupancy_image(&self) -> Option<([usize; 2], Vec<u8>)> {
+        const OBSTACLE_COLOR: u8 = 63u8;
+        const BACKGROUND_COLOR: u8 = 127u8;
+
+        Some((
+            [self.xs, self.ys],
+            self.board
+                .iter()
+                .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
+                .collect::<Vec<_>>(),
+        ))
+    }
+
+    pub fn labeled_image(&self) -> Option<([usize; 2], Vec<u8>)> {
+        let mut rng = Xor128::new(616516);
+        let max_label = *self.mesh.labeled_image.iter().max()? + 1;
+
+        const OBSTACLE_COLOR: u8 = 63u8;
+
+        let label_colors = (0..max_label)
+            .map(|label| {
+                if label == 0 {
+                    [OBSTACLE_COLOR, OBSTACLE_COLOR, OBSTACLE_COLOR]
+                } else {
+                    [
+                        (rng.nexti() % 0x80) as u8,
+                        (rng.nexti() % 0x80) as u8,
+                        (rng.nexti() % 0x80) as u8,
+                    ]
+                }
+            })
+            .collect::<Vec<_>>();
+        Some((
+            [self.xs, self.ys],
+            self.mesh
+                .labeled_image
+                .iter()
+                .map(|p| label_colors[*p as usize].into_iter())
+                .flatten()
+                .collect::<Vec<_>>(),
+        ))
+    }
 }
 
 /// Separating axis theorem is relatively fast algorithm to detect collision between convex polygons,
@@ -699,5 +741,15 @@ pub(crate) fn separating_axis(
         0. < bbox[2] && bbox[0] < dir.magnitude() && 0. < bbox[3] && bbox[1] < 0.
     } else {
         false
+    }
+}
+
+pub fn is_passable_at(board: &[bool], shape: (usize, usize), pos: [f64; 2]) -> bool {
+    let pos = [pos[0] as isize, pos[1] as isize];
+    if pos[0] < 0 || shape.0 as isize <= pos[0] || pos[1] < 0 || shape.1 as isize <= pos[1] {
+        false
+    } else {
+        let pos = [pos[0] as usize, pos[1] as usize];
+        board[pos[0] + shape.0 * pos[1]]
     }
 }
