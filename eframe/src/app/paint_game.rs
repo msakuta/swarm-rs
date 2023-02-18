@@ -107,6 +107,8 @@ impl TemplateApp {
             paint_agents(&response, &painter, self, &self.view_transform());
 
             paint_bullets(&response, &painter, &self.app_data);
+
+            paint_big_message(&response, &painter, &self.app_data, ui.available_size());
         });
     }
 }
@@ -576,5 +578,30 @@ fn paint_resources(response: &Response, painter: &Painter, data: &AppData) {
 
     for resource in &game.resources {
         draw_resource(resource, to_point(resource.pos));
+    }
+}
+
+fn paint_big_message(_response: &Response, painter: &Painter, data: &AppData, size: Vec2) {
+    if 0. < data.big_message_time {
+        let color = Color32::from_rgba_unmultiplied(
+            255,
+            255,
+            255,
+            ((data.big_message_time / 1000.).min(1.) * 255.) as u8,
+        );
+
+        // Not sure if it is correct way to do this, but `clip_rect()` doesn't seem to consider side panel,
+        // and `ui.available_size()` assigns 0 to y.
+        let rect = painter.clip_rect();
+        let mut pos = (rect.min.to_vec2() + rect.max.to_vec2()) / 2.;
+        pos.x = rect.min.x + size.x / 2.;
+
+        painter.text(
+            pos.to_pos2(),
+            Align2::CENTER_CENTER,
+            &data.big_message,
+            FontId::proportional(48.),
+            color,
+        );
     }
 }

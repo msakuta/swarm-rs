@@ -80,7 +80,7 @@ impl AppData {
         }
     }
 
-    pub fn update(&mut self) -> (bool, f64) {
+    pub fn update(&mut self, delta_time: f64) -> (bool, f64) {
         self.game_params.agent_count = self.agent_count_text.parse().unwrap_or(3);
         let game = &mut self.game;
         game.set_params(&self.game_params);
@@ -94,6 +94,9 @@ impl AppData {
                 self.big_message_time = 5000.;
             }
         }
+
+        self.big_message_time = (self.big_message_time - delta_time).max(0.);
+
         self.global_render_time += interval;
         (self.game_params.paused, interval)
     }
