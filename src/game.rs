@@ -154,7 +154,7 @@ impl Game {
         let xs = 128;
         let ys = 128;
 
-        let MeshResult { board, mesh } = Self::create_perlin_board(&BoardParams {
+        let MeshResult { board, mesh } = Self::create_rooms_board(&BoardParams {
             shape: (xs, ys),
             seed,
             simplify,

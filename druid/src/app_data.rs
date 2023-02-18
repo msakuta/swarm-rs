@@ -89,7 +89,7 @@ impl AppData {
             ys_text: game.shape().1.to_string(),
             seed_text: seed.to_string(),
             maze_expansions: maze_expansion.to_string(),
-            board_type: BoardType::Perlin,
+            board_type: BoardType::Rooms,
             simplify_text: game.simplify.to_string(),
             agent_count_text: game.agent_count.to_string(),
             game: Rc::new(RefCell::new(game)),

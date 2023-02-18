@@ -66,7 +66,7 @@ impl Default for SwarmRsApp {
             show_labels: false,
             app_data: AppData::new(WINDOW_HEIGHT),
             draw_circle: false,
-            board_type: BoardType::Perlin,
+            board_type: BoardType::Rooms,
             xs: 128,
             ys: 128,
             maze_expansions: 512,
