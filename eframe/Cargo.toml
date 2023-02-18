@@ -18,7 +18,7 @@ eframe = { version = "0.20.0", default-features = false, features = [
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
 
-swarm-rs = { path = "..", features = ["druid", "serde"] }
+swarm-rs = { path = "..", features = ["serde"] }
 cgmath = "0.18.0"
 
 # web:
