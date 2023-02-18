@@ -25,10 +25,6 @@ jobs:
         # Optional version of wasm-pack to install (eg. "v0.9.1", "latest")
         #version: # optional, default is latest
 
-    - uses: jetli/trunk-action@v0.4.0
-      with:
-        # Optional version of trunk to install(eg. 'v0.16.0', 'latest')
-        version: 'latest'
     - name: Build with trunk
       run: cd eframe && trunk build --release
     - name: Deploy
