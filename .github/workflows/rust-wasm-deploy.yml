@@ -22,7 +22,7 @@ jobs:
         version: 'latest'
 
     - name: Build with trunk
-      run: rustup target add wasm32-unknown-unknown && cd eframe && trunk build --release
+      run: rustup target add wasm32-unknown-unknown && cd eframe && trunk build --release --public-url swarm-rs
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
       with:
