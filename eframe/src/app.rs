@@ -134,11 +134,13 @@ impl SwarmRsApp {
                 self.img_labels.clear();
             }
 
-            ui.radio_value(&mut self.board_type, BoardType::Rect, "Rect");
-            ui.radio_value(&mut self.board_type, BoardType::Crank, "Crank");
-            ui.radio_value(&mut self.board_type, BoardType::Perlin, "Perlin");
-            ui.radio_value(&mut self.board_type, BoardType::Rooms, "Rooms");
-            ui.radio_value(&mut self.board_type, BoardType::Maze, "Maze");
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut self.board_type, BoardType::Rect, "Rect");
+                ui.radio_value(&mut self.board_type, BoardType::Crank, "Crank");
+                ui.radio_value(&mut self.board_type, BoardType::Perlin, "Perlin");
+                ui.radio_value(&mut self.board_type, BoardType::Rooms, "Rooms");
+                ui.radio_value(&mut self.board_type, BoardType::Maze, "Maze");
+            });
 
             ui.horizontal(|ui| {
                 ui.label("Width: ");
@@ -167,31 +169,35 @@ impl SwarmRsApp {
         ui.group(|ui| {
             ui.label("View options");
 
-            ui.group(|ui| {
+            ui.horizontal(|ui| {
                 ui.add(egui::Checkbox::new(&mut self.app_data.path_visible, "Path"));
 
                 ui.add(egui::Checkbox::new(&mut self.draw_circle, "Circle"));
             });
 
-            ui.add(egui::Checkbox::new(
-                &mut self.app_data.qtree_visible,
-                "QTree",
-            ));
+            ui.horizontal(|ui| {
+                ui.add(egui::Checkbox::new(
+                    &mut self.app_data.qtree_visible,
+                    "QTree",
+                ));
 
-            ui.add(egui::Checkbox::new(
-                &mut self.app_data.qtree_search_visible,
-                "QTree search",
-            ));
+                ui.add(egui::Checkbox::new(
+                    &mut self.app_data.qtree_search_visible,
+                    "QTree search",
+                ));
+            });
 
-            ui.add(egui::Checkbox::new(
-                &mut self.app_data.target_visible,
-                "Target line",
-            ));
+            ui.horizontal(|ui| {
+                ui.add(egui::Checkbox::new(
+                    &mut self.app_data.target_visible,
+                    "Target line",
+                ));
 
-            ui.add(egui::Checkbox::new(
-                &mut self.app_data.entity_trace_visible,
-                "Trace line",
-            ));
+                ui.add(egui::Checkbox::new(
+                    &mut self.app_data.entity_trace_visible,
+                    "Trace line",
+                ));
+            });
 
             ui.add(egui::Checkbox::new(
                 &mut self.app_data.entity_label_visible,
