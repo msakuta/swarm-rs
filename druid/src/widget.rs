@@ -241,53 +241,55 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
             .expand_width(),
         );
 
-    let tab_behavior_tree = |get: fn(&AppData) -> &Rc<String>,
-                             get_mut: fn(&mut AppData) -> &mut Rc<String>,
-                             file: fn(&mut AppData) -> &str| {
-        Flex::column()
-            .cross_axis_alignment(CrossAxisAlignment::Start)
-            .with_child(Label::new(|data: &AppData, _env: &_| data.message.clone()).padding(5.))
-            .with_child(
-                Flex::row()
-                    .with_child(Button::new("Apply").on_click(
-                        move |_, app_data: &mut AppData, _| {
-                            app_data.try_load_behavior_tree(get(app_data).clone(), |params| {
-                                &mut params.agent_source
-                            });
-                        },
-                    ))
-                    .with_child(TextBox::new().lens(AppData::agent_source_file))
-                    .with_child(Button::new("Reload from file").on_click(
-                        move |_, app_data: &mut AppData, _| match std::fs::read_to_string(&file(
-                            app_data,
-                        )) {
-                            Ok(s) => {
-                                let s = Rc::new(s);
-                                if app_data.try_load_behavior_tree(s.clone(), |params| {
-                                    &mut params.spawner_source
-                                }) {
-                                    *get_mut(app_data) = s;
-                                }
-                            }
-                            Err(e) => app_data.message = format!("Read file error! {e:?}"),
-                        },
-                    )),
-            )
-            // For some reason, scroll box doesn't seem to allow scrolling when the text box is longer than the window height.
-            .with_child(
-                Scroll::new(
-                    TextBox::multiline()
-                        .lens(Field::new(
-                            move |app_data: &AppData| get(app_data).as_ref(),
-                            move |app_data| Rc::make_mut(get_mut(app_data)),
+    let tab_behavior_tree =
+        |get: fn(&AppData) -> &Rc<String>,
+         get_mut: fn(&mut AppData) -> &mut Rc<String>,
+         file: fn(&AppData) -> &String,
+         file_mut: fn(&mut AppData) -> &mut String| {
+            Flex::column()
+                .cross_axis_alignment(CrossAxisAlignment::Start)
+                .with_child(Label::new(|data: &AppData, _env: &_| data.message.clone()).padding(5.))
+                .with_child(
+                    Flex::row()
+                        .with_child(Button::new("Apply").on_click(
+                            move |_, app_data: &mut AppData, _| {
+                                app_data.try_load_behavior_tree(get(app_data).clone(), |params| {
+                                    &mut params.agent_source
+                                });
+                            },
                         ))
-                        .padding(5.0)
-                        .fix_width(BAR_WIDTH),
+                        .with_child(TextBox::new().lens(Field::new(file, file_mut)))
+                        .with_child(Button::new("Reload from file").on_click(
+                            move |_, app_data: &mut AppData, _| match std::fs::read_to_string(
+                                &file(app_data),
+                            ) {
+                                Ok(s) => {
+                                    let s = Rc::new(s);
+                                    if app_data.try_load_behavior_tree(s.clone(), |params| {
+                                        &mut params.spawner_source
+                                    }) {
+                                        *get_mut(app_data) = s;
+                                    }
+                                }
+                                Err(e) => app_data.message = format!("Read file error! {e:?}"),
+                            },
+                        )),
                 )
-                .vertical(),
-            )
-            .background(BG)
-    };
+                // For some reason, scroll box doesn't seem to allow scrolling when the text box is longer than the window height.
+                .with_child(
+                    Scroll::new(
+                        TextBox::multiline()
+                            .lens(Field::new(
+                                move |app_data: &AppData| get(app_data).as_ref(),
+                                move |app_data| Rc::make_mut(get_mut(app_data)),
+                            ))
+                            .padding(5.0)
+                            .fix_width(BAR_WIDTH),
+                    )
+                    .vertical(),
+                )
+                .background(BG)
+        };
 
     let tabs = Tabs::new()
         .with_tab("Main", main_tab)
@@ -297,6 +299,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 |app_data: &AppData| &app_data.agent_source_buffer,
                 |app_data| &mut app_data.agent_source_buffer,
                 |app_data| &app_data.agent_source_file,
+                |app_data| &mut app_data.agent_source_file,
             ),
         )
         .with_tab(
@@ -305,6 +308,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 |app_data: &AppData| &app_data.spawner_source_buffer,
                 |app_data| &mut app_data.spawner_source_buffer,
                 |app_data| &app_data.spawner_source_file,
+                |app_data| &mut app_data.spawner_source_file,
             ),
         )
         .border(Color::GRAY, 2.)

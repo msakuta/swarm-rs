@@ -51,7 +51,6 @@ pub struct AppData {
     pub target_visible: bool,
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
-    pub(crate) source_visible: bool,
     pub agent_source_file: String,
     /// This buffer is not yet applied to the game.
     pub agent_source_buffer: Rc<String>,
@@ -114,7 +113,6 @@ impl AppData {
             target_visible: false,
             entity_label_visible: true,
             entity_trace_visible: false,
-            source_visible: false,
             agent_source_file: AGENT_SOURCE_FILE.to_string(),
             agent_source_buffer,
             spawner_source_file: SPAWNER_SOURCE_FILE.to_string(),

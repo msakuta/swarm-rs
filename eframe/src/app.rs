@@ -8,6 +8,8 @@ use egui::{Pos2, Ui};
 use swarm_rs::game::{BoardType, GameParams};
 
 const WINDOW_HEIGHT: f64 = 800.;
+const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
+const SPAWNER_SOURCE_FILE: &'static str = "behavior_tree_config/spawner.txt";
 
 #[derive(Debug, PartialEq)]
 enum Panel {
@@ -71,8 +73,8 @@ impl Default for TemplateApp {
             ys: 128,
             maze_expansions: 512,
             agent_count: 3,
-            agent_source_file: "../behavior_tree_config/agent.txt".to_owned(),
-            spawner_source_file: "../behavior_tree_config/spawner.txt".to_owned(),
+            agent_source_file: AGENT_SOURCE_FILE.to_owned(),
+            spawner_source_file: SPAWNER_SOURCE_FILE.to_owned(),
             canvas_offset: Pos2::ZERO,
         }
     }
