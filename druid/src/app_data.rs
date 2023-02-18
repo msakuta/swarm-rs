@@ -3,18 +3,13 @@ use swarm_rs::{
     behavior_tree_lite::parse_file,
     // agent::AvoidanceRenderParams,
     game::{BoardParams, BoardType, Game, GameParams},
-    perlin_noise::Xor128,
-    qtree::QTreeSearcher,
 };
 
 use ::druid::{Data, Lens};
 
 use crate::{agent::avoidance::AvoidanceRenderParams, WINDOW_HEIGHT};
 
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, PartialEq, Eq, Data)]
 pub enum LineMode {
@@ -165,58 +160,6 @@ impl AppData {
         self.big_message_time = 5000.;
     }
 
-    pub fn occupancy_image(&self) -> Option<([usize; 2], Vec<u8>)> {
-        const OBSTACLE_COLOR: u8 = 63u8;
-        const BACKGROUND_COLOR: u8 = 127u8;
-
-        let game = self.game.borrow();
-        Some((
-            [game.shape().0, game.shape().1],
-            game.board
-                .iter()
-                .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
-                .collect::<Vec<_>>(),
-        ))
-    }
-
-    pub fn labeled_image(&self) -> Option<([usize; 2], Vec<u8>)> {
-        let game = self.game.borrow();
-
-        let mut rng = Xor128::new(616516);
-        let max_label = *game.mesh.labeled_image.iter().max()? + 1;
-
-        const OBSTACLE_COLOR: u8 = 63u8;
-        const BACKGROUND_COLOR: u8 = 127u8;
-
-        let label_colors = (0..max_label)
-            .map(|label| {
-                if label == 0 {
-                    [OBSTACLE_COLOR, OBSTACLE_COLOR, OBSTACLE_COLOR]
-                } else {
-                    [
-                        (rng.nexti() % 0x80) as u8,
-                        (rng.nexti() % 0x80) as u8,
-                        (rng.nexti() % 0x80) as u8,
-                    ]
-                }
-            })
-            .collect::<Vec<_>>();
-        Some((
-            [game.shape().0, game.shape().1],
-            game.mesh
-                .labeled_image
-                .iter()
-                .map(|p| label_colors[*p as usize].into_iter())
-                .flatten()
-                .collect::<Vec<_>>(),
-        ))
-    }
-
-    pub fn with_qtree(&self, f: impl FnOnce(&QTreeSearcher)) {
-        let game = self.game.borrow();
-        f(&game.qtree);
-    }
-
     pub fn try_load_behavior_tree(
         &mut self,
         src: Rc<String>,
@@ -250,32 +193,5 @@ impl AppData {
                 false
             }
         }
-    }
-
-    pub fn try_load_from_file(
-        &mut self,
-        file: &str,
-        get_mut: fn(&mut AppData) -> &mut Rc<String>,
-        setter: fn(&mut GameParams) -> &mut Rc<String>,
-    ) {
-        match std::fs::read_to_string(file) {
-            Ok(s) => {
-                let s = Rc::new(s);
-                if self.try_load_behavior_tree(s.clone(), setter) {
-                    *get_mut(self) = s;
-                }
-            }
-            Err(e) => self.message = format!("Read file error! {e:?}"),
-        }
-    }
-}
-
-pub(crate) fn is_passable_at(board: &[bool], shape: (usize, usize), pos: [f64; 2]) -> bool {
-    let pos = [pos[0] as isize, pos[1] as isize];
-    if pos[0] < 0 || shape.0 as isize <= pos[0] || pos[1] < 0 || shape.1 as isize <= pos[1] {
-        false
-    } else {
-        let pos = [pos[0] as usize, pos[1] as usize];
-        board[pos[0] + shape.0 * pos[1]]
     }
 }

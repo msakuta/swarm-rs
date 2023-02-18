@@ -85,7 +85,7 @@ pub(crate) fn create_mesh(
 
     let lines = trace_lines(&field);
     #[cfg(feature = "druid")]
-    let mut simplified_vertices = 0;
+    let mut _simplified_vertices = 0;
     for line in &lines {
         let simplified = if simplify_epsilon == 0. {
             line.iter().map(|p| [p[0] as f64, p[1] as f64]).collect()
@@ -125,7 +125,7 @@ pub(crate) fn create_mesh(
             }
             bez_path.close_path();
             simplified_border.push(bez_path);
-            simplified_vertices += simplified.len();
+            _simplified_vertices += simplified.len();
         }
 
         let line_string: geo::geometry::LineString = simplified
@@ -140,7 +140,7 @@ pub(crate) fn create_mesh(
     //     lines.len(),
     //     lines.iter().map(|line| line.len()).sum::<usize>(),
     //     simplified_border.len(),
-    //     simplified_vertices
+    //     _simplified_vertices
     // );
 
     let triangulation = triangulate(&points);

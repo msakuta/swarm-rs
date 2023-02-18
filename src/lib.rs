@@ -27,9 +27,6 @@ pub use crate::{
 };
 pub use behavior_tree_lite;
 
-const WINDOW_WIDTH: f64 = 1200.;
-const WINDOW_HEIGHT: f64 = 800.;
-
 // #[wasm_bindgen]
 // pub fn wasm_main() {
 //     // This hook is necessary to get panic messages in the console

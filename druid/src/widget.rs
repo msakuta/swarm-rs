@@ -6,10 +6,7 @@ use crate::{
     board_widget::BoardWidget,
 };
 
-use ::swarm_rs::{
-    behavior_tree_lite::parse_file,
-    game::{AvoidanceMode, BoardType},
-};
+use ::swarm_rs::game::{AvoidanceMode, BoardType};
 use druid::widget::{
     Button, Checkbox, CrossAxisAlignment, Flex, Label, Radio, RadioGroup, Scroll, Slider, Tabs,
     TextBox, WidgetExt,

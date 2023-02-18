@@ -12,6 +12,8 @@ use swarm_rs::{
 
 use crate::bg_image::BgImage;
 
+const WINDOW_HEIGHT: f64 = 800.;
+
 #[derive(Debug, PartialEq)]
 enum Panel {
     Main,
@@ -68,7 +70,7 @@ impl Default for TemplateApp {
             img_labels: BgImage::new(),
             open_panel: Panel::Main,
             show_labels: false,
-            app_data: AppData::new(),
+            app_data: AppData::new(WINDOW_HEIGHT),
             draw_circle: false,
             xs: 128,
             ys: 128,

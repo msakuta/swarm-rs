@@ -5,7 +5,6 @@ use crate::{
     game::{BoardParams, BoardType, Game, GameParams},
     perlin_noise::Xor128,
     qtree::QTreeSearcher,
-    WINDOW_HEIGHT,
 };
 
 use std::{
@@ -63,10 +62,10 @@ pub struct AppData {
 }
 
 impl AppData {
-    pub fn new() -> Self {
+    pub fn new(window_height: f64) -> Self {
         let mut game = Game::new();
         let seed = 123513;
-        let scale = WINDOW_HEIGHT / game.ys as f64;
+        let scale = window_height / game.ys as f64;
         let maze_expansion = 2000;
 
         const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
