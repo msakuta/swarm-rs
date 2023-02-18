@@ -1,6 +1,6 @@
 mod paint_game;
 
-use std::{rc::Rc, time::Duration};
+use std::rc::Rc;
 
 use crate::{app_data::AppData, bg_image::BgImage};
 use cgmath::Matrix3;
@@ -285,7 +285,7 @@ impl eframe::App for SwarmRsApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        ctx.request_repaint_after(Duration::from_millis(16));
+        ctx.request_repaint();
 
         let dt = ctx.input().stable_dt.min(0.1);
 

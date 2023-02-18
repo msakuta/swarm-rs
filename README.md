@@ -45,21 +45,43 @@ tree main = Sequence {
 
 ![screenshot](https://msakuta.github.io/images/showcase/swarm-rs02.png)
 
-## How to run
+## How to run native application on PC
 
 * Install [Rust](https://www.rust-lang.org/learn/get-started)
+
+We have 2 versions of native application, using different GUI frameworks.
+
+### eframe
+
 * Run `cargo r -p swarm-rs-eframe`
+
+### druid
+
+* Run `cargo r -p swarm-rs-druid`
+
+Note that Druid is being discontinued so we will drop support some time in the future.
 
 
 ## How to build Wasm version
 
 You can build the application to WebAssembly and run on the browser.
 
+* Install [Rust](https://www.rust-lang.org/learn/get-started)
 * Install [wasm-pack](https://rustwasm.github.io/wasm-pack/)
-* Run `cd druid && wasm-pack build --target web`
-* Copy `druid/index.html` and `druid/index.js` to `druid/pkg`
 
-Currently only Druid version is compiled to Wasm.
+We have 2 versions of wasm application, using different GUI frameworks.
+
+
+### eframe
+
+* Install [trunk](https://github.com/thedodd/trunk) by `cargo install trunk`
+* Run `cd eframe && trunk serve` for development server, or
+* Run `cd eframe && trunk build --release` for release build in `eframe/dist`
+
+### druid
+
+* Run `cd druid && wasm-pack build --release`
+* Copy `druid/index.html` and `druid/index.js` to `druid/pkg`
 
 
 ## How to edit the behavior tree

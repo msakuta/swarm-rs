@@ -29,3 +29,12 @@ jobs:
       run: cargo test --verbose
     - name: Build
       run: cd druid && wasm-pack build --target web
+
+    - uses: jetli/trunk-action@v0.4.0
+      with:
+        # Optional version of trunk to install(eg. 'v0.16.0', 'latest')
+        version: 'latest'
+    - name: Build with trunk
+      run: cd eframe && trunk build --release
+    - name: Check artifacts
+      run: cd eframe && ls dist
