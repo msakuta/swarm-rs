@@ -30,6 +30,7 @@ impl SwarmRsApp {
             pointer: bool,
             delta: Vec2,
             interact_pos: Vector2<f64>,
+            hover_pos: Option<Pos2>,
         }
 
         let ui_result = {
@@ -41,8 +42,15 @@ impl SwarmRsApp {
                 pointer: input.pointer.primary_down(),
                 delta: input.pointer.delta(),
                 interact_pos: Vector2::new(interact_pos.x as f64, interact_pos.y as f64),
+                hover_pos: input.pointer.hover_pos(),
             }
         };
+
+        self.mouse_pos = ui_result.hover_pos.map(|pos| {
+            let point = Point2::new(pos.x as f64, pos.y as f64);
+            let transformed = transform_point(&self.inverse_view_transform(), point);
+            pos2(transformed.x as f32, transformed.y as f32)
+        });
 
         if ui.ui_contains_pointer() {
             if ui_result.scroll_delta[1] != 0. {

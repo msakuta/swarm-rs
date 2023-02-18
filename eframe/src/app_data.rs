@@ -10,7 +10,6 @@ use std::rc::Rc;
 pub struct AppData {
     pub game: Game,
     pub game_params: GameParams,
-    pub agent_count_text: String,
     pub origin: [f64; 2],
     pub scale: f64,
     pub message: String,
@@ -47,7 +46,6 @@ impl AppData {
         game.init();
 
         Self {
-            agent_count_text: game.agent_count.to_string(),
             game,
             game_params,
             origin: [0., 0.],

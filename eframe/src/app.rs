@@ -50,6 +50,9 @@ pub struct SwarmRsApp {
 
     #[serde(skip)]
     pub(crate) canvas_offset: Pos2,
+
+    #[serde(skip)]
+    mouse_pos: Option<Pos2>,
 }
 
 impl Default for SwarmRsApp {
@@ -71,6 +74,7 @@ impl Default for SwarmRsApp {
             agent_source_file: AGENT_SOURCE_FILE.to_owned(),
             spawner_source_file: SPAWNER_SOURCE_FILE.to_owned(),
             canvas_offset: Pos2::ZERO,
+            mouse_pos: None,
         }
     }
 }
@@ -112,15 +116,13 @@ impl SwarmRsApp {
     }
 
     fn show_panel_ui(&mut self, ui: &mut Ui) {
-        ui.heading("Side Panel");
-
         ui.add(egui::Checkbox::new(
             &mut self.app_data.game_params.paused,
             "Paused",
         ));
 
         ui.group(|ui| {
-            ui.label("New game options");
+            ui.heading("New game options");
 
             if ui.button("New game").clicked() {
                 let params = BoardParams {
@@ -167,7 +169,7 @@ impl SwarmRsApp {
         });
 
         ui.group(|ui| {
-            ui.label("View options");
+            ui.heading("View options");
 
             ui.horizontal(|ui| {
                 ui.add(egui::Checkbox::new(&mut self.app_data.path_visible, "Path"));
@@ -205,6 +207,34 @@ impl SwarmRsApp {
             ));
 
             ui.add(egui::Checkbox::new(&mut self.show_labels, "Label image"));
+        });
+
+        ui.group(|ui| {
+            ui.heading("Debug output");
+
+            let game = &self.app_data.game;
+
+            ui.label(format!("Scale: {:.06}", self.app_data.scale));
+
+            ui.label(format!("Cursor: {:?}", self.mouse_pos));
+
+            ui.label({
+                let profiler = game.qtree_profiler.borrow();
+                format!(
+                    "QTree update time: {:.06}ms, calls: {}",
+                    profiler.get_average() * 1e3,
+                    profiler.get_count()
+                )
+            });
+
+            ui.label({
+                let profiler = game.path_find_profiler.borrow();
+                format!(
+                    "Path find time: {:.06}ms, calls: {}",
+                    profiler.get_average() * 1e3,
+                    profiler.get_count()
+                )
+            });
         });
     }
 
