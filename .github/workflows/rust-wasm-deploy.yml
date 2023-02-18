@@ -15,17 +15,35 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: wasm-pack-action
-      uses: jetli/wasm-pack-action@v0.3.0
+    - uses: jetli/trunk-action@v0.4.0
+      with:
+        # Optional version of trunk to install(eg. 'v0.16.0', 'latest')
+        version: 'latest'
+    # - name: wasm-pack-action
+    #   uses: jetli/wasm-pack-action@v0.3.0
       #with:
         # Optional version of wasm-pack to install (eg. "v0.9.1", "latest")
         #version: # optional, default is latest
-    - name: Build
-      run: cd druid && wasm-pack build --target web
-    - name: Copy static data
-      run: cd druid && cp index.html index.js pkg/ && rm pkg/.gitignore
+
+    - uses: jetli/trunk-action@v0.4.0
+      with:
+        # Optional version of trunk to install(eg. 'v0.16.0', 'latest')
+        version: 'latest'
+    - name: Build with trunk
+      run: cd eframe && trunk build --release
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./druid/pkg
+        publish_dir: ./eframe/dist
+        force_orphan: true
+
+    # - name: Build
+    #   run: cd druid && wasm-pack build --target web
+    # - name: Copy static data
+    #   run: cd druid && cp index.html index.js pkg/ && rm pkg/.gitignore
+    # - name: Deploy
+    #   uses: peaceiris/actions-gh-pages@v3
+    #   with:
+    #     github_token: ${{ secrets.GITHUB_TOKEN }}
+    #     publish_dir: ./druid/pkg
