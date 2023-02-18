@@ -1,21 +1,10 @@
 use ::swarm_rs::{
     behavior_tree_lite::parse_file,
-    // agent::AvoidanceRenderParams,
     game::{BoardParams, BoardType, Game, GameParams},
     qtree::QTreeSearcher,
 };
 
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
-
-#[derive(Clone, PartialEq, Eq)]
-pub enum LineMode {
-    None,
-    Line,
-    Polygon,
-}
+use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone)]
 pub struct AppData {
@@ -28,21 +17,11 @@ pub struct AppData {
     pub game_params: GameParams,
     pub(crate) simplify_text: String,
     pub agent_count_text: String,
-    pub(crate) line_mode: LineMode,
-    pub(crate) simplified_visible: bool,
-    pub(crate) triangulation_visible: bool,
-    pub(crate) unpassable_visible: bool,
-    pub(crate) triangle_label_visible: bool,
-    pub(crate) show_label_image: bool,
     pub origin: [f64; 2],
     pub scale: f64,
     pub message: String,
     pub(crate) big_message: String,
     pub big_message_time: f64,
-    // pub(super) mouse_pos: Option<Point>,
-    pub(crate) get_board_time: f64,
-    pub(crate) render_board_time: Cell<f64>,
-    pub(crate) render_stats: Rc<RefCell<String>>,
     pub path_visible: bool,
     // pub(crate) avoidance_render_params: AvoidanceRenderParams,
     pub qtree_visible: bool,
@@ -91,23 +70,12 @@ impl AppData {
             agent_count_text: game.agent_count.to_string(),
             game: Rc::new(RefCell::new(game)),
             game_params,
-            line_mode: LineMode::None,
-            simplified_visible: false,
-            triangulation_visible: false,
-            unpassable_visible: false,
-            triangle_label_visible: false,
-            show_label_image: false,
             origin: [0., 0.],
             scale,
             message: "".to_string(),
             big_message: "Game Start".to_string(),
             big_message_time: 5000.,
-            // mouse_pos: None,
-            render_board_time: Cell::new(0.),
-            get_board_time: 0.,
-            render_stats: Rc::new(RefCell::new("".to_string())),
             path_visible: true,
-            // avoidance_render_params: AvoidanceRenderParams::new(),
             qtree_visible: false,
             qtree_search_visible: false,
             target_visible: false,
