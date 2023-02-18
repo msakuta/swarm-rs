@@ -8,10 +8,8 @@ use swarm_rs::game::UpdateResult;
 use std::rc::Rc;
 
 pub struct AppData {
-    pub maze_expansions: String,
     pub game: Game,
     pub game_params: GameParams,
-    pub(crate) simplify_text: String,
     pub agent_count_text: String,
     pub origin: [f64; 2],
     pub scale: f64,
@@ -35,7 +33,6 @@ impl AppData {
     pub fn new(window_height: f64) -> Self {
         let mut game = Game::new();
         let scale = window_height / game.shape().1 as f64;
-        let maze_expansion = 2000;
 
         let agent_source_buffer =
             Rc::new(include_str!("../../behavior_tree_config/agent.txt").to_string());
@@ -50,8 +47,6 @@ impl AppData {
         game.init();
 
         Self {
-            maze_expansions: maze_expansion.to_string(),
-            simplify_text: game.simplify.to_string(),
             agent_count_text: game.agent_count.to_string(),
             game,
             game_params,
@@ -72,8 +67,8 @@ impl AppData {
         }
     }
 
-    pub fn update(&mut self, delta_time: f64) -> Option<UpdateResult> {
-        self.game_params.agent_count = self.agent_count_text.parse().unwrap_or(3);
+    pub fn update(&mut self, delta_time: f64, agent_count: usize) -> Option<UpdateResult> {
+        self.game_params.agent_count = agent_count;
         let game = &mut self.game;
         game.set_params(&self.game_params);
         let interval = game.interval;
@@ -94,20 +89,15 @@ impl AppData {
         update_res
     }
 
-    pub fn new_game(&mut self, seed: u32, board_type: BoardType, shape: (usize, usize)) {
-        let simplify = self.simplify_text.parse().unwrap_or(1.);
-        let params = BoardParams {
-            shape,
-            seed,
-            simplify,
-            maze_expansions: self.maze_expansions.parse().unwrap_or(1),
-        };
+    pub fn new_game(&mut self, board_type: BoardType, params: BoardParams, show_message: bool) {
         let ref mut game = self.game;
         game.new_board(board_type, &params);
         game.init();
 
-        self.big_message = "Game Start".to_string();
-        self.big_message_time = 5000.;
+        if show_message {
+            self.big_message = "Game Start".to_string();
+            self.big_message_time = 5000.;
+        }
     }
 
     pub fn with_qtree(&self, f: impl FnOnce(&QTreeSearcher)) {

@@ -5,7 +5,7 @@ use std::{rc::Rc, time::Duration};
 use crate::{app_data::AppData, bg_image::BgImage};
 use cgmath::Matrix3;
 use egui::{Pos2, Ui};
-use swarm_rs::game::{BoardType, GameParams, UpdateResult};
+use swarm_rs::game::{BoardParams, BoardType, GameParams, UpdateResult};
 
 const WINDOW_HEIGHT: f64 = 800.;
 const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
@@ -100,9 +100,13 @@ impl SwarmRsApp {
         };
 
         println!("Recreating Game with {:?}", (res.xs, res.ys));
-        let seed = res.seed_text.parse().unwrap_or(1);
-        res.app_data
-            .new_game(seed, res.board_type, (res.xs, res.ys));
+        let params = BoardParams {
+            shape: (res.xs, res.ys),
+            seed: res.seed_text.parse().unwrap_or(1),
+            simplify: 0.,
+            maze_expansions: res.maze_expansions,
+        };
+        res.app_data.new_game(res.board_type, params, true);
 
         res
     }
@@ -119,10 +123,13 @@ impl SwarmRsApp {
             ui.label("New game options");
 
             if ui.button("New game").clicked() {
-                self.app_data.maze_expansions = self.maze_expansions.to_string();
-                let seed = self.seed_text.parse().unwrap_or(1);
-                self.app_data
-                    .new_game(seed, self.board_type, (self.xs, self.ys));
+                let params = BoardParams {
+                    shape: (self.xs, self.ys),
+                    seed: self.seed_text.parse().unwrap_or(1),
+                    simplify: 0.,
+                    maze_expansions: self.maze_expansions,
+                };
+                self.app_data.new_game(self.board_type, params, true);
                 self.img_gray.clear();
                 self.img_labels.clear();
             }
@@ -154,7 +161,6 @@ impl SwarmRsApp {
             ui.horizontal(|ui| {
                 ui.label("Agents");
                 ui.add(egui::Slider::new(&mut self.agent_count, 1..=100));
-                self.app_data.agent_count_text = self.agent_count.to_string();
             });
         });
 
@@ -247,12 +253,16 @@ impl eframe::App for SwarmRsApp {
 
         let dt = ctx.input().stable_dt.min(0.1);
 
-        let update_res = self.app_data.update(dt as f64 * 1000.);
+        let update_res = self.app_data.update(dt as f64 * 1000., self.agent_count);
 
         if let Some(UpdateResult::TeamWon(_)) = update_res {
-            let seed = self.seed_text.parse().unwrap_or(1);
-            self.app_data
-                .new_game(seed, self.board_type, (self.xs, self.ys));
+            let params = BoardParams {
+                shape: (self.xs, self.ys),
+                seed: self.seed_text.parse().unwrap_or(1),
+                simplify: 0.,
+                maze_expansions: self.maze_expansions,
+            };
+            self.app_data.new_game(self.board_type, params, false);
             self.img_gray.clear();
             self.img_labels.clear();
         }
