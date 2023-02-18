@@ -34,6 +34,7 @@ pub struct Resource {
 pub(crate) type Board = Vec<bool>;
 
 #[cfg_attr(feature = "druid", derive(Data))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardType {
     Rect,

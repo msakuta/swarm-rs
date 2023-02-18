@@ -38,6 +38,7 @@ pub struct SwarmRsApp {
 
     draw_circle: bool,
 
+    board_type: BoardType,
     pub xs: usize,
     pub ys: usize,
     maze_expansions: usize,
@@ -59,6 +60,7 @@ impl Default for SwarmRsApp {
             show_labels: false,
             app_data: AppData::new(WINDOW_HEIGHT),
             draw_circle: false,
+            board_type: BoardType::Perlin,
             xs: 128,
             ys: 128,
             maze_expansions: 512,
@@ -94,8 +96,8 @@ impl SwarmRsApp {
             Self::default()
         };
 
-        println!("Recreating with {:?}", (res.xs, res.ys));
-        res.app_data.new_game((res.xs, res.ys));
+        println!("Recreating Game with {:?}", (res.xs, res.ys));
+        res.app_data.new_game(res.board_type, (res.xs, res.ys));
 
         res
     }
@@ -113,16 +115,16 @@ impl SwarmRsApp {
 
             if ui.button("New game").clicked() {
                 self.app_data.maze_expansions = self.maze_expansions.to_string();
-                self.app_data.new_game((self.xs, self.ys));
+                self.app_data.new_game(self.board_type, (self.xs, self.ys));
                 self.img_gray.clear();
                 self.img_labels.clear();
             }
 
-            ui.radio_value(&mut self.app_data.board_type, BoardType::Rect, "Rect");
-            ui.radio_value(&mut self.app_data.board_type, BoardType::Crank, "Crank");
-            ui.radio_value(&mut self.app_data.board_type, BoardType::Perlin, "Perlin");
-            ui.radio_value(&mut self.app_data.board_type, BoardType::Rooms, "Rooms");
-            ui.radio_value(&mut self.app_data.board_type, BoardType::Maze, "Maze");
+            ui.radio_value(&mut self.board_type, BoardType::Rect, "Rect");
+            ui.radio_value(&mut self.board_type, BoardType::Crank, "Crank");
+            ui.radio_value(&mut self.board_type, BoardType::Perlin, "Perlin");
+            ui.radio_value(&mut self.board_type, BoardType::Rooms, "Rooms");
+            ui.radio_value(&mut self.board_type, BoardType::Maze, "Maze");
 
             ui.horizontal(|ui| {
                 ui.label("Width: ");
@@ -241,7 +243,7 @@ impl eframe::App for SwarmRsApp {
         let update_res = self.app_data.update(dt as f64 * 1000.);
 
         if let Some(UpdateResult::TeamWon(_)) = update_res {
-            self.app_data.new_game((self.xs, self.ys));
+            self.app_data.new_game(self.board_type, (self.xs, self.ys));
             self.img_gray.clear();
             self.img_labels.clear();
         }

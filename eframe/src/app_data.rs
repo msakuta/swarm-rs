@@ -10,7 +10,6 @@ use std::rc::Rc;
 pub struct AppData {
     pub seed_text: String,
     pub maze_expansions: String,
-    pub board_type: BoardType,
     pub game: Game,
     pub game_params: GameParams,
     pub(crate) simplify_text: String,
@@ -55,7 +54,6 @@ impl AppData {
         Self {
             seed_text: seed.to_string(),
             maze_expansions: maze_expansion.to_string(),
-            board_type: BoardType::Perlin,
             simplify_text: game.simplify.to_string(),
             agent_count_text: game.agent_count.to_string(),
             game,
@@ -99,7 +97,7 @@ impl AppData {
         update_res
     }
 
-    pub fn new_game(&mut self, shape: (usize, usize)) {
+    pub fn new_game(&mut self, board_type: BoardType, shape: (usize, usize)) {
         let seed = self.seed_text.parse().unwrap_or(1);
         let simplify = self.simplify_text.parse().unwrap_or(1.);
         let params = BoardParams {
@@ -109,7 +107,7 @@ impl AppData {
             maze_expansions: self.maze_expansions.parse().unwrap_or(1),
         };
         let ref mut game = self.game;
-        game.new_board(self.board_type, &params);
+        game.new_board(board_type, &params);
         game.init();
 
         self.big_message = "Game Start".to_string();

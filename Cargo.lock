@@ -2602,6 +2602,7 @@ dependencies = [
  "getrandom",
  "log",
  "rand",
+ "serde",
  "wasm-bindgen",
 ]
 
