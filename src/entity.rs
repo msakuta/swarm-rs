@@ -24,7 +24,7 @@ pub(crate) enum GameEvent {
 }
 
 impl Entity {
-    pub(crate) fn get_id(&self) -> usize {
+    pub fn get_id(&self) -> usize {
         match self {
             Entity::Agent(agent) => agent.id,
             Entity::Spawner(spawner) => spawner.id,
@@ -82,7 +82,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_target(&self) -> Option<usize> {
+    pub fn get_target(&self) -> Option<usize> {
         match self {
             Entity::Agent(agent) => agent.get_target(),
             Entity::Spawner(_) => None,

@@ -50,7 +50,7 @@ pub struct AppData {
     // pub(crate) avoidance_render_params: AvoidanceRenderParams,
     pub qtree_visible: bool,
     pub qtree_search_visible: bool,
-    pub(crate) target_visible: bool,
+    pub target_visible: bool,
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
     pub(crate) source_visible: bool,

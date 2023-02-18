@@ -176,6 +176,11 @@ impl TemplateApp {
                 "QTree search",
             ));
 
+            ui.add(egui::Checkbox::new(
+                &mut self.app_data.target_visible,
+                "Target line",
+            ));
+
             ui.add(egui::Checkbox::new(&mut self.show_labels, "Label image"));
         });
     }
@@ -624,6 +629,21 @@ fn paint_agents(
                     width: 1.,
                 },
             );
+        }
+
+        if data.target_visible {
+            if let Some(target) = agent.get_target() {
+                if let Some(target) = game
+                    .entities
+                    .iter()
+                    .find(|agent| agent.borrow().get_id() == target)
+                {
+                    let target_pos = target.borrow().get_pos();
+                    let line = [pos, to_point(target_pos)];
+
+                    painter.line_segment(line, (1., brush));
+                }
+            }
         }
 
         if data.path_visible {
