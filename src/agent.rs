@@ -623,19 +623,6 @@ impl Agent {
                     return Some(Box::new(self.to_state()));
                 } else if let Some(com) = f.downcast_ref::<IsTargetVisibleCommand>() {
                     let target_pos = com.0;
-                    let target_triangle = find_triangle_at(
-                        &game.mesh,
-                        target_pos,
-                        &mut game.triangle_profiler.borrow_mut(),
-                    );
-                    let self_triangle = find_triangle_at(
-                        &game.mesh,
-                        self.pos,
-                        &mut game.triangle_profiler.borrow_mut(),
-                    );
-                    if target_triangle == self_triangle {
-                        return Some(Box::new(true));
-                    }
                     let ret = Box::new(self.is_position_visible(
                         target_pos,
                         &game.board,
