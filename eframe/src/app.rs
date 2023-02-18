@@ -39,8 +39,9 @@ pub struct SwarmRsApp {
     draw_circle: bool,
 
     board_type: BoardType,
-    pub xs: usize,
-    pub ys: usize,
+    seed_text: String,
+    xs: usize,
+    ys: usize,
     maze_expansions: usize,
     agent_count: usize,
 
@@ -53,7 +54,9 @@ pub struct SwarmRsApp {
 
 impl Default for SwarmRsApp {
     fn default() -> Self {
+        let seed = 123513;
         Self {
+            seed_text: seed.to_string(),
             img_gray: BgImage::new(),
             img_labels: BgImage::new(),
             open_panel: Panel::Main,
@@ -97,7 +100,9 @@ impl SwarmRsApp {
         };
 
         println!("Recreating Game with {:?}", (res.xs, res.ys));
-        res.app_data.new_game(res.board_type, (res.xs, res.ys));
+        let seed = res.seed_text.parse().unwrap_or(1);
+        res.app_data
+            .new_game(seed, res.board_type, (res.xs, res.ys));
 
         res
     }
@@ -115,7 +120,9 @@ impl SwarmRsApp {
 
             if ui.button("New game").clicked() {
                 self.app_data.maze_expansions = self.maze_expansions.to_string();
-                self.app_data.new_game(self.board_type, (self.xs, self.ys));
+                let seed = self.seed_text.parse().unwrap_or(1);
+                self.app_data
+                    .new_game(seed, self.board_type, (self.xs, self.ys));
                 self.img_gray.clear();
                 self.img_labels.clear();
             }
@@ -137,7 +144,7 @@ impl SwarmRsApp {
 
             ui.horizontal(|ui| {
                 ui.label("Seed");
-                ui.text_edit_singleline(&mut self.app_data.seed_text);
+                ui.text_edit_singleline(&mut self.seed_text);
             });
             ui.horizontal(|ui| {
                 ui.label("Maze expansion");
@@ -243,7 +250,9 @@ impl eframe::App for SwarmRsApp {
         let update_res = self.app_data.update(dt as f64 * 1000.);
 
         if let Some(UpdateResult::TeamWon(_)) = update_res {
-            self.app_data.new_game(self.board_type, (self.xs, self.ys));
+            let seed = self.seed_text.parse().unwrap_or(1);
+            self.app_data
+                .new_game(seed, self.board_type, (self.xs, self.ys));
             self.img_gray.clear();
             self.img_labels.clear();
         }

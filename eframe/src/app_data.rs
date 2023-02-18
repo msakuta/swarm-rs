@@ -8,7 +8,6 @@ use swarm_rs::game::UpdateResult;
 use std::rc::Rc;
 
 pub struct AppData {
-    pub seed_text: String,
     pub maze_expansions: String,
     pub game: Game,
     pub game_params: GameParams,
@@ -35,7 +34,6 @@ pub struct AppData {
 impl AppData {
     pub fn new(window_height: f64) -> Self {
         let mut game = Game::new();
-        let seed = 123513;
         let scale = window_height / game.shape().1 as f64;
         let maze_expansion = 2000;
 
@@ -52,7 +50,6 @@ impl AppData {
         game.init();
 
         Self {
-            seed_text: seed.to_string(),
             maze_expansions: maze_expansion.to_string(),
             simplify_text: game.simplify.to_string(),
             agent_count_text: game.agent_count.to_string(),
@@ -97,8 +94,7 @@ impl AppData {
         update_res
     }
 
-    pub fn new_game(&mut self, board_type: BoardType, shape: (usize, usize)) {
-        let seed = self.seed_text.parse().unwrap_or(1);
+    pub fn new_game(&mut self, seed: u32, board_type: BoardType, shape: (usize, usize)) {
         let simplify = self.simplify_text.parse().unwrap_or(1.);
         let params = BoardParams {
             shape,
