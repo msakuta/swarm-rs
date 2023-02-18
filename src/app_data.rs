@@ -58,7 +58,7 @@ pub struct AppData {
     /// This buffer is not yet applied to the game.
     pub agent_source_buffer: Rc<String>,
     pub(crate) spawner_source_file: String,
-    pub(crate) spawner_source_buffer: Rc<String>,
+    pub spawner_source_buffer: Rc<String>,
     pub(crate) global_render_time: f64,
 }
 
@@ -214,7 +214,11 @@ impl AppData {
         f(&game.qtree);
     }
 
-    pub fn try_load_behavior_tree(&mut self, src: Rc<String>) -> bool {
+    pub fn try_load_behavior_tree(
+        &mut self,
+        src: Rc<String>,
+        setter: fn(&mut GameParams) -> &mut Rc<String>,
+    ) -> bool {
         fn count_newlines(src: &str) -> usize {
             src.lines().count()
         }
@@ -222,7 +226,7 @@ impl AppData {
         // Check the syntax before applying
         match parse_file(&src) {
             Ok(("", _)) => {
-                self.game_params.agent_source = src.clone();
+                *setter(&mut self.game_params) = src.clone();
                 self.message = format!(
                     "Behavior tree applied! {}",
                     Rc::strong_count(&self.agent_source_buffer)
@@ -245,11 +249,16 @@ impl AppData {
         }
     }
 
-    pub fn try_load_from_file(&mut self, file: &str, get_mut: fn(&mut AppData) -> &mut Rc<String>) {
+    pub fn try_load_from_file(
+        &mut self,
+        file: &str,
+        get_mut: fn(&mut AppData) -> &mut Rc<String>,
+        setter: fn(&mut GameParams) -> &mut Rc<String>,
+    ) {
         match std::fs::read_to_string(file) {
             Ok(s) => {
                 let s = Rc::new(s);
-                if self.try_load_behavior_tree(s.clone()) {
+                if self.try_load_behavior_tree(s.clone(), setter) {
                     *get_mut(self) = s;
                 }
             }

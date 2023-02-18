@@ -20,7 +20,7 @@ use crate::{
     qtree::{CellState, QTreeSearcher, Rect},
     spawner::Spawner,
     temp_ents::TempEnt,
-    triangle_utils::{check_shape_in_mesh, find_triangle_at},
+    triangle_utils::check_shape_in_mesh,
 };
 
 #[derive(Clone, Debug)]
@@ -97,8 +97,8 @@ pub struct GameParams {
     pub paused: bool,
     pub(crate) avoidance_expands: f64,
     pub(crate) agent_count: usize,
-    pub(crate) agent_source: Rc<String>,
-    pub(crate) spawner_source: Rc<String>,
+    pub agent_source: Rc<String>,
+    pub spawner_source: Rc<String>,
 }
 
 impl GameParams {

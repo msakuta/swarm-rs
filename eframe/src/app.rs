@@ -5,7 +5,7 @@ use eframe::epaint::{self, PathShape};
 use egui::{pos2, Color32, Frame, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
-    game::{BoardType, Resource},
+    game::{BoardType, GameParams, Resource},
     qtree::FRESH_TICKS,
     AppData, Bullet, CellState,
 };
@@ -15,7 +15,8 @@ use crate::bg_image::BgImage;
 #[derive(Debug, PartialEq)]
 enum Panel {
     Main,
-    Editor,
+    AgentEditor,
+    SpawnerEditor,
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -51,6 +52,7 @@ pub struct TemplateApp {
     agent_count: usize,
 
     agent_source_file: String,
+    spawner_source_file: String,
 
     #[serde(skip)]
     canvas_offset: Pos2,
@@ -73,6 +75,7 @@ impl Default for TemplateApp {
             maze_expansions: 512,
             agent_count: 3,
             agent_source_file: "../behavior_tree_config/agent.txt".to_owned(),
+            spawner_source_file: "../behavior_tree_config/spawner.txt".to_owned(),
             canvas_offset: Pos2::ZERO,
         }
     }
@@ -177,25 +180,32 @@ impl TemplateApp {
         });
     }
 
-    fn show_editor(&mut self, ui: &mut Ui) {
+    fn show_editor(
+        &mut self,
+        ui: &mut Ui,
+        contents: impl Fn(&Self) -> Rc<String>,
+        contents_mut: fn(&mut AppData) -> &mut Rc<String>,
+        game_params_mut: fn(&mut GameParams) -> &mut Rc<String>,
+        file: impl Fn(&Self) -> &str,
+        mut file_mut: impl FnMut(&mut Self) -> &mut String,
+    ) {
         ui.label(&self.app_data.message);
 
         ui.horizontal(|ui| {
             if ui.button("Apply").clicked() {
                 self.app_data
-                    .try_load_behavior_tree(self.app_data.agent_source_buffer.clone());
+                    .try_load_behavior_tree(contents(self).clone(), game_params_mut);
             }
-            ui.text_edit_singleline(&mut self.agent_source_file);
+            ui.text_edit_singleline(file_mut(self));
             if ui.button("Reload from file").clicked() {
+                let file = file(self).to_owned();
                 self.app_data
-                    .try_load_from_file(&self.agent_source_file, |app_data| {
-                        &mut app_data.agent_source_buffer
-                    });
+                    .try_load_from_file(&file, contents_mut, game_params_mut);
             }
         });
 
         egui::ScrollArea::vertical().show(ui, |ui| {
-            let source = Rc::make_mut(&mut self.app_data.agent_source_buffer);
+            let source = Rc::make_mut(contents_mut(&mut self.app_data));
             ui.add(
                 egui::TextEdit::multiline(source)
                     .font(egui::TextStyle::Monospace)
@@ -253,11 +263,35 @@ impl eframe::App for TemplateApp {
         egui::SidePanel::right("side_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.open_panel, Panel::Main, "Main");
-                ui.selectable_value(&mut self.open_panel, Panel::Editor, "Editor");
+                ui.selectable_value(
+                    &mut self.open_panel,
+                    Panel::AgentEditor,
+                    "Agent behavior tree",
+                );
+                ui.selectable_value(
+                    &mut self.open_panel,
+                    Panel::SpawnerEditor,
+                    "Spawner behavior tree",
+                );
             });
             match self.open_panel {
                 Panel::Main => self.show_panel_ui(ui),
-                Panel::Editor => self.show_editor(ui),
+                Panel::AgentEditor => self.show_editor(
+                    ui,
+                    |app_data| app_data.app_data.agent_source_buffer.clone(),
+                    |app_data| &mut app_data.agent_source_buffer,
+                    |params| &mut params.agent_source,
+                    |app_data| &app_data.agent_source_file,
+                    |app_data| &mut app_data.agent_source_file,
+                ),
+                Panel::SpawnerEditor => self.show_editor(
+                    ui,
+                    |app_data| app_data.app_data.spawner_source_buffer.clone(),
+                    |app_data| &mut app_data.spawner_source_buffer,
+                    |params| &mut params.spawner_source,
+                    |app_data| &app_data.spawner_source_file,
+                    |app_data| &mut app_data.spawner_source_file,
+                ),
             }
         });
 
