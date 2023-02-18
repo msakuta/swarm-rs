@@ -78,6 +78,7 @@ pub(crate) fn create_mesh(
     #[cfg(feature = "druid")]
     let mut simplified_border = vec![];
     let mut polygons = vec![];
+    #[cfg(feature = "druid")]
     let mut points = vec![];
 
     #[cfg(feature = "druid")]
@@ -142,6 +143,9 @@ pub(crate) fn create_mesh(
     //     simplified_border.len(),
     //     _simplified_vertices
     // );
+
+    #[cfg(not(feature = "druid"))]
+    let points = vec![];
 
     let triangulation = triangulate(&points);
 
