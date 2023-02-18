@@ -23,7 +23,11 @@ fn main() {
     // Redirect tracing to console.log and friends:
     tracing_wasm::set_as_global_default();
 
-    let web_options = eframe::WebOptions::default();
+    let mut web_options = eframe::WebOptions::default();
+
+    // We insist to use dark theme, because light theme looks dumb.
+    web_options.follow_system_theme = false;
+    web_options.default_theme = eframe::Theme::Dark;
 
     wasm_bindgen_futures::spawn_local(async {
         eframe::start_web(
