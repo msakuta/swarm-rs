@@ -13,8 +13,8 @@ macro_rules! dbg_println {
     };
 }
 
-mod cache_map;
-pub(crate) mod qtree;
+pub mod cache_map;
+pub mod qtree;
 // pub mod render;
 
 pub use self::cache_map::FRESH_TICKS;
@@ -186,8 +186,8 @@ pub(crate) type QTreePath = Vec<QTreePathNode>;
 
 #[derive(Debug)]
 pub struct SearchTree {
-    nodes: Vec<[f64; 2]>,
-    edges: Vec<[usize; 2]>,
+    pub nodes: Vec<[f64; 2]>,
+    pub edges: Vec<[usize; 2]>,
 }
 
 impl SearchTree {

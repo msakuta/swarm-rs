@@ -5,7 +5,7 @@ use druid::{
 
 use crate::{app_data::AppData, paint_board::to_point};
 
-use super::{cache_map::FRESH_TICKS, CellState, SearchTree};
+use ::swarm_rs::qtree::{cache_map::FRESH_TICKS, CellState, SearchTree};
 
 pub(crate) fn paint_qtree(ctx: &mut PaintCtx, data: &AppData, view_transform: &Affine) {
     let qtree_searcher = &data.game.borrow().qtree;
@@ -13,7 +13,7 @@ pub(crate) fn paint_qtree(ctx: &mut PaintCtx, data: &AppData, view_transform: &A
     let width = 1;
     const CELL_MARGIN: f64 = 0.1;
 
-    for (&[x, y], &freshness) in &qtree_searcher.cache_map.fresh_cells {
+    for (&[x, y], &freshness) in &qtree_searcher.get_cache_map().fresh_cells {
         let rect = Rect::new(
             x as f64 + CELL_MARGIN,
             y as f64 + CELL_MARGIN,
@@ -21,7 +21,7 @@ pub(crate) fn paint_qtree(ctx: &mut PaintCtx, data: &AppData, view_transform: &A
             y as f64 + width as f64 - CELL_MARGIN,
         );
         let rect = rect.to_path(1.);
-        let color = match qtree_searcher.cache_map.get([x, y]) {
+        let color = match qtree_searcher.get_cache_map().get([x, y]) {
             CellState::Obstacle => (255, 127, 127),
             CellState::Occupied(_) => (255, 127, 255),
             CellState::Free => (0, 255, 127),
@@ -36,7 +36,7 @@ pub(crate) fn paint_qtree(ctx: &mut PaintCtx, data: &AppData, view_transform: &A
         ctx.fill(*view_transform * rect, &brush);
     }
 
-    let qtree = &qtree_searcher.qtree;
+    let qtree = qtree_searcher.get_qtree();
 
     for (level, cells) in qtree.levels.iter().enumerate() {
         let width = qtree.width(level);
@@ -69,8 +69,19 @@ pub(crate) fn paint_qtree(ctx: &mut PaintCtx, data: &AppData, view_transform: &A
     }
 }
 
-impl SearchTree {
-    pub(crate) fn render(
+pub trait DruidRender {
+    fn render(
+        &self,
+        ctx: &mut PaintCtx,
+        _env: &Env,
+        view_transform: &Affine,
+        _brush: &Color,
+        _scale: f64,
+    );
+}
+
+impl DruidRender for SearchTree {
+    fn render(
         &self,
         ctx: &mut PaintCtx,
         _env: &Env,

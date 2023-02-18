@@ -141,7 +141,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_trace(&self) -> Option<&VecDeque<[f64; 2]>> {
+    pub fn get_trace(&self) -> Option<&VecDeque<[f64; 2]>> {
         match self {
             Entity::Agent(agent) => Some(&agent.trace),
             _ => None,
@@ -155,7 +155,7 @@ impl Entity {
         }
     }
 
-    pub(crate) fn get_search_state(&self) -> Option<&crate::agent::SearchState> {
+    pub fn get_search_state(&self) -> Option<&crate::agent::SearchState> {
         match self {
             Entity::Agent(agent) => agent.search_state.as_ref(),
             _ => None,

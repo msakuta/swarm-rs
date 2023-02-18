@@ -1,7 +1,7 @@
 pub(crate) const MAX_TTL: f64 = 20.;
 
 #[derive(Debug, Clone)]
-pub(crate) struct TempEnt {
+pub struct TempEnt {
     pub pos: [f64; 2],
     pub ttl: f64,
     pub max_ttl: f64,

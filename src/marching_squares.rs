@@ -19,7 +19,7 @@ use crate::shape::Shape;
 use std::collections::{HashMap, HashSet};
 
 /// A trait for objects that can behave like a field of booleans.
-pub(crate) trait AsBoolField {
+pub trait AsBoolField {
     fn get(&self, pos: (isize, isize)) -> bool;
     fn shape(&self) -> Shape;
 
@@ -34,13 +34,13 @@ pub(crate) trait AsBoolField {
 
 /// A concrete type of a boolean field.
 #[derive(Clone, Copy)]
-pub(crate) struct BoolField<'a> {
+pub struct BoolField<'a> {
     field: &'a [bool],
     shape: Shape,
 }
 
 impl<'a> BoolField<'a> {
-    pub(crate) fn new(field: &'a [bool], shape: Shape) -> Self {
+    pub fn new(field: &'a [bool], shape: Shape) -> Self {
         Self { field, shape }
     }
 }
@@ -85,7 +85,7 @@ impl<'a> AsBoolField for F64Field<'a> {
     }
 }
 
-pub(crate) fn pick_bits<T: AsBoolField>(f: &T, pos: (isize, isize)) -> u8 {
+pub fn pick_bits<T: AsBoolField>(f: &T, pos: (isize, isize)) -> u8 {
     (f.get_or_false((pos.0, pos.1))) as u8
         | ((f.get_or_false((pos.0 + 1, pos.1)) as u8) << 1)
         | ((f.get_or_false((pos.0 + 1, pos.1 + 1)) as u8) << 2)
@@ -96,7 +96,7 @@ pub(crate) fn pick_bits<T: AsBoolField>(f: &T, pos: (isize, isize)) -> u8 {
 const LW: f32 = 0.4;
 
 /// buffer for vertex shader, use with SliceFlatExt::flat()
-pub(crate) const CELL_POLYGON_BUFFER: [[f32; 8]; 7] = [
+pub const CELL_POLYGON_BUFFER: [[f32; 8]; 7] = [
     [1., 1., -1., 1., -1., -1., 1., -1.],
     [1., LW, -1., LW, -1., -LW, 1., -LW],
     [LW, 1., -LW, 1.0, -LW, -1., LW, -1.],
@@ -107,7 +107,7 @@ pub(crate) const CELL_POLYGON_BUFFER: [[f32; 8]; 7] = [
 ];
 
 /// Index into CELL_POLYGON_BUFFER
-pub(crate) fn cell_polygon_index(bits: u8) -> i32 {
+pub fn cell_polygon_index(bits: u8) -> i32 {
     match bits {
         1 | 14 => 12,
         2 | 13 => 16,
@@ -129,7 +129,7 @@ pub(crate) fn _border_pixel(idx: u8) -> bool {
     }
 }
 
-pub(crate) fn cell_lines(bits: u8) -> Vec<[[f32; 2]; 2]> {
+pub fn cell_lines(bits: u8) -> Vec<[[f32; 2]; 2]> {
     match bits {
         1 | 14 => vec![[[0.5, 0.], [0., 0.5]]],
         2 | 13 => vec![[[0.5, 0.], [1., 0.5]]],

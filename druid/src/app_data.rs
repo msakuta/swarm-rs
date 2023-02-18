@@ -1,26 +1,29 @@
-use behavior_tree_lite::parse_file;
-
-use crate::{
+use druid::{Point, Vec2};
+use swarm_rs::{
+    behavior_tree_lite::parse_file,
     // agent::AvoidanceRenderParams,
     game::{BoardParams, BoardType, Game, GameParams},
     perlin_noise::Xor128,
     qtree::QTreeSearcher,
-    WINDOW_HEIGHT,
 };
+
+use ::druid::{Data, Lens};
+
+use crate::{agent::avoidance::AvoidanceRenderParams, WINDOW_HEIGHT};
 
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Data)]
 pub enum LineMode {
     None,
     Line,
     Polygon,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Data, Lens)]
 pub struct AppData {
     pub xs_text: String,
     pub ys_text: String,
@@ -37,17 +40,17 @@ pub struct AppData {
     pub(crate) unpassable_visible: bool,
     pub(crate) triangle_label_visible: bool,
     pub(crate) show_label_image: bool,
-    pub origin: [f64; 2],
+    pub origin: Vec2,
     pub scale: f64,
     pub message: String,
     pub(crate) big_message: String,
     pub big_message_time: f64,
-    // pub(super) mouse_pos: Option<Point>,
+    pub(super) mouse_pos: Option<Point>,
     pub(crate) get_board_time: f64,
-    pub(crate) render_board_time: Cell<f64>,
+    // pub(crate) render_board_time: Cell<f64>,
     pub(crate) render_stats: Rc<RefCell<String>>,
     pub path_visible: bool,
-    // pub(crate) avoidance_render_params: AvoidanceRenderParams,
+    pub(crate) avoidance_render_params: AvoidanceRenderParams,
     pub qtree_visible: bool,
     pub qtree_search_visible: bool,
     pub target_visible: bool,
@@ -66,16 +69,16 @@ impl AppData {
     pub fn new() -> Self {
         let mut game = Game::new();
         let seed = 123513;
-        let scale = WINDOW_HEIGHT / game.ys as f64;
+        let scale = WINDOW_HEIGHT / game.shape().1 as f64;
         let maze_expansion = 2000;
 
         const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
         const SPAWNER_SOURCE_FILE: &'static str = "behavior_tree_config/spawner.txt";
 
         let agent_source_buffer =
-            Rc::new(include_str!("../behavior_tree_config/agent.txt").to_string());
+            Rc::new(include_str!("../../behavior_tree_config/agent.txt").to_string());
         let spawner_source_buffer =
-            Rc::new(include_str!("../behavior_tree_config/spawner.txt").to_string());
+            Rc::new(include_str!("../../behavior_tree_config/spawner.txt").to_string());
 
         let mut game_params = GameParams::new();
         game_params.agent_source = agent_source_buffer.clone();
@@ -85,8 +88,8 @@ impl AppData {
         game.init();
 
         Self {
-            xs_text: game.ys.to_string(),
-            ys_text: game.xs.to_string(),
+            xs_text: game.shape().0.to_string(),
+            ys_text: game.shape().1.to_string(),
             seed_text: seed.to_string(),
             maze_expansions: maze_expansion.to_string(),
             board_type: BoardType::Perlin,
@@ -100,17 +103,17 @@ impl AppData {
             unpassable_visible: false,
             triangle_label_visible: false,
             show_label_image: false,
-            origin: [0., 0.],
+            origin: Vec2::ZERO,
             scale,
             message: "".to_string(),
             big_message: "Game Start".to_string(),
             big_message_time: 5000.,
-            // mouse_pos: None,
-            render_board_time: Cell::new(0.),
+            mouse_pos: None,
+            // render_board_time: Cell::new(0.),
             get_board_time: 0.,
             render_stats: Rc::new(RefCell::new("".to_string())),
             path_visible: true,
-            // avoidance_render_params: AvoidanceRenderParams::new(),
+            avoidance_render_params: AvoidanceRenderParams::new(),
             qtree_visible: false,
             qtree_search_visible: false,
             target_visible: false,
@@ -132,7 +135,7 @@ impl AppData {
         let interval = game.interval;
         if !self.game_params.paused {
             let update_res = game.update();
-            if let crate::game::UpdateResult::TeamWon(team) = update_res {
+            if let swarm_rs::game::UpdateResult::TeamWon(team) = update_res {
                 drop(game);
                 self.new_game();
                 self.big_message = ["Green team won!!", "Red team won!!"][team].to_string();
@@ -168,7 +171,7 @@ impl AppData {
 
         let game = self.game.borrow();
         Some((
-            [game.xs, game.ys],
+            [game.shape().0, game.shape().1],
             game.board
                 .iter()
                 .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
@@ -199,7 +202,7 @@ impl AppData {
             })
             .collect::<Vec<_>>();
         Some((
-            [game.xs, game.ys],
+            [game.shape().0, game.shape().1],
             game.mesh
                 .labeled_image
                 .iter()

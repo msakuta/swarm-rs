@@ -15,7 +15,7 @@ pub(crate) type Aabb = [f64; 4];
 
 /// Oriented bounding box
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Obb {
+pub struct Obb {
     pub center: Vector2<f64>,
     pub xs: f64,
     pub ys: f64,
@@ -23,13 +23,13 @@ pub(crate) struct Obb {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum CollisionShape {
+pub enum CollisionShape {
     // Circle(f64),
     BBox(Obb),
 }
 
 impl CollisionShape {
-    pub(crate) fn to_vertices(&self) -> Option<[[f64; 2]; 4]> {
+    pub fn to_vertices(&self) -> Option<[[f64; 2]; 4]> {
         let Self::BBox(Obb {
             center,
             xs,

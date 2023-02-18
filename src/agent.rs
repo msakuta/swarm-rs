@@ -1,8 +1,8 @@
 mod agent_class;
-mod avoidance;
+pub mod avoidance;
 mod behavior_nodes;
 mod find_path;
-mod interpolation;
+pub mod interpolation;
 mod motion;
 
 pub use self::agent_class::AgentClass;
@@ -27,7 +27,6 @@ use crate::{
     measure_time,
     qtree::{QTreePath, SearchTree},
     spawner::{SPAWNER_MAX_RESOURCE, SPAWNER_RADIUS},
-    triangle_utils::find_triangle_at,
 };
 use ::behavior_tree_lite::Context;
 use ::cgmath::{InnerSpace, MetricSpace, Vector2};
@@ -450,7 +449,7 @@ impl Agent {
         true
     }
 
-    pub(super) fn get_avoidance_state(&self, (drive, steer): (f64, f64)) -> Vector2<f64> {
+    pub fn get_avoidance_state(&self, (drive, steer): (f64, f64)) -> Vector2<f64> {
         let desired_angle = wrap_angle(self.orient + steer);
         drive * Vector2::new(desired_angle.cos(), desired_angle.sin()) + Vector2::from(self.pos)
     }

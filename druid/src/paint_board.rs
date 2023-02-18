@@ -1,12 +1,16 @@
-use crate::{
+use ::swarm_rs::{
     agent::{AgentClass, Bullet, AGENT_HALFLENGTH, AGENT_HALFWIDTH, BULLET_RADIUS},
-    app_data::{AppData, LineMode},
     entity::Entity,
     game::Resource,
     marching_squares::{cell_lines, cell_polygon_index, pick_bits, BoolField, CELL_POLYGON_BUFFER},
     perlin_noise::Xor128,
-    qtree::render::paint_qtree,
     triangle_utils::center_of_triangle_obj,
+};
+
+use crate::{
+    agent::avoidance::render::DruidRender as _,
+    app_data::{AppData, LineMode},
+    qtree::render::{paint_qtree, DruidRender},
 };
 
 use cgmath::{InnerSpace, Vector2};
@@ -54,7 +58,7 @@ pub(crate) fn paint_board(
     view_transform: &Affine,
 ) -> usize {
     let game = data.game.borrow();
-    let (xs, ys) = (game.xs, game.ys);
+    let (xs, ys) = game.shape();
 
     let mut contours = 0;
 

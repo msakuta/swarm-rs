@@ -1,9 +1,10 @@
-use crate::{
-    agent::{interpolation::lerp, AgentClass},
-    paint_board::to_point,
+use crate::paint_board::to_point;
+use swarm_rs::agent::{
+    avoidance::{sampler::REWIRE_DISTANCE, SearchState, CELL_SIZE, DIST_RADIUS},
+    interpolation::lerp,
+    AgentClass,
 };
 
-use super::{sampler::REWIRE_DISTANCE, SearchState, CELL_SIZE, DIST_RADIUS};
 use druid::{
     kurbo::{Circle, Shape},
     piet::kurbo::BezPath,
@@ -42,8 +43,21 @@ impl AvoidanceRenderParams {
     }
 }
 
-impl SearchState {
-    pub(crate) fn render(
+/// An extension trait for rendering specifically in Druid.
+pub(crate) trait DruidRender {
+    fn render(
+        &self,
+        ctx: &mut PaintCtx,
+        env: &Env,
+        view_transform: &Affine,
+        params: &AvoidanceRenderParams,
+        brush: &Color,
+        scale: f64,
+    );
+}
+
+impl DruidRender for SearchState {
+    fn render(
         &self,
         ctx: &mut PaintCtx,
         env: &Env,
@@ -53,7 +67,7 @@ impl SearchState {
         scale: f64,
     ) {
         if params.grid_visible {
-            for (cell, _count) in self.grid_map.iter() {
+            for (cell, _count) in self.get_grid_map().iter() {
                 let (x, y) = (cell[0] as f64, cell[1] as f64);
                 let rect = Rect::new(
                     x * CELL_SIZE,
@@ -89,7 +103,7 @@ impl SearchState {
                 for level in 0..=3 {
                     let level_width = level as f64 * 0.5;
                     let mut bez_path = BezPath::new();
-                    for state in &self.search_tree {
+                    for state in self.get_search_tree() {
                         if state.max_level != level {
                             continue;
                         }
@@ -106,7 +120,7 @@ impl SearchState {
                         }
                         let point = Point::new(state.state.x, state.state.y);
                         if let Some(from) = state.from {
-                            let from_state = self.search_tree[from].state;
+                            let from_state = self.get_search_tree()[from].state;
                             bez_path.move_to(Point::new(from_state.x, from_state.y));
                             bez_path.line_to(point);
 

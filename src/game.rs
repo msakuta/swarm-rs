@@ -23,6 +23,9 @@ use crate::{
     triangle_utils::check_shape_in_mesh,
 };
 
+#[cfg(feature = "druid")]
+use druid::Data;
+
 #[derive(Clone, Debug)]
 pub struct Resource {
     pub pos: [f64; 2],
@@ -31,6 +34,7 @@ pub struct Resource {
 
 pub(crate) type Board = Vec<bool>;
 
+#[cfg_attr(feature = "druid", derive(Data))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BoardType {
     Rect,
@@ -41,12 +45,12 @@ pub enum BoardType {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Profiler {
+pub struct Profiler {
     total: f64,
     count: usize,
 }
 
-pub(crate) enum UpdateResult {
+pub enum UpdateResult {
     Running,
     TeamWon(usize),
 }
@@ -59,7 +63,7 @@ impl Profiler {
         }
     }
 
-    pub(crate) fn get_average(&self) -> f64 {
+    pub fn get_average(&self) -> f64 {
         if self.count == 0 {
             0.
         } else {
@@ -67,7 +71,7 @@ impl Profiler {
         }
     }
 
-    pub(crate) fn get_count(&self) -> usize {
+    pub fn get_count(&self) -> usize {
         self.count
     }
 
@@ -77,26 +81,28 @@ impl Profiler {
     }
 }
 
+#[cfg_attr(feature = "druid", derive(Data))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AvoidanceMode {
+pub enum AvoidanceMode {
     Kinematic,
     Rrt,
     RrtStar,
 }
 
-pub(crate) struct BoardParams {
+pub struct BoardParams {
     pub shape: (usize, usize),
     pub seed: u32,
     pub simplify: f64,
     pub maze_expansions: usize,
 }
 
+#[cfg_attr(feature = "druid", derive(Data))]
 #[derive(Clone)]
 pub struct GameParams {
-    pub(crate) avoidance_mode: AvoidanceMode,
+    pub avoidance_mode: AvoidanceMode,
     pub paused: bool,
-    pub(crate) avoidance_expands: f64,
-    pub(crate) agent_count: usize,
+    pub avoidance_expands: f64,
+    pub agent_count: usize,
     pub agent_source: Rc<String>,
     pub spawner_source: Rc<String>,
 }
@@ -118,30 +124,30 @@ impl GameParams {
 pub struct Game {
     pub(crate) xs: usize,
     pub(crate) ys: usize,
-    pub(crate) simplify: f64,
-    pub(crate) board: Board,
-    pub(crate) mesh: Mesh,
+    pub simplify: f64,
+    pub board: Board,
+    pub mesh: Mesh,
     pub entities: Vec<RefCell<Entity>>,
     pub bullets: Vec<Bullet>,
     pub resources: Vec<Resource>,
-    pub(crate) interval: f64,
+    pub interval: f64,
     pub(crate) rng: Xor128,
     pub(crate) id_gen: usize,
     pub(crate) avoidance_mode: AvoidanceMode,
     pub(crate) avoidance_expands: f64,
-    pub(crate) temp_ents: Vec<TempEnt>,
-    pub(crate) triangle_profiler: RefCell<Profiler>,
-    pub(crate) pixel_profiler: RefCell<Profiler>,
-    pub(crate) qtree_profiler: RefCell<Profiler>,
-    pub(crate) path_find_profiler: RefCell<Profiler>,
-    pub(crate) agent_count: usize,
+    pub temp_ents: Vec<TempEnt>,
+    pub triangle_profiler: RefCell<Profiler>,
+    pub pixel_profiler: RefCell<Profiler>,
+    pub qtree_profiler: RefCell<Profiler>,
+    pub path_find_profiler: RefCell<Profiler>,
+    pub agent_count: usize,
     pub(crate) agent_source: Rc<String>,
     pub(crate) spawner_source: Rc<String>,
-    pub(crate) qtree: QTreeSearcher,
+    pub qtree: QTreeSearcher,
 }
 
 impl Game {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let seed = 123513;
         let simplify = 1.;
 
@@ -188,7 +194,11 @@ impl Game {
         }
     }
 
-    pub(crate) fn init(&mut self) {
+    pub fn shape(&self) -> (usize, usize) {
+        (self.xs, self.ys)
+    }
+
+    pub fn init(&mut self) {
         for team in 0..2 {
             if !self
                 .entities
@@ -240,7 +250,7 @@ impl Game {
                 && !(xs * 2 / 16 < dx && dx < xs * 3 / 16 && dy < ys / 16)
         })
     }
-    pub(crate) fn new_board(&mut self, board_type: BoardType, params: &BoardParams) {
+    pub fn new_board(&mut self, board_type: BoardType, params: &BoardParams) {
         self.xs = params.shape.0;
         self.ys = params.shape.1;
 
@@ -341,8 +351,8 @@ impl Game {
         const STATIC_SOURCE_FILE: &str = include_str!("../behavior_tree_config/test_obstacle.txt");
         let rng = &mut self.rng;
         let id_gen = &mut self.id_gen;
-        let triangle_labels = &self.mesh.triangle_labels;
-        let largest_label = self.mesh.largest_label;
+        // let triangle_labels = &self.mesh.triangle_labels;
+        // let largest_label = self.mesh.largest_label;
 
         for _ in 0..10 {
             let state_candidate = AgentState {
@@ -454,7 +464,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn set_params(&mut self, params: &GameParams) {
+    pub fn set_params(&mut self, params: &GameParams) {
         self.avoidance_mode = params.avoidance_mode;
         self.avoidance_expands = params.avoidance_expands;
         self.agent_count = params.agent_count;
@@ -462,7 +472,7 @@ impl Game {
         self.spawner_source = params.spawner_source.clone();
     }
 
-    pub(crate) fn update(&mut self) -> UpdateResult {
+    pub fn update(&mut self) -> UpdateResult {
         let mut entities = std::mem::take(&mut self.entities);
         let mut bullets = std::mem::take(&mut self.bullets);
         let mut events = vec![];

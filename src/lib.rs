@@ -2,9 +2,9 @@ mod app_data;
 mod behavior_tree_adapt;
 // mod board_widget;
 mod dijkstra;
-mod marching_squares;
+pub mod marching_squares;
 // mod paint_board;
-mod perlin_noise;
+pub mod perlin_noise;
 mod rdp;
 mod shape;
 // mod widget;
@@ -12,17 +12,20 @@ mod shape;
 mod macros;
 pub mod agent;
 mod collision;
-mod entity;
+pub mod entity;
 pub mod game;
 mod mesh;
 pub mod qtree;
 mod spawner;
 mod temp_ents;
-mod triangle_utils;
+pub mod triangle_utils;
 
 pub use crate::agent::Bullet;
-pub use crate::{app_data::AppData, qtree::CellState};
-use wasm_bindgen::prelude::*;
+pub use crate::{
+    app_data::{AppData, LineMode},
+    qtree::CellState,
+};
+pub use behavior_tree_lite;
 
 const WINDOW_WIDTH: f64 = 1200.;
 const WINDOW_HEIGHT: f64 = 800.;
@@ -51,6 +54,14 @@ const WINDOW_HEIGHT: f64 = 800.;
 //         .expect("launch failed");
 // }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn measure_time<T>(f: impl FnOnce() -> T) -> (T, f64) {
+    let start = std::time::Instant::now();
+    let ret = f();
+    (ret, start.elapsed().as_secs_f64())
+}
+
+#[cfg(target_arch = "wasm32")]
 fn measure_time<T>(f: impl FnOnce() -> T) -> (T, f64) {
     (f(), 0.)
 }

@@ -1,12 +1,15 @@
 use std::rc::Rc;
 
 use crate::{
-    agent::AvoidanceRenderParams,
+    agent::avoidance::AvoidanceRenderParams,
     app_data::{AppData, LineMode},
     board_widget::BoardWidget,
+};
+
+use ::swarm_rs::{
+    behavior_tree_lite::parse_file,
     game::{AvoidanceMode, BoardType},
 };
-use behavior_tree_lite::parse_file;
 use druid::widget::{
     Button, Checkbox, CrossAxisAlignment, Flex, Label, Radio, RadioGroup, Scroll, Slider, Tabs,
     TextBox, WidgetExt,
@@ -251,7 +254,9 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                 Flex::row()
                     .with_child(Button::new("Apply").on_click(
                         move |_, app_data: &mut AppData, _| {
-                            try_load_behavior_tree(app_data, get(app_data).clone());
+                            app_data.try_load_behavior_tree(get(app_data).clone(), |params| {
+                                &mut params.agent_source
+                            });
                         },
                     ))
                     .with_child(TextBox::new().lens(AppData::agent_source_file))
@@ -261,7 +266,9 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                         )) {
                             Ok(s) => {
                                 let s = Rc::new(s);
-                                if try_load_behavior_tree(app_data, s.clone()) {
+                                if app_data.try_load_behavior_tree(s.clone(), |params| {
+                                    &mut params.spawner_source
+                                }) {
                                     *get_mut(app_data) = s;
                                 }
                             }
@@ -311,4 +318,3 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
         .with_flex_child(BoardWidget::new(), 1.)
         .with_child(tabs.fix_width(BAR_WIDTH).background(BG))
 }
-

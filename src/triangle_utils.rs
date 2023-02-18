@@ -11,7 +11,7 @@ pub(crate) fn center_of_triangle(v1: Point, v2: Point, v3: Point) -> Point {
     }
 }
 
-pub(crate) fn center_of_triangle_obj(
+pub fn center_of_triangle_obj(
     triangulation: &Triangulation,
     points: &[Point],
     idx: usize,
