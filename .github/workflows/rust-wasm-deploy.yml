@@ -16,19 +16,13 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: wasm-pack-action
-      uses: jetli/wasm-pack-action@v0.3.0
-      #with:
-        # Optional version of wasm-pack to install (eg. "v0.9.1", "latest")
-        #version: # optional, default is latest
-
     - uses: jetli/trunk-action@v0.4.0
       with:
         # Optional version of trunk to install(eg. 'v0.16.0', 'latest')
         version: 'latest'
 
     - name: Build with trunk
-      run: cd eframe && trunk build --release
+      run: rustup target add wasm32-unknown-unknown && cd eframe && trunk build --release
     - name: Deploy
       uses: peaceiris/actions-gh-pages@v3
       with:
