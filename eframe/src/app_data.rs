@@ -3,12 +3,11 @@ use ::swarm_rs::{
     game::{BoardParams, BoardType, Game, GameParams},
     qtree::QTreeSearcher,
 };
+use swarm_rs::game::UpdateResult;
 
 use std::rc::Rc;
 
 pub struct AppData {
-    pub xs_text: String,
-    pub ys_text: String,
     pub seed_text: String,
     pub maze_expansions: String,
     pub board_type: BoardType,
@@ -54,8 +53,6 @@ impl AppData {
         game.init();
 
         Self {
-            xs_text: game.shape().0.to_string(),
-            ys_text: game.shape().1.to_string(),
             seed_text: seed.to_string(),
             maze_expansions: maze_expansion.to_string(),
             board_type: BoardType::Perlin,
@@ -80,34 +77,33 @@ impl AppData {
         }
     }
 
-    pub fn update(&mut self, delta_time: f64) -> (bool, f64) {
+    pub fn update(&mut self, delta_time: f64) -> Option<UpdateResult> {
         self.game_params.agent_count = self.agent_count_text.parse().unwrap_or(3);
         let game = &mut self.game;
         game.set_params(&self.game_params);
         let interval = game.interval;
-        if !self.game_params.paused {
+        let update_res = if !self.game_params.paused {
             let update_res = game.update();
-            if let swarm_rs::game::UpdateResult::TeamWon(team) = update_res {
-                drop(game);
-                self.new_game();
+            if let UpdateResult::TeamWon(team) = update_res {
                 self.big_message = ["Green team won!!", "Red team won!!"][team].to_string();
                 self.big_message_time = 5000.;
             }
-        }
+            Some(update_res)
+        } else {
+            None
+        };
 
         self.big_message_time = (self.big_message_time - delta_time).max(0.);
 
         self.global_render_time += interval;
-        (self.game_params.paused, interval)
+        update_res
     }
 
-    pub fn new_game(&mut self) {
-        let xs = self.xs_text.parse().unwrap_or(64);
-        let ys = self.ys_text.parse().unwrap_or(64);
+    pub fn new_game(&mut self, shape: (usize, usize)) {
         let seed = self.seed_text.parse().unwrap_or(1);
         let simplify = self.simplify_text.parse().unwrap_or(1.);
         let params = BoardParams {
-            shape: (xs, ys),
+            shape,
             seed,
             simplify,
             maze_expansions: self.maze_expansions.parse().unwrap_or(1),

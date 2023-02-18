@@ -5,7 +5,7 @@ use std::{rc::Rc, time::Duration};
 use crate::{app_data::AppData, bg_image::BgImage};
 use cgmath::Matrix3;
 use egui::{Pos2, Ui};
-use swarm_rs::game::{BoardType, GameParams};
+use swarm_rs::game::{BoardType, GameParams, UpdateResult};
 
 const WINDOW_HEIGHT: f64 = 800.;
 const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
@@ -38,8 +38,8 @@ pub struct SwarmRsApp {
 
     draw_circle: bool,
 
-    xs: usize,
-    ys: usize,
+    pub xs: usize,
+    pub ys: usize,
     maze_expansions: usize,
     agent_count: usize,
 
@@ -88,11 +88,16 @@ impl SwarmRsApp {
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-        }
+        let mut res = if let Some(storage) = cc.storage {
+            eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
+        } else {
+            Self::default()
+        };
 
-        Default::default()
+        println!("Recreating with {:?}", (res.xs, res.ys));
+        res.app_data.new_game((res.xs, res.ys));
+
+        res
     }
 
     fn show_panel_ui(&mut self, ui: &mut Ui) {
@@ -107,10 +112,8 @@ impl SwarmRsApp {
             ui.label("New game options");
 
             if ui.button("New game").clicked() {
-                self.app_data.xs_text = self.xs.to_string();
-                self.app_data.ys_text = self.ys.to_string();
                 self.app_data.maze_expansions = self.maze_expansions.to_string();
-                self.app_data.new_game();
+                self.app_data.new_game((self.xs, self.ys));
                 self.img_gray.clear();
                 self.img_labels.clear();
             }
@@ -235,7 +238,13 @@ impl eframe::App for SwarmRsApp {
 
         let dt = ctx.input().stable_dt.min(0.1);
 
-        self.app_data.update(dt as f64 * 1000.);
+        let update_res = self.app_data.update(dt as f64 * 1000.);
+
+        if let Some(UpdateResult::TeamWon(_)) = update_res {
+            self.app_data.new_game((self.xs, self.ys));
+            self.img_gray.clear();
+            self.img_labels.clear();
+        }
 
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
