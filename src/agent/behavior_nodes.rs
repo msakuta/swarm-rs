@@ -301,7 +301,10 @@ impl BehaviorNode for TargetPosNode {
     }
 }
 
-pub(super) struct FindPathCommand(pub [f64; 2]);
+pub(super) struct FindPathCommand {
+    pub target: [f64; 2],
+    pub ignore_obstacles: bool,
+}
 
 pub(super) struct FindPathNode;
 
@@ -309,6 +312,7 @@ impl BehaviorNode for FindPathNode {
     fn provided_ports(&self) -> Vec<PortSpec> {
         vec![
             *TARGET_SPEC,
+            PortSpec::new_in("ignore_obstacles"),
             PortSpec::new_out("path"),
             PortSpec::new_out("fail_reason"),
         ]
@@ -319,16 +323,18 @@ impl BehaviorNode for FindPathNode {
         arg: BehaviorCallback,
         ctx: &mut behavior_tree_lite::Context,
     ) -> BehaviorResult {
-        let path_find_result = ctx
+        let target = ctx
             .get::<[f64; 2]>(*TARGET)
-            .and_then(|target| arg(&FindPathCommand(*target)))
-            .and_then(|res| {
-                res.downcast::<Result<Vec<QTreePathNode>, PathFindError>>()
-                    .ok()
-            })
-            .expect(
-                "PathFindCommand should always return Result<Vec<QTreePathNode>, PathFindError>",
-            );
+            .expect("Target was not given to FindPath");
+        let path_find_result = arg(&FindPathCommand {
+            target: *target,
+            ignore_obstacles: ctx.get_parse::<bool>("ignore_obstacles").unwrap_or(false),
+        })
+        .and_then(|res| {
+            res.downcast::<Result<Vec<QTreePathNode>, PathFindError>>()
+                .ok()
+        })
+        .expect("FindPathCommand should always return Result<Vec<QTreePathNode>, PathFindError>");
         match *path_find_result {
             Ok(path) => {
                 ctx.set("path", path);

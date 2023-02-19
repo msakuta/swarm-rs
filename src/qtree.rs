@@ -133,12 +133,12 @@ impl QTreeSearcher {
 
     pub(crate) fn path_find(
         &self,
-        ignore_id: &[usize],
+        ignore: impl Fn(usize) -> bool,
         start: [f64; 2],
         end: [f64; 2],
         goal_radius: f64,
     ) -> (Result<QTreePath, PathFindError>, SearchTree) {
-        self.qtree.path_find(ignore_id, start, end, goal_radius)
+        self.qtree.path_find(ignore, start, end, goal_radius)
     }
 
     pub fn check_collision(&self, aabb: &Aabb) -> bool {

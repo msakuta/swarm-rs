@@ -1,4 +1,4 @@
-use super::{Agent, AgentTarget, AGENT_HALFLENGTH};
+use super::{behavior_nodes::FindPathCommand, Agent, AgentTarget, AGENT_HALFLENGTH};
 use crate::{
     game::Game,
     measure_time,
@@ -6,17 +6,33 @@ use crate::{
 };
 
 impl Agent {
-    pub(crate) fn find_path(
+    pub(super) fn find_path(
         &mut self,
-        target: [f64; 2],
+        com: &FindPathCommand,
         game: &mut Game,
     ) -> Result<Vec<QTreePathNode>, PathFindError> {
         let ((found_path, search_tree), time) = measure_time(|| {
             let qtree = &game.qtree;
-            if let Some(AgentTarget::Entity(tgt_id)) = self.target {
-                qtree.path_find(&[self.id, tgt_id], self.pos, target, AGENT_HALFLENGTH * 1.5)
+            fn ignore_id<'a>(ignore_ids: &'a [usize]) -> impl Fn(usize) -> bool + 'a {
+                |id| ignore_ids.iter().any(|i| *i == id)
+            }
+            let target = com.target;
+            if com.ignore_obstacles {
+                qtree.path_find(|_| true, self.pos, target, AGENT_HALFLENGTH * 1.5)
+            } else if let Some(AgentTarget::Entity(tgt_id)) = self.target {
+                qtree.path_find(
+                    ignore_id(&[self.id, tgt_id]),
+                    self.pos,
+                    target,
+                    AGENT_HALFLENGTH * 1.5,
+                )
             } else {
-                qtree.path_find(&[self.id], self.pos, target, AGENT_HALFLENGTH * 1.5)
+                qtree.path_find(
+                    ignore_id(&[self.id]),
+                    self.pos,
+                    target,
+                    AGENT_HALFLENGTH * 1.5,
+                )
             }
         });
         game.path_find_profiler.get_mut().add(time);
