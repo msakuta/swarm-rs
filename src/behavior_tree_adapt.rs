@@ -90,6 +90,8 @@ impl BehaviorNode for GeNode {
     }
 }
 
+pub(crate) struct PrintCommand(pub String);
+
 /// A node with string output with interpolation.
 struct PrintNode;
 
@@ -137,6 +139,7 @@ impl BehaviorNode for PrintNode {
             } else {
                 println!("PrintNode(?): {result:?}");
             }
+            arg(&PrintCommand(result));
             BehaviorResult::Success
         } else {
             BehaviorResult::Fail

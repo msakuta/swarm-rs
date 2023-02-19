@@ -121,9 +121,7 @@ impl SwarmRsApp {
             "Paused",
         ));
 
-        ui.group(|ui| {
-            ui.heading("New game options");
-
+        ui.collapsing("New game options", |ui| {
             if ui.button("New game").clicked() {
                 let params = BoardParams {
                     shape: (self.xs, self.ys),
@@ -168,9 +166,7 @@ impl SwarmRsApp {
             });
         });
 
-        ui.group(|ui| {
-            ui.heading("View options");
-
+        ui.collapsing("View options", |ui| {
             ui.horizontal(|ui| {
                 ui.add(egui::Checkbox::new(&mut self.app_data.path_visible, "Path"));
 
@@ -209,9 +205,7 @@ impl SwarmRsApp {
             ui.add(egui::Checkbox::new(&mut self.show_labels, "Label image"));
         });
 
-        ui.group(|ui| {
-            ui.heading("Debug output");
-
+        ui.collapsing("Debug output", |ui| {
             let game = &self.app_data.game;
 
             ui.label(format!("Scale: {:.06}", self.app_data.scale));
@@ -275,6 +269,29 @@ impl SwarmRsApp {
                 ),
                 None => "Resource: ? / ?".to_owned(),
             });
+
+            egui::ScrollArea::vertical()
+                .always_show_scroll(true)
+                .stick_to_bottom(true)
+                .show(ui, |ui| {
+                    let mut source = entity
+                        .map(|entity| {
+                            entity
+                                .log_buffer()
+                                .iter()
+                                .fold("".to_owned(), |acc, cur| acc + "\n" + cur)
+                        })
+                        .unwrap_or_else(|| "".to_owned());
+                    ui.add_enabled(
+                        false,
+                        egui::TextEdit::multiline(&mut source)
+                            .font(egui::TextStyle::Monospace)
+                            .code_editor()
+                            .desired_rows(10)
+                            .lock_focus(true)
+                            .desired_width(f32::INFINITY),
+                    );
+                });
         });
     }
 

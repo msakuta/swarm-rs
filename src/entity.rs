@@ -8,6 +8,8 @@ use crate::{
 };
 use std::{cell::RefCell, collections::VecDeque};
 
+pub(crate) const MAX_LOG_ENTRIES: usize = 100;
+
 #[derive(Debug)]
 pub enum Entity {
     Agent(Agent),
@@ -208,6 +210,13 @@ impl Entity {
         match self {
             Entity::Agent(agent) => agent.resource = (agent.resource - resource).max(0),
             Entity::Spawner(spawner) => spawner.resource = (spawner.resource - resource).max(0),
+        }
+    }
+
+    pub fn log_buffer(&self) -> &VecDeque<String> {
+        match self {
+            Entity::Agent(agent) => agent.log_buffer(),
+            Entity::Spawner(spawner) => spawner.log_buffer(),
         }
     }
 

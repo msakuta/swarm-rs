@@ -5,12 +5,12 @@ use behavior_tree_lite::{error::LoadError, Blackboard, Context};
 use self::behavior_nodes::{build_tree, SpawnFighter, SpawnWorker};
 use crate::{
     agent::AgentClass,
-    behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource},
+    behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource, PrintCommand},
     collision::{aabb_intersects, CollisionShape, Obb},
-    entity::{Entity, GameEvent},
+    entity::{Entity, GameEvent, MAX_LOG_ENTRIES},
     game::Game,
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::VecDeque};
 
 pub(crate) const SPAWNER_MAX_HEALTH: u32 = 1000;
 pub(crate) const SPAWNER_MAX_RESOURCE: i32 = 1000;
@@ -28,6 +28,7 @@ pub struct Spawner {
     pub resource: i32,
     behavior_tree: Option<BehaviorTree>,
     blackboard: Blackboard,
+    log_buffer: VecDeque<String>,
 }
 
 impl Spawner {
@@ -51,6 +52,7 @@ impl Spawner {
             resource: 0,
             behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
+            log_buffer: VecDeque::new(),
         })
     }
 
@@ -69,6 +71,10 @@ impl Spawner {
             ys: SPAWNER_RADIUS,
             orient: 0.,
         })
+    }
+
+    pub(crate) fn log_buffer(&self) -> &VecDeque<String> {
+        &self.log_buffer
     }
 
     pub(crate) fn qtree_collision(
@@ -137,6 +143,11 @@ impl Spawner {
             let mut process = |f: &dyn std::any::Any| {
                 if f.downcast_ref::<GetIdCommand>().is_some() {
                     return Some(Box::new(self.id) as Box<dyn std::any::Any>);
+                } else if let Some(s) = f.downcast_ref::<PrintCommand>() {
+                    self.log_buffer.push_back(s.0.clone());
+                    while MAX_LOG_ENTRIES < self.log_buffer.len() {
+                        self.log_buffer.pop_front();
+                    }
                 } else if f.downcast_ref::<GetResource>().is_some() {
                     return Some(Box::new(self.resource));
                 } else if f.downcast_ref::<SpawnFighter>().is_some() {
