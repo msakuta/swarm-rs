@@ -33,10 +33,12 @@ impl AppData {
         let mut game = Game::new();
         let scale = window_height / game.shape().1 as f64;
 
-        let agent_source_buffer =
-            Rc::new(include_str!("../../behavior_tree_config/agent.txt").to_string());
-        let spawner_source_buffer =
-            Rc::new(include_str!("../../behavior_tree_config/spawner.txt").to_string());
+        let agent_source_buffer = Rc::new(collapse_newlines(include_str!(
+            "../../behavior_tree_config/agent.txt"
+        )));
+        let spawner_source_buffer = Rc::new(collapse_newlines(include_str!(
+            "../../behavior_tree_config/spawner.txt"
+        )));
 
         let mut game_params = GameParams::new();
         game_params.agent_source = agent_source_buffer.clone();
@@ -146,7 +148,7 @@ impl AppData {
     ) {
         match std::fs::read_to_string(file) {
             Ok(s) => {
-                let s = Rc::new(s);
+                let s = Rc::new(collapse_newlines(&s));
                 if self.try_load_behavior_tree(s.clone(), setter) {
                     *get_mut(self) = s;
                 }
@@ -154,4 +156,11 @@ impl AppData {
             Err(e) => self.message = format!("Read file error! {e:?}"),
         }
     }
+}
+
+/// Windows still uses CRLF
+fn collapse_newlines(s: &str) -> String {
+    // Can we skip replacing in *nix and newer Mac? Maybe, but it's such a fast operation
+    // that we don't gain much by "optimizing" for the platform.
+    s.replace("\r\n", "\n")
 }
