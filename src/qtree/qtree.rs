@@ -369,9 +369,10 @@ impl QTree {
         let start_idx = (start_found.0, start_idx);
 
         if start_idx == end_idx {
-            let mut path = vec![];
-            path.push(QTreePathNode::new_with_qtree(end_idx, self));
-            path.push(QTreePathNode::new_with_qtree(start_idx, self));
+            let path = vec![
+                QTreePathNode::new(end, goal_radius),
+                QTreePathNode::new_with_qtree(start_idx, self),
+            ];
             return (Ok(path), SearchTree::new());
         }
 
