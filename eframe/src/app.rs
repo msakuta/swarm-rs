@@ -245,30 +245,35 @@ impl SwarmRsApp {
                     .find(|entity| entity.get_id() == id)
             });
 
-            ui.label(match &entity {
-                Some(entity) => {
-                    format!(
-                        "Health: {} / {}",
-                        entity.get_health(),
-                        entity.get_max_health()
-                    )
-                }
-                None => "Health: ? / ?".to_owned(),
-            });
+            match &entity {
+                Some(entity) => ui.label(format!("Team: {:?}", entity.get_team())),
+                None => ui.label("Team: ?"),
+            };
 
-            ui.label(match &entity {
-                Some(entity) => format!("Target: {:?}", entity.get_target()),
-                None => "Target: ?".to_owned(),
-            });
+            match &entity {
+                Some(entity) => ui.label(format!(
+                    "Health: {} / {}",
+                    entity.get_health(),
+                    entity.get_max_health()
+                )),
+                None => ui.label("Health: ? / ?"),
+            };
 
-            ui.label(match &entity {
-                Some(entity) => format!(
+            match &entity {
+                Some(entity) => ui.label(format!("Target: {:?}", entity.get_target())),
+                None => ui.label("Target: ?"),
+            };
+
+            match &entity {
+                Some(entity) => ui.label(format!(
                     "Resource: {} / {}",
                     entity.resource(),
                     entity.max_resource()
-                ),
-                None => "Resource: ? / ?".to_owned(),
-            });
+                )),
+                None => ui.label("Resource: ? / ?"),
+            };
+
+            ui.label("Print log:");
 
             egui::ScrollArea::vertical()
                 .always_show_scroll(true)
