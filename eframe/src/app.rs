@@ -53,6 +53,9 @@ pub struct SwarmRsApp {
 
     #[serde(skip)]
     mouse_pos: Option<Pos2>,
+
+    #[serde(skip)]
+    last_log: Option<String>,
 }
 
 impl Default for SwarmRsApp {
@@ -75,6 +78,7 @@ impl Default for SwarmRsApp {
             spawner_source_file: SPAWNER_SOURCE_FILE.to_owned(),
             canvas_offset: Pos2::ZERO,
             mouse_pos: None,
+            last_log: None,
         }
     }
 }
@@ -279,14 +283,16 @@ impl SwarmRsApp {
                 .always_show_scroll(true)
                 .stick_to_bottom(true)
                 .show(ui, |ui| {
-                    let mut source = entity
-                        .map(|entity| {
-                            entity
-                                .log_buffer()
-                                .iter()
-                                .fold("".to_owned(), |acc, cur| acc + "\n" + cur)
-                        })
-                        .unwrap_or_else(|| "".to_owned());
+                    let mut source = if let Some(entity) = entity {
+                        entity
+                            .log_buffer()
+                            .iter()
+                            .fold("".to_owned(), |acc, cur| acc + "\n" + cur)
+                    } else if let Some(last_log) = &self.last_log {
+                        last_log.clone()
+                    } else {
+                        "".to_owned()
+                    };
                     ui.add_enabled(
                         false,
                         egui::TextEdit::multiline(&mut source)
@@ -296,6 +302,9 @@ impl SwarmRsApp {
                             .lock_focus(true)
                             .desired_width(f32::INFINITY),
                     );
+
+                    // Keep the last log in a buffer in case the entity is destroyed
+                    self.last_log = Some(source);
                 });
         });
     }
