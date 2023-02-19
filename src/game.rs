@@ -444,9 +444,30 @@ impl Game {
         if 10 < self.resources.len() {
             return;
         }
-        for _ in 0..10 {
+        for team in 0..2 {
             let rng = &mut self.rng;
-            let pos_candidate = [rng.next() * self.xs as f64, rng.next() * self.ys as f64];
+            let Some(spawner) = self.entities.iter().find_map(|entity| {
+                let entity = entity.try_borrow().ok()?;
+                if entity.get_team() == team {
+                    Some(entity)
+                } else {
+                    None
+                }
+            }) else { continue };
+
+            // Randomize the distance, but keep minimum from the spawner to make fair distribution of resources
+            let distance = rng.next() * 30. + 20.;
+            let Some(candidates) = self.qtree.get_qtree().find_contour(|id| spawner.get_id() == id, spawner.get_pos(), distance) else {
+                continue
+            };
+
+            // In case enough distance could not be placed, find random point without distance consideration.
+            let pos_candidate = if candidates.is_empty() {
+                [rng.next() * self.xs as f64, rng.next() * self.ys as f64]
+            } else {
+                candidates[rng.nexti() as usize % candidates.len()]
+            };
+
             if !is_passable_at(&self.board, (self.xs, self.ys), pos_candidate) {
                 continue;
             }

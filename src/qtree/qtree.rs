@@ -327,6 +327,14 @@ fn blocked(state: CellState, ignore: &impl Fn(usize) -> bool) -> bool {
     }
 }
 
+struct SearchState<'a> {
+    cost: f64,
+    idx: QTreeIdx,
+    state: QTreeIdx,
+    closed_set: &'a HashMap<QTreeIdx, ClosedState>,
+    open_set: &'a BinaryHeap<OpenState>,
+}
+
 impl QTree {
     pub(crate) fn path_find(
         &self,
@@ -372,16 +380,19 @@ impl QTree {
 
         dbg_println!("Start Searching from {start:?}");
 
-        let search_tree = self.explore(ignore, start_idx, |idx, state, closed_set| {
-            if idx == end_idx {
+        let search_tree = self.explore(ignore, start_idx, |search_state| {
+            if search_state.idx == end_idx {
                 let mut path = vec![];
                 // The last node should directly connect to the goal
                 // path.push(QTreePathNode::new_with_qtree(end_idx, self));
                 path.push(QTreePathNode::new(end, goal_radius));
-                let mut node = Some(state);
+                let mut node = Some(search_state.state);
                 while let Some(anode) = node {
                     path.push(QTreePathNode::new_with_qtree(anode, self));
-                    node = closed_set.get(&anode).and_then(|bnode| bnode.came_from);
+                    node = search_state
+                        .closed_set
+                        .get(&anode)
+                        .and_then(|bnode| bnode.came_from);
                 }
                 result = Ok(path);
                 return true;
@@ -391,13 +402,44 @@ impl QTree {
         (result, search_tree)
     }
 
+    pub(crate) fn find_contour(
+        &self,
+        ignore: impl Fn(usize) -> bool,
+        start: [f64; 2],
+        distance: f64,
+    ) -> Option<Vec<[f64; 2]>> {
+        let Some(start_found) = self.find(start) else {
+            return None
+        };
+        if blocked(start_found.1, &ignore) {
+            dbg_println!("Start position {start:?} was occupied!");
+            return None;
+        }
+
+        let start_idx = (start_found.0, self.pos_to_idx(start, start_found.0));
+
+        let mut result = vec![];
+
+        self.explore(ignore, start_idx, |search_state| {
+            if distance <= search_state.cost {
+                for o in search_state.open_set {
+                    result.push(self.idx_to_center((o.level, o.idx)));
+                }
+                return true;
+            }
+            false
+        });
+
+        Some(result)
+    }
+
     /// Explore the quad tree structure from given start index. `terminate` will give a condition to terminate the search.
     /// Typically, it also constructs the path by tracking the tree in reverse.
     fn explore(
         &self,
         ignore: impl Fn(usize) -> bool,
         start_idx: QTreeIdx,
-        mut terminate: impl FnMut(QTreeIdx, QTreeIdx, &HashMap<QTreeIdx, ClosedState>) -> bool,
+        mut terminate: impl FnMut(SearchState) -> bool,
     ) -> SearchTree {
         let mut open_set = BinaryHeap::new();
 
@@ -426,7 +468,15 @@ impl QTree {
                 let nei_width = self.width(nei_level) as i32;
                 let nei_bottom = [nei_idx[0] * nei_width, nei_idx[1] * nei_width];
 
-                if terminate((nei_level, nei_idx), (state.level, state.idx), &closed_set) {
+                let search_state = SearchState {
+                    cost: state.cost,
+                    idx: (nei_level, nei_idx),
+                    state: (state.level, state.idx),
+                    closed_set: &closed_set,
+                    open_set: &open_set,
+                };
+
+                if terminate(search_state) {
                     return self.build_search_tree(closed_set);
                 }
                 let new_cost = state.cost + 1.;
