@@ -47,7 +47,7 @@ impl SwarmRsApp {
                 delta: input.pointer.delta(),
                 interact_pos: Point2::new(interact_pos.x as f64, interact_pos.y as f64),
                 hover_pos: input.pointer.hover_pos(),
-                clicked: input.pointer.primary_clicked(),
+                clicked: input.pointer.primary_released(),
             }
         };
 
