@@ -23,13 +23,16 @@ fn transform_point(m: &Matrix3<f64>, v: impl Into<Point2<f64>>) -> Point2<f64> {
     <Matrix3<f64> as Transform<Point2<f64>>>::transform_point(m, v.into())
 }
 
+/// In points
+const SCREEN_SELECT_RADIUS: f64 = 20.;
+
 impl SwarmRsApp {
     pub(crate) fn paint_game(&mut self, ui: &mut Ui) {
         struct UiResult {
             scroll_delta: Vec2,
             pointer: bool,
             delta: Vec2,
-            interact_pos: Vector2<f64>,
+            interact_pos: Point2<f64>,
             hover_pos: Option<Pos2>,
             clicked: bool,
         }
@@ -42,7 +45,7 @@ impl SwarmRsApp {
                 scroll_delta: input.scroll_delta,
                 pointer: input.pointer.primary_down(),
                 delta: input.pointer.delta(),
-                interact_pos: Vector2::new(interact_pos.x as f64, interact_pos.y as f64),
+                interact_pos: Point2::new(interact_pos.x as f64, interact_pos.y as f64),
                 hover_pos: input.pointer.hover_pos(),
                 clicked: input.pointer.primary_clicked(),
             }
@@ -51,15 +54,15 @@ impl SwarmRsApp {
         if ui.ui_contains_pointer() {
             if ui_result.scroll_delta[1] != 0. {
                 let old_offset =
-                    transform_vector(&self.inverse_view_transform(), ui_result.interact_pos);
+                    transform_point(&self.inverse_view_transform(), ui_result.interact_pos);
                 if ui_result.scroll_delta[1] < 0. {
                     self.app_data.scale /= 1.2;
                 } else if 0. < ui_result.scroll_delta[1] {
                     self.app_data.scale *= 1.2;
                 }
                 let new_offset =
-                    transform_vector(&self.inverse_view_transform(), ui_result.interact_pos);
-                let diff: Vector2<f64> = new_offset - old_offset;
+                    transform_point(&self.inverse_view_transform(), ui_result.interact_pos);
+                let diff = new_offset - old_offset;
                 self.app_data.origin = (Vector2::<f64>::from(self.app_data.origin) + diff).into();
             }
 
@@ -69,24 +72,23 @@ impl SwarmRsApp {
             }
 
             if ui_result.clicked {
-                if let Some(mouse_pos) = self.mouse_pos {
-                    let mouse_pos = Vector2::new(mouse_pos.x as f64, mouse_pos.y as f64);
-                    self.app_data.selected_entity = self
-                        .app_data
-                        .game
-                        .entities
-                        .iter()
-                        .find(|entity| {
-                            let entity = entity.borrow();
-                            let pos = Vector2::from(entity.get_pos());
-                            pos.distance2(mouse_pos) < AGENT_HALFLENGTH.powf(2.)
-                        })
-                        .map(|entity| entity.borrow().get_id());
-                    println!(
-                        "Clicked {mouse_pos:?}, selected {:?}",
-                        self.app_data.selected_entity
-                    );
-                }
+                let view_transform = self.view_transform();
+                self.app_data.selected_entity = self
+                    .app_data
+                    .game
+                    .entities
+                    .iter()
+                    .find(|entity| {
+                        let entity = entity.borrow();
+                        let pos = Point2::from(entity.get_pos());
+                        let screen_pos = transform_point(&view_transform, pos);
+                        screen_pos.distance2(ui_result.interact_pos) < SCREEN_SELECT_RADIUS.powf(2.)
+                    })
+                    .map(|entity| entity.borrow().get_id());
+                println!(
+                    "Clicked {:?}, selected {:?}",
+                    self.mouse_pos, self.app_data.selected_entity,
+                );
             }
         }
 
