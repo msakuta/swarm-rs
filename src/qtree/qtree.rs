@@ -283,6 +283,50 @@ impl Display for PathFindError {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct OpenState {
+    level: usize,
+    idx: [i32; 2],
+    cost: f64,
+}
+
+impl Display for OpenState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}]{:?}", self.level, self.idx)
+    }
+}
+
+impl PartialEq for OpenState {
+    fn eq(&self, other: &Self) -> bool {
+        self.level == other.level && self.idx == other.idx
+    }
+}
+
+impl Eq for OpenState {}
+
+impl PartialOrd for OpenState {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.cost.partial_cmp(&other.cost).map(|o| o.reverse())
+    }
+}
+
+impl Ord for OpenState {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.cost
+            .partial_cmp(&other.cost)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .reverse()
+    }
+}
+
+fn blocked(state: CellState, ignore: &impl Fn(usize) -> bool) -> bool {
+    match state {
+        CellState::Obstacle => true,
+        CellState::Occupied(id) => !ignore(id),
+        _ => false,
+    }
+}
+
 impl QTree {
     pub(crate) fn path_find(
         &self,
@@ -291,25 +335,25 @@ impl QTree {
         end: [f64; 2],
         goal_radius: f64,
     ) -> (Result<QTreePath, PathFindError>, SearchTree) {
+        let mut result = Err(PathFindError::SearchFailed);
         let Some(start_found) = self.find(start) else {
             return (Err(PathFindError::StartBlocked), SearchTree::new())
         };
-        let blocked = |state| match state {
-            CellState::Obstacle => true,
-            CellState::Occupied(id) => !ignore(id),
-            _ => false,
-        };
-        if blocked(start_found.1) {
+        if blocked(start_found.1, &ignore) {
             dbg_println!("Start position {start:?} was occupied!");
             return (Err(PathFindError::GoalBlocked), SearchTree::new());
         }
+
         let Some(end_found) = self.find(end) else {
             return (Err(PathFindError::GoalBlocked), SearchTree::new())
         };
-        if blocked(end_found.1) {
+        if blocked(end_found.1, &ignore) {
             dbg_println!("End position {start:?} was occupied!");
             return (Err(PathFindError::GoalBlocked), SearchTree::new());
         }
+
+        let start_idx = (start_found.0, self.pos_to_idx(start, start_found.0));
+
         let end_idx = (
             end_found.0,
             [
@@ -318,56 +362,6 @@ impl QTree {
             ],
         );
 
-        #[derive(Debug, Clone, Copy)]
-        struct OpenState {
-            level: usize,
-            idx: [i32; 2],
-            cost: f64,
-        }
-
-        impl Display for OpenState {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "[{}]{:?}", self.level, self.idx)
-            }
-        }
-
-        impl PartialEq for OpenState {
-            fn eq(&self, other: &Self) -> bool {
-                self.level == other.level && self.idx == other.idx
-            }
-        }
-
-        impl Eq for OpenState {}
-
-        impl PartialOrd for OpenState {
-            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                self.cost.partial_cmp(&other.cost).map(|o| o.reverse())
-            }
-        }
-
-        impl Ord for OpenState {
-            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                self.cost
-                    .partial_cmp(&other.cost)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .reverse()
-            }
-        }
-
-        dbg_println!("Start Searching from {start:?}");
-
-        let mut open_set = BinaryHeap::new();
-
-        let start_idx = self.pos_to_idx(start, start_found.0);
-        let start_state = OpenState {
-            level: start_found.0,
-            idx: start_idx,
-            cost: 0.,
-        };
-        open_set.push(start_state);
-
-        let start_idx = (start_found.0, start_idx);
-
         if start_idx == end_idx {
             let path = vec![
                 QTreePathNode::new(end, goal_radius),
@@ -375,6 +369,44 @@ impl QTree {
             ];
             return (Ok(path), SearchTree::new());
         }
+
+        dbg_println!("Start Searching from {start:?}");
+
+        let search_tree = self.explore(ignore, start_idx, |idx, state, closed_set| {
+            if idx == end_idx {
+                let mut path = vec![];
+                // The last node should directly connect to the goal
+                // path.push(QTreePathNode::new_with_qtree(end_idx, self));
+                path.push(QTreePathNode::new(end, goal_radius));
+                let mut node = Some(state);
+                while let Some(anode) = node {
+                    path.push(QTreePathNode::new_with_qtree(anode, self));
+                    node = closed_set.get(&anode).and_then(|bnode| bnode.came_from);
+                }
+                result = Ok(path);
+                return true;
+            }
+            false
+        });
+        (result, search_tree)
+    }
+
+    /// Explore the quad tree structure from given start index. `terminate` will give a condition to terminate the search.
+    /// Typically, it also constructs the path by tracking the tree in reverse.
+    fn explore(
+        &self,
+        ignore: impl Fn(usize) -> bool,
+        start_idx: QTreeIdx,
+        mut terminate: impl FnMut(QTreeIdx, QTreeIdx, &HashMap<QTreeIdx, ClosedState>) -> bool,
+    ) -> SearchTree {
+        let mut open_set = BinaryHeap::new();
+
+        let start_state = OpenState {
+            level: start_idx.0,
+            idx: start_idx.1,
+            cost: 0.,
+        };
+        open_set.push(start_state);
 
         let mut closed_set = HashMap::new();
         closed_set.insert(
@@ -394,17 +426,8 @@ impl QTree {
                 let nei_width = self.width(nei_level) as i32;
                 let nei_bottom = [nei_idx[0] * nei_width, nei_idx[1] * nei_width];
 
-                if (nei_level, nei_idx) == end_idx {
-                    let mut path = vec![];
-                    // The last node should directly connect to the goal
-                    // path.push(QTreePathNode::new_with_qtree(end_idx, self));
-                    path.push(QTreePathNode::new(end, goal_radius));
-                    let mut node = Some((state.level, state.idx));
-                    while let Some(anode) = node {
-                        path.push(QTreePathNode::new_with_qtree(anode, self));
-                        node = closed_set.get(&anode).and_then(|bnode| bnode.came_from);
-                    }
-                    return (Ok(path), self.build_search_tree(closed_set));
+                if terminate((nei_level, nei_idx), (state.level, state.idx), &closed_set) {
+                    return self.build_search_tree(closed_set);
                 }
                 let new_cost = state.cost + 1.;
                 let cell = self.levels[nei_level].get(&nei_idx);
@@ -416,7 +439,7 @@ impl QTree {
                 let Some(cell) = cell else {
                     continue
                 };
-                if blocked(*cell) {
+                if blocked(*cell, &ignore) {
                     continue;
                 }
                 let cell_idx = [nei_bottom[0] / nei_width, nei_bottom[1] / nei_width];
@@ -443,10 +466,7 @@ impl QTree {
             }
         }
 
-        (
-            Err(PathFindError::SearchFailed),
-            self.build_search_tree(closed_set),
-        )
+        self.build_search_tree(closed_set)
     }
 
     fn build_search_tree(&self, closed_set: HashMap<QTreeIdx, ClosedState>) -> SearchTree {
