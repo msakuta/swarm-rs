@@ -29,7 +29,8 @@ const SCREEN_SELECT_RADIUS: f64 = 20.;
 impl SwarmRsApp {
     pub(crate) fn paint_game(&mut self, ui: &mut Ui) {
         struct UiResult {
-            scroll_delta: Vec2,
+            scroll_delta: f32,
+            zoom_delta: f32,
             pointer: bool,
             delta: Vec2,
             interact_pos: Point2<f64>,
@@ -41,8 +42,14 @@ impl SwarmRsApp {
             let input = ui.input();
             let interact_pos =
                 input.pointer.interact_pos().unwrap_or(Pos2::ZERO) - self.canvas_offset;
+
             UiResult {
-                scroll_delta: input.scroll_delta,
+                scroll_delta: input.scroll_delta[1],
+                zoom_delta: if input.multi_touch().is_some() {
+                    input.zoom_delta()
+                } else {
+                    1.
+                },
                 pointer: input.pointer.primary_down(),
                 delta: input.pointer.delta(),
                 interact_pos: Point2::new(interact_pos.x as f64, interact_pos.y as f64),
@@ -52,13 +59,15 @@ impl SwarmRsApp {
         };
 
         if ui.ui_contains_pointer() {
-            if ui_result.scroll_delta[1] != 0. {
+            if ui_result.scroll_delta != 0. || ui_result.zoom_delta != 1. {
                 let old_offset =
                     transform_point(&self.inverse_view_transform(), ui_result.interact_pos);
-                if ui_result.scroll_delta[1] < 0. {
+                if ui_result.scroll_delta < 0. {
                     self.app_data.scale /= 1.2;
-                } else if 0. < ui_result.scroll_delta[1] {
+                } else if 0. < ui_result.scroll_delta {
                     self.app_data.scale *= 1.2;
+                } else if ui_result.zoom_delta != 1. {
+                    self.app_data.scale *= ui_result.zoom_delta as f64;
                 }
                 let new_offset =
                     transform_point(&self.inverse_view_transform(), ui_result.interact_pos);
