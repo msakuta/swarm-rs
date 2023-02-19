@@ -286,7 +286,7 @@ impl Display for PathFindError {
 impl QTree {
     pub(crate) fn path_find(
         &self,
-        ignore_id: &[usize],
+        ignore: impl Fn(usize) -> bool,
         start: [f64; 2],
         end: [f64; 2],
         goal_radius: f64,
@@ -296,7 +296,7 @@ impl QTree {
         };
         let blocked = |state| match state {
             CellState::Obstacle => true,
-            CellState::Occupied(id) => !ignore_id.iter().any(|i| *i == id),
+            CellState::Occupied(id) => !ignore(id),
             _ => false,
         };
         if blocked(start_found.1) {

@@ -67,17 +67,14 @@ tree TryReverse = ReactiveSequence {
 tree FollowPathAndAvoid = Sequence {
     TargetPos (pos -> target_pos)
     if (!HasPath) {
-        if (!FindPath (target <- target_pos, path -> path, fail_reason -> failReason)) {
-            Print (input <- "Failed to find path! reason: {}", arg0 <- failReason)
-            # If path finding failed because the start is blocked, try back out
-            if (StringEq(lhs <- failReason, rhs <- "StartBlocked")) {
-                TryReverse
-            }
-        } else {
-            DigestPath (input <- path, output -> digest_path)
-            Print(input <- "found path: {}", arg0 <- digest_path)
-        }
+        FindPathPlan (try_reverse <- "true")
     }
+
+    # Try to search path every 50 ticks, even if we already have one, to update potentially moving target or obstacles
+    Throttle (time <- "100") {
+        FindPathPlan (try_reverse <- "false")
+    }
+
     if (HasPath) {
         #SimpleAvoidance
         if (!FollowPath) {
@@ -87,6 +84,19 @@ tree FollowPathAndAvoid = Sequence {
             FindPath (target <- target_pos)
             #AvoidancePlan
         }
+    }
+}
+
+tree FindPathPlan(in try_reverse) = Sequence {
+    TargetPos (pos -> target_pos)
+    if (!FindPath (target <- target_pos, path -> path, fail_reason -> failReason) && !FindPath (target <- target_pos, ignore_obstacles <- "true", path -> path, fail_reason -> failReason)) {
+        Print (input <- "Failed to find path! reason: {}", arg0 <- failReason)
+        if (IsTrue(input <- try_reverse) && StringEq(lhs <- failReason, rhs <- "StartBlocked")) {
+            TryReverse
+        }
+    } else {
+        DigestPath (input <- path, output -> digest_path)
+        Print (input <- "found path: {}", arg0 <- digest_path)
     }
 }
 

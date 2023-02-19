@@ -551,10 +551,7 @@ impl Agent {
                 if f.downcast_ref::<GetIdCommand>().is_some() {
                     return Some(Box::new(self.id) as Box<dyn std::any::Any>);
                 } else if let Some(s) = f.downcast_ref::<PrintCommand>() {
-                    self.log_buffer.push_back(s.0.clone());
-                    while MAX_LOG_ENTRIES < self.log_buffer.len() {
-                        self.log_buffer.pop_front();
-                    }
+                    self.log(s.0.clone());
                 } else if f.downcast_ref::<GetResource>().is_some() {
                     return Some(Box::new(self.resource));
                 } else if let Some(com) = f.downcast_ref::<DriveCommand>() {
@@ -612,7 +609,7 @@ impl Agent {
                         _ => (),
                     }
                 } else if let Some(com) = f.downcast_ref::<FindPathCommand>() {
-                    let found_path = self.find_path(com.0, game);
+                    let found_path = self.find_path(com, game);
                     return Some(Box::new(found_path));
                 } else if let Some(cmd) = f.downcast_ref::<FollowPathCommand>() {
                     command = Some(Command::FollowPath(*cmd));
@@ -724,6 +721,13 @@ impl Agent {
         //     self.path = vec![];
         // }
         self.cooldown = (self.cooldown - 1.).max(0.);
+    }
+
+    fn log(&mut self, msg: String) {
+        self.log_buffer.push_back(msg);
+        while MAX_LOG_ENTRIES < self.log_buffer.len() {
+            self.log_buffer.pop_front();
+        }
     }
 }
 

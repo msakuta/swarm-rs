@@ -12,7 +12,7 @@ use swarm_rs::{
 use super::SwarmRsApp;
 
 /// Transform a vector (delta). Equivalent to `(m * v.extend(0.)).truncate()`.
-fn transform_vector(m: &Matrix3<f64>, v: impl Into<Vector2<f64>>) -> Vector2<f64> {
+fn _transform_vector(m: &Matrix3<f64>, v: impl Into<Vector2<f64>>) -> Vector2<f64> {
     // Transform trait is implemented for both Point2 and Point3, so we need to repeat fully qualified method call
     <Matrix3<f64> as Transform<Point2<f64>>>::transform_vector(m, v.into())
 }
