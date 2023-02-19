@@ -10,6 +10,7 @@ use std::rc::Rc;
 pub struct AppData {
     pub game: Game,
     pub game_params: GameParams,
+    pub(crate) selected_entity: Option<usize>,
     pub origin: [f64; 2],
     pub scale: f64,
     pub message: String,
@@ -50,6 +51,7 @@ impl AppData {
         Self {
             game,
             game_params,
+            selected_entity: None,
             origin: [0., 0.],
             scale,
             message: "".to_string(),

@@ -182,6 +182,10 @@ impl Agent {
         self.health as f64 / self.class.health() as f64
     }
 
+    pub(crate) fn get_max_health(&self) -> u32 {
+        self.class.health()
+    }
+
     /// Check collision in qtree bounding boxes
     pub(crate) fn qtree_collision(
         ignore: Option<usize>,

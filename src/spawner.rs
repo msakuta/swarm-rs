@@ -12,7 +12,7 @@ use crate::{
 };
 use std::cell::RefCell;
 
-const SPAWNER_MAX_HEALTH: u32 = 1000;
+pub(crate) const SPAWNER_MAX_HEALTH: u32 = 1000;
 pub(crate) const SPAWNER_MAX_RESOURCE: i32 = 1000;
 pub(crate) const SPAWNER_RADIUS: f64 = 1.0;
 

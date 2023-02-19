@@ -1,5 +1,5 @@
 use crate::app_data::AppData;
-use cgmath::{InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
+use cgmath::{InnerSpace, Matrix2, Matrix3, MetricSpace, Point2, Rad, Transform, Vector2};
 use eframe::epaint::{self, PathShape};
 use egui::{pos2, Align2, Color32, FontId, Frame, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2};
 use swarm_rs::{
@@ -31,6 +31,7 @@ impl SwarmRsApp {
             delta: Vec2,
             interact_pos: Vector2<f64>,
             hover_pos: Option<Pos2>,
+            clicked: bool,
         }
 
         let ui_result = {
@@ -43,14 +44,9 @@ impl SwarmRsApp {
                 delta: input.pointer.delta(),
                 interact_pos: Vector2::new(interact_pos.x as f64, interact_pos.y as f64),
                 hover_pos: input.pointer.hover_pos(),
+                clicked: input.pointer.primary_clicked(),
             }
         };
-
-        self.mouse_pos = ui_result.hover_pos.map(|pos| {
-            let point = Point2::new(pos.x as f64, pos.y as f64);
-            let transformed = transform_point(&self.inverse_view_transform(), point);
-            pos2(transformed.x as f32, transformed.y as f32)
-        });
 
         if ui.ui_contains_pointer() {
             if ui_result.scroll_delta[1] != 0. {
@@ -71,15 +67,45 @@ impl SwarmRsApp {
                 self.app_data.origin[0] += ui_result.delta[0] as f64 / self.app_data.scale;
                 self.app_data.origin[1] += ui_result.delta[1] as f64 / self.app_data.scale;
             }
-        }
 
-        // println!("scroll_delta: {scroll_delta:?}");
+            if ui_result.clicked {
+                if let Some(mouse_pos) = self.mouse_pos {
+                    let mouse_pos = Vector2::new(mouse_pos.x as f64, mouse_pos.y as f64);
+                    self.app_data.selected_entity = self
+                        .app_data
+                        .game
+                        .entities
+                        .iter()
+                        .find(|entity| {
+                            let entity = entity.borrow();
+                            let pos = Vector2::from(entity.get_pos());
+                            pos.distance2(mouse_pos) < AGENT_HALFLENGTH.powf(2.)
+                        })
+                        .map(|entity| entity.borrow().get_id());
+                    println!(
+                        "Clicked {mouse_pos:?}, selected {:?}",
+                        self.app_data.selected_entity
+                    );
+                }
+            }
+        }
 
         Frame::canvas(ui.style()).show(ui, |ui| {
             let (response, painter) =
                 ui.allocate_painter(ui.available_size(), egui::Sense::hover());
 
             self.canvas_offset = response.rect.min;
+
+            self.mouse_pos = ui_result.hover_pos.map(|pos| {
+                let from_screen = egui::emath::RectTransform::from_to(
+                    response.rect,
+                    Rect::from_min_size(Pos2::ZERO, response.rect.size()),
+                );
+                let pos = from_screen.transform_pos(pos);
+                let point = Point2::new(pos.x as f64, pos.y as f64);
+                let transformed = transform_point(&self.inverse_view_transform(), point);
+                pos2(transformed.x as f32, transformed.y as f32)
+            });
 
             if self.show_labels {
                 self.img_labels
@@ -257,6 +283,8 @@ fn paint_agents(
         Color32::from_rgb(255, 0, 63),
     ];
 
+    const SELECTED_COLOR: Color32 = Color32::WHITE;
+
     let game = &data.game;
 
     let entities = &game.entities;
@@ -274,7 +302,11 @@ fn paint_agents(
         let agent = agent.borrow();
         let agent_pos = agent.get_pos();
         let pos = to_point(agent_pos);
-        let brush = AGENT_COLORS[agent.get_team() % AGENT_COLORS.len()];
+        let brush = if data.selected_entity == Some(agent.get_id()) {
+            SELECTED_COLOR
+        } else {
+            AGENT_COLORS[agent.get_team() % AGENT_COLORS.len()]
+        };
         painter.circle_filled(pos, 5., brush);
 
         if !agent.is_agent() {

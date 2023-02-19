@@ -236,6 +236,46 @@ impl SwarmRsApp {
                 )
             });
         });
+
+        ui.group(|ui| {
+            ui.heading("Selected entity");
+
+            ui.label(format!("Id: {:?}", self.app_data.selected_entity));
+
+            let entity = self.app_data.selected_entity.and_then(|id| {
+                self.app_data
+                    .game
+                    .entities
+                    .iter()
+                    .filter_map(|entity| entity.try_borrow().ok())
+                    .find(|entity| entity.get_id() == id)
+            });
+
+            ui.label(match &entity {
+                Some(entity) => {
+                    format!(
+                        "Health: {} / {}",
+                        entity.get_health(),
+                        entity.get_max_health()
+                    )
+                }
+                None => "Health: ? / ?".to_owned(),
+            });
+
+            ui.label(match &entity {
+                Some(entity) => format!("Target: {:?}", entity.get_target()),
+                None => "Target: ?".to_owned(),
+            });
+
+            ui.label(match &entity {
+                Some(entity) => format!(
+                    "Resource: {} / {}",
+                    entity.resource(),
+                    entity.max_resource()
+                ),
+                None => "Resource: ? / ?".to_owned(),
+            });
+        });
     }
 
     fn show_editor(

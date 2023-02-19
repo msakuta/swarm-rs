@@ -4,7 +4,7 @@ use crate::{
     collision::CollisionShape,
     game::Game,
     qtree::QTreePathNode,
-    spawner::{Spawner, SPAWNER_MAX_RESOURCE},
+    spawner::{Spawner, SPAWNER_MAX_HEALTH, SPAWNER_MAX_RESOURCE},
 };
 use std::{cell::RefCell, collections::VecDeque};
 
@@ -131,6 +131,20 @@ impl Entity {
         match self {
             Entity::Agent(agent) => agent.get_shape().to_aabb(),
             Entity::Spawner(spawner) => Spawner::collision_shape(spawner.pos).to_aabb(),
+        }
+    }
+
+    pub fn get_health(&self) -> u32 {
+        match self {
+            Entity::Agent(agent) => agent.health,
+            Entity::Spawner(spawner) => spawner.health,
+        }
+    }
+
+    pub fn get_max_health(&self) -> u32 {
+        match self {
+            Entity::Agent(agent) => agent.get_max_health(),
+            Entity::Spawner(_) => SPAWNER_MAX_HEALTH,
         }
     }
 
