@@ -1,5 +1,5 @@
 use crate::app_data::AppData;
-use cgmath::{InnerSpace, Matrix2, Matrix3, Point2, Rad, Transform, Vector2};
+use cgmath::{InnerSpace, Matrix2, Matrix3, MetricSpace, Point2, Rad, Transform, Vector2};
 use eframe::epaint::{self, PathShape};
 use egui::{pos2, Align2, Color32, FontId, Frame, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2};
 use swarm_rs::{
@@ -23,14 +23,18 @@ fn transform_point(m: &Matrix3<f64>, v: impl Into<Point2<f64>>) -> Point2<f64> {
     <Matrix3<f64> as Transform<Point2<f64>>>::transform_point(m, v.into())
 }
 
+/// In points
+const SCREEN_SELECT_RADIUS: f64 = 20.;
+
 impl SwarmRsApp {
     pub(crate) fn paint_game(&mut self, ui: &mut Ui) {
         struct UiResult {
             scroll_delta: Vec2,
             pointer: bool,
             delta: Vec2,
-            interact_pos: Vector2<f64>,
+            interact_pos: Point2<f64>,
             hover_pos: Option<Pos2>,
+            clicked: bool,
         }
 
         let ui_result = {
@@ -41,29 +45,24 @@ impl SwarmRsApp {
                 scroll_delta: input.scroll_delta,
                 pointer: input.pointer.primary_down(),
                 delta: input.pointer.delta(),
-                interact_pos: Vector2::new(interact_pos.x as f64, interact_pos.y as f64),
+                interact_pos: Point2::new(interact_pos.x as f64, interact_pos.y as f64),
                 hover_pos: input.pointer.hover_pos(),
+                clicked: input.pointer.primary_released(),
             }
         };
-
-        self.mouse_pos = ui_result.hover_pos.map(|pos| {
-            let point = Point2::new(pos.x as f64, pos.y as f64);
-            let transformed = transform_point(&self.inverse_view_transform(), point);
-            pos2(transformed.x as f32, transformed.y as f32)
-        });
 
         if ui.ui_contains_pointer() {
             if ui_result.scroll_delta[1] != 0. {
                 let old_offset =
-                    transform_vector(&self.inverse_view_transform(), ui_result.interact_pos);
+                    transform_point(&self.inverse_view_transform(), ui_result.interact_pos);
                 if ui_result.scroll_delta[1] < 0. {
                     self.app_data.scale /= 1.2;
                 } else if 0. < ui_result.scroll_delta[1] {
                     self.app_data.scale *= 1.2;
                 }
                 let new_offset =
-                    transform_vector(&self.inverse_view_transform(), ui_result.interact_pos);
-                let diff: Vector2<f64> = new_offset - old_offset;
+                    transform_point(&self.inverse_view_transform(), ui_result.interact_pos);
+                let diff = new_offset - old_offset;
                 self.app_data.origin = (Vector2::<f64>::from(self.app_data.origin) + diff).into();
             }
 
@@ -71,15 +70,44 @@ impl SwarmRsApp {
                 self.app_data.origin[0] += ui_result.delta[0] as f64 / self.app_data.scale;
                 self.app_data.origin[1] += ui_result.delta[1] as f64 / self.app_data.scale;
             }
-        }
 
-        // println!("scroll_delta: {scroll_delta:?}");
+            if ui_result.clicked {
+                let view_transform = self.view_transform();
+                self.app_data.selected_entity = self
+                    .app_data
+                    .game
+                    .entities
+                    .iter()
+                    .find(|entity| {
+                        let entity = entity.borrow();
+                        let pos = Point2::from(entity.get_pos());
+                        let screen_pos = transform_point(&view_transform, pos);
+                        screen_pos.distance2(ui_result.interact_pos) < SCREEN_SELECT_RADIUS.powf(2.)
+                    })
+                    .map(|entity| entity.borrow().get_id());
+                println!(
+                    "Clicked {:?}, selected {:?}",
+                    self.mouse_pos, self.app_data.selected_entity,
+                );
+            }
+        }
 
         Frame::canvas(ui.style()).show(ui, |ui| {
             let (response, painter) =
                 ui.allocate_painter(ui.available_size(), egui::Sense::hover());
 
             self.canvas_offset = response.rect.min;
+
+            self.mouse_pos = ui_result.hover_pos.map(|pos| {
+                let from_screen = egui::emath::RectTransform::from_to(
+                    response.rect,
+                    Rect::from_min_size(Pos2::ZERO, response.rect.size()),
+                );
+                let pos = from_screen.transform_pos(pos);
+                let point = Point2::new(pos.x as f64, pos.y as f64);
+                let transformed = transform_point(&self.inverse_view_transform(), point);
+                pos2(transformed.x as f32, transformed.y as f32)
+            });
 
             if self.show_labels {
                 self.img_labels
@@ -257,6 +285,8 @@ fn paint_agents(
         Color32::from_rgb(255, 0, 63),
     ];
 
+    const SELECTED_COLOR: Color32 = Color32::WHITE;
+
     let game = &data.game;
 
     let entities = &game.entities;
@@ -274,7 +304,11 @@ fn paint_agents(
         let agent = agent.borrow();
         let agent_pos = agent.get_pos();
         let pos = to_point(agent_pos);
-        let brush = AGENT_COLORS[agent.get_team() % AGENT_COLORS.len()];
+        let brush = if data.selected_entity == Some(agent.get_id()) {
+            SELECTED_COLOR
+        } else {
+            AGENT_COLORS[agent.get_team() % AGENT_COLORS.len()]
+        };
         painter.circle_filled(pos, 5., brush);
 
         if !agent.is_agent() {

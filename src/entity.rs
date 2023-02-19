@@ -4,9 +4,11 @@ use crate::{
     collision::CollisionShape,
     game::Game,
     qtree::QTreePathNode,
-    spawner::{Spawner, SPAWNER_MAX_RESOURCE},
+    spawner::{Spawner, SPAWNER_MAX_HEALTH, SPAWNER_MAX_RESOURCE},
 };
 use std::{cell::RefCell, collections::VecDeque};
+
+pub(crate) const MAX_LOG_ENTRIES: usize = 100;
 
 #[derive(Debug)]
 pub enum Entity {
@@ -134,6 +136,20 @@ impl Entity {
         }
     }
 
+    pub fn get_health(&self) -> u32 {
+        match self {
+            Entity::Agent(agent) => agent.health,
+            Entity::Spawner(spawner) => spawner.health,
+        }
+    }
+
+    pub fn get_max_health(&self) -> u32 {
+        match self {
+            Entity::Agent(agent) => agent.get_max_health(),
+            Entity::Spawner(_) => SPAWNER_MAX_HEALTH,
+        }
+    }
+
     pub fn get_health_rate(&self) -> f64 {
         match self {
             Entity::Agent(agent) => agent.get_health_rate(),
@@ -194,6 +210,13 @@ impl Entity {
         match self {
             Entity::Agent(agent) => agent.resource = (agent.resource - resource).max(0),
             Entity::Spawner(spawner) => spawner.resource = (spawner.resource - resource).max(0),
+        }
+    }
+
+    pub fn log_buffer(&self) -> &VecDeque<String> {
+        match self {
+            Entity::Agent(agent) => agent.log_buffer(),
+            Entity::Spawner(spawner) => spawner.log_buffer(),
         }
     }
 

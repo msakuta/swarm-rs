@@ -74,7 +74,8 @@ tree FollowPathAndAvoid = Sequence {
                 TryReverse
             }
         } else {
-            Print(input <- "found path: {}", arg0 <- path)
+            DigestPath (input <- path, output -> digest_path)
+            Print(input <- "found path: {}", arg0 <- digest_path)
         }
     }
     if (HasPath) {

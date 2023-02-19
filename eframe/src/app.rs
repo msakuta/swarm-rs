@@ -53,6 +53,9 @@ pub struct SwarmRsApp {
 
     #[serde(skip)]
     mouse_pos: Option<Pos2>,
+
+    #[serde(skip)]
+    last_log: Option<String>,
 }
 
 impl Default for SwarmRsApp {
@@ -75,6 +78,7 @@ impl Default for SwarmRsApp {
             spawner_source_file: SPAWNER_SOURCE_FILE.to_owned(),
             canvas_offset: Pos2::ZERO,
             mouse_pos: None,
+            last_log: None,
         }
     }
 }
@@ -121,9 +125,7 @@ impl SwarmRsApp {
             "Paused",
         ));
 
-        ui.group(|ui| {
-            ui.heading("New game options");
-
+        ui.collapsing("New game options", |ui| {
             if ui.button("New game").clicked() {
                 let params = BoardParams {
                     shape: (self.xs, self.ys),
@@ -168,9 +170,7 @@ impl SwarmRsApp {
             });
         });
 
-        ui.group(|ui| {
-            ui.heading("View options");
-
+        ui.collapsing("View options", |ui| {
             ui.horizontal(|ui| {
                 ui.add(egui::Checkbox::new(&mut self.app_data.path_visible, "Path"));
 
@@ -209,9 +209,7 @@ impl SwarmRsApp {
             ui.add(egui::Checkbox::new(&mut self.show_labels, "Label image"));
         });
 
-        ui.group(|ui| {
-            ui.heading("Debug output");
-
+        ui.collapsing("Debug output", |ui| {
             let game = &self.app_data.game;
 
             ui.label(format!("Scale: {:.06}", self.app_data.scale));
@@ -235,6 +233,79 @@ impl SwarmRsApp {
                     profiler.get_count()
                 )
             });
+        });
+
+        ui.group(|ui| {
+            ui.heading("Selected entity");
+
+            ui.label(format!("Id: {:?}", self.app_data.selected_entity));
+
+            let entity = self.app_data.selected_entity.and_then(|id| {
+                self.app_data
+                    .game
+                    .entities
+                    .iter()
+                    .filter_map(|entity| entity.try_borrow().ok())
+                    .find(|entity| entity.get_id() == id)
+            });
+
+            match &entity {
+                Some(entity) => ui.label(format!("Team: {:?}", entity.get_team())),
+                None => ui.label("Team: ?"),
+            };
+
+            match &entity {
+                Some(entity) => ui.label(format!(
+                    "Health: {} / {}",
+                    entity.get_health(),
+                    entity.get_max_health()
+                )),
+                None => ui.label("Health: ? / ?"),
+            };
+
+            match &entity {
+                Some(entity) => ui.label(format!("Target: {:?}", entity.get_target())),
+                None => ui.label("Target: ?"),
+            };
+
+            match &entity {
+                Some(entity) => ui.label(format!(
+                    "Resource: {} / {}",
+                    entity.resource(),
+                    entity.max_resource()
+                )),
+                None => ui.label("Resource: ? / ?"),
+            };
+
+            ui.label("Print log:");
+
+            egui::ScrollArea::vertical()
+                .always_show_scroll(true)
+                .stick_to_bottom(true)
+                .show(ui, |ui| {
+                    let mut source = if let Some(entity) = entity {
+                        entity
+                            .log_buffer()
+                            .iter()
+                            .fold("".to_owned(), |acc, cur| acc + "\n" + cur)
+                    } else if let Some(last_log) = &self.last_log {
+                        last_log.clone()
+                    } else {
+                        "".to_owned()
+                    };
+                    ui.add_enabled(
+                        false,
+                        egui::TextEdit::multiline(&mut source)
+                            .font(egui::TextStyle::Monospace)
+                            .code_editor()
+                            .desired_rows(10)
+                            .lock_focus(true)
+                            .desired_width(f32::INFINITY),
+                    );
+
+                    // Keep the last log in a buffer in case the entity is destroyed
+                    self.last_log = Some(source);
+                });
         });
     }
 

@@ -19,9 +19,9 @@ use self::{
     motion::{MotionCommandResult, OrientToResult},
 };
 use crate::{
-    behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource},
+    behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource, PrintCommand},
     collision::{aabb_intersects, CollisionShape, Obb},
-    entity::Entity,
+    entity::{Entity, MAX_LOG_ENTRIES},
     game::is_passable_at,
     game::{Board, Game, Profiler, Resource},
     measure_time,
@@ -95,6 +95,7 @@ pub struct Agent {
     last_state: Option<AgentState>,
     behavior_tree: Option<BehaviorTree>,
     blackboard: Blackboard,
+    log_buffer: VecDeque<String>,
 }
 
 const AGENT_SCALE: f64 = 1.;
@@ -152,6 +153,7 @@ impl Agent {
             last_state: None,
             behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
+            log_buffer: VecDeque::new(),
         })
     }
 
@@ -180,6 +182,14 @@ impl Agent {
 
     pub(crate) fn get_health_rate(&self) -> f64 {
         self.health as f64 / self.class.health() as f64
+    }
+
+    pub(crate) fn get_max_health(&self) -> u32 {
+        self.class.health()
+    }
+
+    pub(crate) fn log_buffer(&self) -> &VecDeque<String> {
+        &self.log_buffer
     }
 
     /// Check collision in qtree bounding boxes
@@ -540,6 +550,11 @@ impl Agent {
             let mut process = |f: &dyn std::any::Any| {
                 if f.downcast_ref::<GetIdCommand>().is_some() {
                     return Some(Box::new(self.id) as Box<dyn std::any::Any>);
+                } else if let Some(s) = f.downcast_ref::<PrintCommand>() {
+                    self.log_buffer.push_back(s.0.clone());
+                    while MAX_LOG_ENTRIES < self.log_buffer.len() {
+                        self.log_buffer.pop_front();
+                    }
                 } else if f.downcast_ref::<GetResource>().is_some() {
                     return Some(Box::new(self.resource));
                 } else if let Some(com) = f.downcast_ref::<DriveCommand>() {
