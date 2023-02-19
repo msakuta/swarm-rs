@@ -8,7 +8,7 @@ use behavior_tree_lite::{
     boxify, error::LoadError, load, parse_file, BehaviorCallback, BehaviorNode, BehaviorResult,
     Context, Lazy, PortSpec, Registry, Symbol,
 };
-use cgmath::{Matrix2, Rad, Vector2};
+use cgmath::{Matrix2, MetricSpace, Rad, Vector2};
 use rand::{distributions::Uniform, prelude::Distribution};
 
 pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
@@ -29,6 +29,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("HasPath", boxify(|| HasPathNode));
     registry.register("ClearPath", boxify(|| ClearPathNode));
     registry.register("FindPath", boxify(|| FindPathNode));
+    registry.register("DigestPath", boxify(|| DigestPathNode));
     registry.register("Drive", boxify(|| DriveNode));
     registry.register("MoveTo", boxify(|| MoveToNode));
     registry.register("FollowPath", boxify(|| FollowPath));
@@ -337,6 +338,34 @@ impl BehaviorNode for FindPathNode {
                 ctx.set("fail_reason", err.to_string());
                 BehaviorResult::Fail
             }
+        }
+    }
+}
+
+struct DigestPathNode;
+
+impl BehaviorNode for DigestPathNode {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("input"), PortSpec::new_out("output")]
+    }
+
+    fn tick(&mut self, _arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
+        if let Some(path) = ctx.get::<Vec<QTreePathNode>>("input") {
+            ctx.set(
+                "output",
+                format!(
+                    "{{nodes: {}, length: {:.03}}}",
+                    path.len(),
+                    path.iter().zip(path.iter().skip(1)).fold(0., |acc, cur| {
+                        let prev = Vector2::from(cur.0.pos);
+                        let next = Vector2::from(cur.1.pos);
+                        acc + prev.distance(next)
+                    })
+                ),
+            );
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
         }
     }
 }
