@@ -1,3 +1,7 @@
+use cgmath::{MetricSpace, Vector2};
+
+use crate::agent::interpolation;
+
 use super::{CellState, Rect};
 use std::{
     collections::HashMap,
@@ -171,5 +175,30 @@ impl CacheMap {
         } else {
             CellState::Obstacle
         }
+    }
+
+    pub fn is_position_visible(
+        &self,
+        collide: impl Fn(CellState) -> bool,
+        source: [f64; 2],
+        target: [f64; 2],
+    ) -> bool {
+        const INTERPOLATE_INTERVAL: f64 = 1.;
+        let distance = Vector2::from(source).distance(Vector2::from(target));
+        if distance < INTERPOLATE_INTERVAL {
+            return false;
+        }
+        !interpolation::interpolate(source, target, INTERPOLATE_INTERVAL, |point| {
+            if point[0] < 0.
+                || self.size <= point[0] as usize
+                || point[1] < 0.
+                || self.size <= point[1] as usize
+            {
+                true
+            } else {
+                let cell = self.get([point[0] as i32, point[1] as i32]);
+                collide(cell)
+            }
+        })
     }
 }
