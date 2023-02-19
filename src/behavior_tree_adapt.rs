@@ -1,7 +1,8 @@
 //! An adapter functions and types for behavior_tree_lite
 
 use behavior_tree_lite::{
-    boxify, BehaviorCallback, BehaviorNode, BehaviorResult, PortSpec, Registry,
+    boxify, tick_child_node, BehaviorCallback, BehaviorNode, BehaviorNodeContainer, BehaviorResult,
+    PortSpec, Registry,
 };
 
 use crate::qtree::QTreePathNode;
@@ -21,6 +22,7 @@ pub(super) fn common_tree_nodes(registry: &mut Registry) {
     registry.register("Ge", boxify(|| GeNode));
     registry.register("Print", boxify(|| PrintNode));
     registry.register("GetResource", boxify(|| GetResource));
+    registry.register("Throttle", boxify(|| ThrottleNode::default()));
 }
 
 /// Because behavior-tree-lite doesn't support string variables in expressions, we need a silly node like this.
@@ -165,5 +167,71 @@ impl BehaviorNode for GetResource {
 
         ctx.set("output", resource);
         BehaviorResult::Success
+    }
+}
+
+/// Throttle the execution of the child node by a given number of ticks. Useful to limit frequency of calling expensive operations.
+///
+/// For example, the following behavior will print "Hello" once every 20 ticks.
+///
+/// ```txt
+/// Throttle (time <- "20") {
+///     Print (input <- "Hello")
+/// }
+/// ```
+///
+/// If the child node fails, this node will fail too. Wrap the child node in a `ForceSuccess` to suppress this behavior.
+#[derive(Default)]
+struct ThrottleNode {
+    timer: Option<usize>,
+    child: Option<BehaviorNodeContainer>,
+}
+
+impl BehaviorNode for ThrottleNode {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_in("time")]
+    }
+
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let set_timer = |this: &mut Self| {
+            if let Some(input) = ctx.get_parse::<usize>("time") {
+                // println!("Timer set! {}", input);
+                this.timer = Some(input);
+            } else {
+                this.timer = None;
+            }
+        };
+
+        if let Some(ref mut remaining) = self.timer {
+            if *remaining == 0 {
+                // println!("Timed out");
+                set_timer(self);
+                let res = self
+                    .child
+                    .as_mut()
+                    .map(|child| tick_child_node(arg, ctx, child))
+                    .unwrap_or(BehaviorResult::Fail);
+                return res;
+            } else {
+                *remaining -= 1;
+                return BehaviorResult::Success;
+            }
+        } else {
+            set_timer(self);
+        }
+        BehaviorResult::Success
+    }
+
+    fn add_child(
+        &mut self,
+        node: Box<dyn BehaviorNode>,
+        blackboard_map: behavior_tree_lite::BBMap,
+    ) -> behavior_tree_lite::error::AddChildResult {
+        self.child = Some(BehaviorNodeContainer::new(node, blackboard_map));
+        Ok(())
     }
 }
