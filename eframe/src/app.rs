@@ -8,8 +8,6 @@ use egui::{Pos2, Ui};
 use swarm_rs::game::{BoardParams, BoardType, GameParams, UpdateResult};
 
 const WINDOW_HEIGHT: f64 = 800.;
-const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
-const SPAWNER_SOURCE_FILE: &'static str = "behavior_tree_config/spawner.txt";
 
 #[derive(Debug, PartialEq)]
 enum Panel {
@@ -22,6 +20,12 @@ enum Panel {
 enum BTEditor {
     Agent,
     Spawner,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct BTSourceFiles {
+    agent: String,
+    spawner: String,
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -54,8 +58,7 @@ pub struct SwarmRsApp {
     maze_expansions: usize,
     agent_count: usize,
 
-    agent_source_file: String,
-    spawner_source_file: String,
+    bt_source_file: [BTSourceFiles; 2],
 
     #[serde(skip)]
     pub(crate) canvas_offset: Pos2,
@@ -84,8 +87,16 @@ impl Default for SwarmRsApp {
             ys: 128,
             maze_expansions: 512,
             agent_count: 3,
-            agent_source_file: AGENT_SOURCE_FILE.to_owned(),
-            spawner_source_file: SPAWNER_SOURCE_FILE.to_owned(),
+            bt_source_file: [
+                BTSourceFiles {
+                    agent: "behavior_tree_config/green/agent.txt".to_owned(),
+                    spawner: "behavior_tree_config/green/spawner.txt".to_owned(),
+                },
+                BTSourceFiles {
+                    agent: "behavior_tree_config/red/agent.txt".to_owned(),
+                    spawner: "behavior_tree_config/red/spawner.txt".to_owned(),
+                },
+            ],
             canvas_offset: Pos2::ZERO,
             mouse_pos: None,
             last_log: None,
@@ -387,8 +398,14 @@ impl SwarmRsApp {
                     BTEditor::Spawner => &mut tc.spawner_source,
                 }
             },
-            |app_data| &app_data.agent_source_file,
-            |app_data| &mut app_data.agent_source_file,
+            |app_data| match bt_type {
+                BTEditor::Agent => &app_data.bt_source_file[team].agent,
+                BTEditor::Spawner => &app_data.bt_source_file[team].spawner,
+            },
+            |app_data| match bt_type {
+                BTEditor::Agent => &mut app_data.bt_source_file[team].agent,
+                BTEditor::Spawner => &mut app_data.bt_source_file[team].spawner,
+            },
         );
     }
 }
