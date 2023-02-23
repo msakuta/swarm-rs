@@ -103,6 +103,13 @@ pub struct TeamConfig {
     pub spawner_source: Rc<String>,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TeamStats {
+    pub spawned: usize,
+    pub kills: usize,
+    pub wins: usize,
+}
+
 #[cfg_attr(feature = "druid", derive(Data))]
 #[derive(Clone)]
 pub struct GameParams {
@@ -147,6 +154,7 @@ pub struct Game {
     pub path_find_profiler: RefCell<Profiler>,
     pub agent_count: usize,
     pub(crate) teams: [TeamConfig; 2],
+    pub stats: [TeamStats; 2],
     pub qtree: QTreeSearcher,
 }
 
@@ -193,6 +201,7 @@ impl Game {
             path_find_profiler: RefCell::new(Profiler::new()),
             agent_count: 3,
             teams: Default::default(),
+            stats: Default::default(),
             qtree,
         }
     }
@@ -499,6 +508,7 @@ impl Game {
                     {
                         println!("Spawning agent {class:?}");
                         entities.push(RefCell::new(agent));
+                        self.stats[team].spawned += 1;
                         if let Some(spawner) = entities
                             .iter_mut()
                             .find(|ent| ent.borrow().get_id() == spawner)
@@ -520,6 +530,7 @@ impl Game {
         {
             let agents = &self.entities;
             let mut temp_ents = std::mem::take(&mut self.temp_ents);
+            let mut kills = [0usize; 2];
             self.bullets = self
                 .bullets
                 .iter()
@@ -550,6 +561,7 @@ impl Game {
                                 temp_ents.push(temp_ent);
                                 if agent.damage(bullet.damage) {
                                     agent.set_active(false);
+                                    kills[bullet.team] += 1;
                                     println!("Entity {} is being killed", agent.get_id());
                                 }
                                 return None;
@@ -567,6 +579,10 @@ impl Game {
                 .into_iter()
                 .filter_map(|mut ent| if ent.update() { Some(ent) } else { None })
                 .collect();
+
+            for team in 0..self.stats.len() {
+                self.stats[team].kills += kills[team];
+            }
         }
 
         let (_, timer) = measure_time(|| {
@@ -653,7 +669,9 @@ impl Game {
                 .any(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
             {
                 self.entities = entities;
-                return UpdateResult::TeamWon((team + 1) % 2);
+                let won_team = (team + 1) % 2;
+                self.stats[won_team].wins += 1;
+                return UpdateResult::TeamWon(won_team);
             }
         }
         self.entities = entities;
