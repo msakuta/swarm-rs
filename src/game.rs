@@ -103,6 +103,13 @@ pub struct TeamConfig {
     pub spawner_source: Rc<String>,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TeamStats {
+    pub spawned: usize,
+    pub kills: usize,
+    pub wins: usize,
+}
+
 #[cfg_attr(feature = "druid", derive(Data))]
 #[derive(Clone)]
 pub struct GameParams {
@@ -147,6 +154,7 @@ pub struct Game {
     pub path_find_profiler: RefCell<Profiler>,
     pub agent_count: usize,
     pub(crate) teams: [TeamConfig; 2],
+    pub stats: [TeamStats; 2],
     pub qtree: QTreeSearcher,
 }
 
@@ -193,6 +201,7 @@ impl Game {
             path_find_profiler: RefCell::new(Profiler::new()),
             agent_count: 3,
             teams: Default::default(),
+            stats: Default::default(),
             qtree,
         }
     }
@@ -499,6 +508,7 @@ impl Game {
                     {
                         println!("Spawning agent {class:?}");
                         entities.push(RefCell::new(agent));
+                        self.stats[team].spawned += 1;
                         if let Some(spawner) = entities
                             .iter_mut()
                             .find(|ent| ent.borrow().get_id() == spawner)

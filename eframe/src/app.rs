@@ -230,6 +230,23 @@ impl SwarmRsApp {
             ui.add(egui::Checkbox::new(&mut self.show_labels, "Label image"));
         });
 
+        ui.collapsing("Statistics", |ui| {
+            let game = &self.app_data.game;
+
+            ui.horizontal(|ui| {
+                for team in 0..=1 {
+                    ui.vertical(|ui| {
+                        ui.group(|ui| {
+                            ui.label(["Green team", "Red team"][team]);
+                            ui.label(format!("Spawned: {}", game.stats[team].spawned));
+                            ui.label(format!("Kills: {}", game.stats[team].kills));
+                            ui.label(format!("Wins: {}", game.stats[team].wins));
+                        });
+                    });
+                }
+            });
+        });
+
         ui.collapsing("Debug output", |ui| {
             let game = &self.app_data.game;
 
