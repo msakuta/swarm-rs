@@ -530,6 +530,7 @@ impl Game {
         {
             let agents = &self.entities;
             let mut temp_ents = std::mem::take(&mut self.temp_ents);
+            let mut kills = [0usize; 2];
             self.bullets = self
                 .bullets
                 .iter()
@@ -560,6 +561,7 @@ impl Game {
                                 temp_ents.push(temp_ent);
                                 if agent.damage(bullet.damage) {
                                     agent.set_active(false);
+                                    kills[bullet.team] += 1;
                                     println!("Entity {} is being killed", agent.get_id());
                                 }
                                 return None;
@@ -577,6 +579,10 @@ impl Game {
                 .into_iter()
                 .filter_map(|mut ent| if ent.update() { Some(ent) } else { None })
                 .collect();
+
+            for team in 0..self.stats.len() {
+                self.stats[team].kills += kills[team];
+            }
         }
 
         let (_, timer) = measure_time(|| {
