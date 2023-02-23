@@ -669,7 +669,9 @@ impl Game {
                 .any(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
             {
                 self.entities = entities;
-                return UpdateResult::TeamWon((team + 1) % 2);
+                let won_team = (team + 1) % 2;
+                self.stats[won_team].wins += 1;
+                return UpdateResult::TeamWon(won_team);
             }
         }
         self.entities = entities;
