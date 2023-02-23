@@ -97,14 +97,20 @@ pub struct BoardParams {
 }
 
 #[cfg_attr(feature = "druid", derive(Data))]
+#[derive(Clone, Debug, Default)]
+pub struct TeamConfig {
+    pub agent_source: Rc<String>,
+    pub spawner_source: Rc<String>,
+}
+
+#[cfg_attr(feature = "druid", derive(Data))]
 #[derive(Clone)]
 pub struct GameParams {
     pub avoidance_mode: AvoidanceMode,
     pub paused: bool,
     pub avoidance_expands: f64,
     pub agent_count: usize,
-    pub agent_source: Rc<String>,
-    pub spawner_source: Rc<String>,
+    pub teams: [TeamConfig; 2],
 }
 
 impl GameParams {
@@ -114,8 +120,7 @@ impl GameParams {
             paused: false,
             avoidance_expands: 1.,
             agent_count: 3,
-            agent_source: Rc::new("".to_string()),
-            spawner_source: Rc::new("".to_string()),
+            teams: Default::default(),
         }
     }
 }
@@ -141,8 +146,7 @@ pub struct Game {
     pub qtree_profiler: RefCell<Profiler>,
     pub path_find_profiler: RefCell<Profiler>,
     pub agent_count: usize,
-    pub(crate) agent_source: Rc<String>,
-    pub(crate) spawner_source: Rc<String>,
+    pub(crate) teams: [TeamConfig; 2],
     pub qtree: QTreeSearcher,
 }
 
@@ -188,8 +192,7 @@ impl Game {
             qtree_profiler: RefCell::new(Profiler::new()),
             path_find_profiler: RefCell::new(Profiler::new()),
             agent_count: 3,
-            agent_source: Rc::new(String::new()),
-            spawner_source: Rc::new(String::new()),
+            teams: Default::default(),
             qtree,
         }
     }
@@ -386,7 +389,7 @@ impl Game {
                 if static_ {
                     STATIC_SOURCE_FILE
                 } else {
-                    &self.agent_source
+                    &self.teams[team].agent_source
                 },
             );
             match agent {
@@ -425,8 +428,12 @@ impl Game {
                 continue;
             }
             if self.board[pos_candidate[0] as usize + self.xs * pos_candidate[1] as usize] {
-                let spawner =
-                    Spawner::new(&mut self.id_gen, pos_candidate, team, &self.spawner_source);
+                let spawner = Spawner::new(
+                    &mut self.id_gen,
+                    pos_candidate,
+                    team,
+                    &self.teams[team].spawner_source,
+                );
                 match spawner {
                     Ok(spawner) => return Some(Entity::Spawner(spawner)),
                     Err(err) => println!("Spawner failed to create!: {err}"),
@@ -468,8 +475,7 @@ impl Game {
         self.avoidance_mode = params.avoidance_mode;
         self.avoidance_expands = params.avoidance_expands;
         self.agent_count = params.agent_count;
-        self.agent_source = params.agent_source.clone();
-        self.spawner_source = params.spawner_source.clone();
+        self.teams = params.teams.clone();
     }
 
     pub fn update(&mut self) -> UpdateResult {

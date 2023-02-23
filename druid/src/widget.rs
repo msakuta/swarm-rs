@@ -254,7 +254,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                         .with_child(Button::new("Apply").on_click(
                             move |_, app_data: &mut AppData, _| {
                                 app_data.try_load_behavior_tree(get(app_data).clone(), |params| {
-                                    &mut params.agent_source
+                                    &mut params.teams[0].agent_source
                                 });
                             },
                         ))
@@ -266,7 +266,7 @@ pub(crate) fn make_widget() -> impl Widget<AppData> {
                                 Ok(s) => {
                                     let s = Rc::new(s);
                                     if app_data.try_load_behavior_tree(s.clone(), |params| {
-                                        &mut params.spawner_source
+                                        &mut params.teams[0].spawner_source
                                     }) {
                                         *get_mut(app_data) = s;
                                     }

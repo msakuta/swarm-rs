@@ -1,6 +1,6 @@
 use ::swarm_rs::{
     behavior_tree_lite::parse_file,
-    game::{BoardParams, BoardType, Game, GameParams},
+    game::{BoardParams, BoardType, Game, GameParams, TeamConfig},
     qtree::QTreeSearcher,
 };
 use swarm_rs::game::UpdateResult;
@@ -24,8 +24,7 @@ pub struct AppData {
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
     /// This buffer is not yet applied to the game.
-    pub agent_source_buffer: Rc<String>,
-    pub spawner_source_buffer: Rc<String>,
+    pub(crate) teams: [TeamConfig; 2],
     pub(crate) global_render_time: f64,
 }
 
@@ -34,16 +33,33 @@ impl AppData {
         let mut game = Game::new();
         let scale = window_height / game.shape().1 as f64;
 
-        let agent_source_buffer = Rc::new(collapse_newlines(include_str!(
-            "../../behavior_tree_config/agent.txt"
-        )));
-        let spawner_source_buffer = Rc::new(collapse_newlines(include_str!(
-            "../../behavior_tree_config/spawner.txt"
-        )));
+        let teams = [
+            TeamConfig {
+                agent_source: Rc::new(collapse_newlines(include_str!(
+                    "../../behavior_tree_config/green/agent.txt"
+                ))),
+                spawner_source: Rc::new(collapse_newlines(include_str!(
+                    "../../behavior_tree_config/green/spawner.txt"
+                ))),
+            },
+            TeamConfig {
+                agent_source: Rc::new(collapse_newlines(include_str!(
+                    "../../behavior_tree_config/red/agent.txt"
+                ))),
+                spawner_source: Rc::new(collapse_newlines(include_str!(
+                    "../../behavior_tree_config/red/spawner.txt"
+                ))),
+            },
+        ];
+
+        println!(
+            "Green bt: {g} red bt: {r}",
+            g = teams[0].agent_source.len(),
+            r = teams[1].agent_source.len()
+        );
 
         let mut game_params = GameParams::new();
-        game_params.agent_source = agent_source_buffer.clone();
-        game_params.spawner_source = spawner_source_buffer.clone();
+        game_params.teams = teams.clone();
 
         game.set_params(&game_params);
         game.init();
@@ -63,8 +79,7 @@ impl AppData {
             target_visible: false,
             entity_label_visible: true,
             entity_trace_visible: false,
-            agent_source_buffer,
-            spawner_source_buffer,
+            teams,
             global_render_time: 0.,
         }
     }
@@ -110,7 +125,7 @@ impl AppData {
     pub fn try_load_behavior_tree(
         &mut self,
         src: Rc<String>,
-        setter: fn(&mut GameParams) -> &mut Rc<String>,
+        setter: &impl Fn(&mut GameParams) -> &mut Rc<String>,
     ) -> bool {
         fn count_newlines(src: &str) -> usize {
             src.lines().count()
@@ -120,10 +135,7 @@ impl AppData {
         match parse_file(&src) {
             Ok(("", _)) => {
                 *setter(&mut self.game_params) = src.clone();
-                self.message = format!(
-                    "Behavior tree applied! {}",
-                    Rc::strong_count(&self.agent_source_buffer)
-                );
+                self.message = format!("Behavior tree applied! {}", Rc::strong_count(&src));
                 true
             }
             Ok((rest, _)) => {
@@ -145,8 +157,8 @@ impl AppData {
     pub fn try_load_from_file(
         &mut self,
         file: &str,
-        get_mut: fn(&mut AppData) -> &mut Rc<String>,
-        setter: fn(&mut GameParams) -> &mut Rc<String>,
+        get_mut: &mut impl FnMut(&mut AppData) -> &mut Rc<String>,
+        setter: &impl Fn(&mut GameParams) -> &mut Rc<String>,
     ) {
         match std::fs::read_to_string(file) {
             Ok(s) => {

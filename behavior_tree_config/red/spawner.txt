@@ -1,0 +1,10 @@
+tree main = Sequence {
+    GetResource (output -> resource)
+    if (Ge (lhs <- resource, rhs <- "500")) {
+        SpawnFighter
+    } else {
+        if (Ge (lhs <- resource, rhs <- "100")) {
+            SpawnWorker
+        }
+    }
+}

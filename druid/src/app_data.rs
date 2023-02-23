@@ -2,7 +2,7 @@ use druid::{Point, Vec2};
 use swarm_rs::{
     behavior_tree_lite::parse_file,
     // agent::AvoidanceRenderParams,
-    game::{BoardParams, BoardType, Game, GameParams},
+    game::{BoardParams, BoardType, Game, GameParams, TeamConfig},
 };
 
 use ::druid::{Data, Lens};
@@ -72,14 +72,27 @@ impl AppData {
         const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
         const SPAWNER_SOURCE_FILE: &'static str = "behavior_tree_config/spawner.txt";
 
-        let agent_source_buffer =
-            Rc::new(include_str!("../../behavior_tree_config/agent.txt").to_string());
-        let spawner_source_buffer =
-            Rc::new(include_str!("../../behavior_tree_config/spawner.txt").to_string());
+        let teams = [
+            TeamConfig {
+                agent_source: Rc::new(
+                    include_str!("../../behavior_tree_config/green/agent.txt").to_string(),
+                ),
+                spawner_source: Rc::new(
+                    include_str!("../../behavior_tree_config/green/spawner.txt").to_string(),
+                ),
+            },
+            TeamConfig {
+                agent_source: Rc::new(
+                    include_str!("../../behavior_tree_config/red/agent.txt").to_string(),
+                ),
+                spawner_source: Rc::new(
+                    include_str!("../../behavior_tree_config/red/spawner.txt").to_string(),
+                ),
+            },
+        ];
 
         let mut game_params = GameParams::new();
-        game_params.agent_source = agent_source_buffer.clone();
-        game_params.spawner_source = spawner_source_buffer.clone();
+        game_params.teams = teams.clone();
 
         game.set_params(&game_params);
         game.init();
@@ -117,9 +130,9 @@ impl AppData {
             entity_label_visible: true,
             entity_trace_visible: false,
             agent_source_file: AGENT_SOURCE_FILE.to_string(),
-            agent_source_buffer,
+            agent_source_buffer: teams[0].agent_source.clone(),
             spawner_source_file: SPAWNER_SOURCE_FILE.to_string(),
-            spawner_source_buffer,
+            spawner_source_buffer: teams[0].spawner_source.clone(),
             global_render_time: 0.,
         }
     }

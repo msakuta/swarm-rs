@@ -14,8 +14,14 @@ const SPAWNER_SOURCE_FILE: &'static str = "behavior_tree_config/spawner.txt";
 #[derive(Debug, PartialEq)]
 enum Panel {
     Main,
-    AgentEditor,
-    SpawnerEditor,
+    GreenBTEditor,
+    RedBTEditor,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum BTEditor {
+    Agent,
+    Spawner,
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -30,6 +36,9 @@ pub struct SwarmRsApp {
 
     #[serde(skip)]
     open_panel: Panel,
+
+    #[serde(skip)]
+    open_bt_panel: BTEditor,
 
     show_labels: bool,
 
@@ -66,6 +75,7 @@ impl Default for SwarmRsApp {
             img_gray: BgImage::new(),
             img_labels: BgImage::new(),
             open_panel: Panel::Main,
+            open_bt_panel: BTEditor::Agent,
             show_labels: false,
             app_data: AppData::new(WINDOW_HEIGHT),
             draw_circle: false,
@@ -313,8 +323,8 @@ impl SwarmRsApp {
         &mut self,
         ui: &mut Ui,
         contents: impl Fn(&Self) -> Rc<String>,
-        contents_mut: fn(&mut AppData) -> &mut Rc<String>,
-        game_params_mut: fn(&mut GameParams) -> &mut Rc<String>,
+        mut contents_mut: impl FnMut(&mut AppData) -> &mut Rc<String>,
+        game_params_mut: impl Fn(&mut GameParams) -> &mut Rc<String>,
         file: impl Fn(&Self) -> &str,
         mut file_mut: impl FnMut(&mut Self) -> &mut String,
     ) {
@@ -323,13 +333,13 @@ impl SwarmRsApp {
         ui.horizontal(|ui| {
             if ui.button("Apply").clicked() {
                 self.app_data
-                    .try_load_behavior_tree(contents(self).clone(), game_params_mut);
+                    .try_load_behavior_tree(contents(self).clone(), &game_params_mut);
             }
             ui.text_edit_singleline(file_mut(self));
             if ui.button("Reload from file").clicked() {
                 let file = file(self).to_owned();
                 self.app_data
-                    .try_load_from_file(&file, contents_mut, game_params_mut);
+                    .try_load_from_file(&file, &mut contents_mut, &game_params_mut);
             }
         });
 
@@ -344,6 +354,42 @@ impl SwarmRsApp {
                     .desired_width(f32::INFINITY),
             );
         });
+    }
+
+    fn bt_editor(&mut self, ui: &mut Ui, team: usize) {
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.open_bt_panel, BTEditor::Agent, "Agent");
+            ui.selectable_value(&mut self.open_bt_panel, BTEditor::Spawner, "Spawner");
+        });
+        let bt_type = self.open_bt_panel;
+
+        self.show_editor(
+            ui,
+            |app_data| {
+                let tc = &app_data.app_data.teams[team];
+                match bt_type {
+                    BTEditor::Agent => &tc.agent_source,
+                    BTEditor::Spawner => &tc.spawner_source,
+                }
+                .clone()
+            },
+            |app_data| {
+                let tc = &mut app_data.teams[team];
+                match bt_type {
+                    BTEditor::Agent => &mut tc.agent_source,
+                    BTEditor::Spawner => &mut tc.spawner_source,
+                }
+            },
+            |params| {
+                let tc = &mut params.teams[team];
+                match bt_type {
+                    BTEditor::Agent => &mut tc.agent_source,
+                    BTEditor::Spawner => &mut tc.spawner_source,
+                }
+            },
+            |app_data| &app_data.agent_source_file,
+            |app_data| &mut app_data.agent_source_file,
+        );
     }
 }
 
@@ -396,33 +442,20 @@ impl eframe::App for SwarmRsApp {
                 ui.selectable_value(&mut self.open_panel, Panel::Main, "Main");
                 ui.selectable_value(
                     &mut self.open_panel,
-                    Panel::AgentEditor,
-                    "Agent behavior tree",
+                    Panel::GreenBTEditor,
+                    "Green behavior tree",
                 );
                 ui.selectable_value(
                     &mut self.open_panel,
-                    Panel::SpawnerEditor,
-                    "Spawner behavior tree",
+                    Panel::RedBTEditor,
+                    "Red behavior tree",
                 );
             });
+
             match self.open_panel {
                 Panel::Main => self.show_panel_ui(ui),
-                Panel::AgentEditor => self.show_editor(
-                    ui,
-                    |app_data| app_data.app_data.agent_source_buffer.clone(),
-                    |app_data| &mut app_data.agent_source_buffer,
-                    |params| &mut params.agent_source,
-                    |app_data| &app_data.agent_source_file,
-                    |app_data| &mut app_data.agent_source_file,
-                ),
-                Panel::SpawnerEditor => self.show_editor(
-                    ui,
-                    |app_data| app_data.app_data.spawner_source_buffer.clone(),
-                    |app_data| &mut app_data.spawner_source_buffer,
-                    |params| &mut params.spawner_source,
-                    |app_data| &app_data.spawner_source_file,
-                    |app_data| &mut app_data.spawner_source_file,
-                ),
+                Panel::GreenBTEditor => self.bt_editor(ui, 0),
+                Panel::RedBTEditor => self.bt_editor(ui, 1),
             }
         });
 
