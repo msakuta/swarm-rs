@@ -231,7 +231,11 @@ impl SwarmRsApp {
         });
 
         ui.collapsing("Statistics", |ui| {
-            let game = &self.app_data.game;
+            let game = &mut self.app_data.game;
+
+            if ui.button("Reset").clicked() {
+                game.stats = Default::default();
+            }
 
             ui.horizontal(|ui| {
                 for team in 0..=1 {
