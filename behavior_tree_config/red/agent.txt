@@ -34,7 +34,7 @@ tree Fight = Sequence {
             FaceToTarget (target <- targetPos)
             Shoot
         } else {
-            FollowPathAndAvoid
+            FollowPathAndAvoid (fight <- "true")
         }
     }
 }
@@ -46,7 +46,7 @@ tree GatherResource(out switchToFight) = Sequence {
     }
     if (IsResourceFull) {
         FindSpawner
-        FollowPathAndAvoid
+        FollowPathAndAvoid (fight <- "false")
         DepositResource
     } else {
         #if (!HasTarget) {
@@ -64,7 +64,7 @@ tree TryReverse = ReactiveSequence {
     Timeout (time <- timeoutValue)
 }
 
-tree FollowPathAndAvoid = Sequence {
+tree FollowPathAndAvoid(in fight) = Sequence {
     TargetPos (pos -> target_pos)
     if (!HasPath) {
         FindPathPlan (try_reverse <- "true")
@@ -72,7 +72,14 @@ tree FollowPathAndAvoid = Sequence {
 
     # Try to search path every 50 ticks, even if we already have one, to update potentially moving target or obstacles
     Throttle (time <- "100") {
-        FindPathPlan (try_reverse <- "false")
+        Sequence {
+            # Attempt to find the closest enemy again
+            if (IsTrue(input <- fight)) {
+                Print (input <- "Finding a new target")
+                FindEnemy
+            }
+            FindPathPlan (try_reverse <- "false")
+        }
     }
 
     if (HasPath) {
