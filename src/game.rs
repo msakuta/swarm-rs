@@ -156,6 +156,10 @@ pub struct Game {
     pub(crate) teams: [TeamConfig; 2],
     pub stats: [TeamStats; 2],
     pub qtree: QTreeSearcher,
+
+    pub enable_raycast_board: bool,
+    /// A visualization of visited pixels by raycasting visibility checking
+    pub raycast_board: RefCell<Vec<u8>>,
 }
 
 impl Game {
@@ -203,6 +207,8 @@ impl Game {
             teams: Default::default(),
             stats: Default::default(),
             qtree,
+            enable_raycast_board: false,
+            raycast_board: RefCell::new(vec![]),
         }
     }
 
@@ -275,6 +281,7 @@ impl Game {
         };
 
         self.qtree = Self::new_qtree(params.shape, &board, &[]);
+        self.raycast_board = RefCell::new(vec![]);
         self.board = board;
         self.mesh = mesh;
         self.entities = vec![];
@@ -488,6 +495,14 @@ impl Game {
     }
 
     pub fn update(&mut self) -> UpdateResult {
+        if self.enable_raycast_board {
+            let mut raycast_board = self.raycast_board.borrow_mut();
+            if raycast_board.len() != self.board.len() {
+                raycast_board.resize(self.board.len(), 0);
+            }
+            raycast_board.fill(0);
+        }
+
         let mut entities = std::mem::take(&mut self.entities);
         let mut bullets = std::mem::take(&mut self.bullets);
         let mut events = vec![];
@@ -770,6 +785,18 @@ pub(crate) fn separating_axis(
 }
 
 pub fn is_passable_at(board: &[bool], shape: (usize, usize), pos: [f64; 2]) -> bool {
+    let pos = [pos[0] as isize, pos[1] as isize];
+    if pos[0] < 0 || shape.0 as isize <= pos[0] || pos[1] < 0 || shape.1 as isize <= pos[1] {
+        false
+    } else {
+        let pos = [pos[0] as usize, pos[1] as usize];
+        board[pos[0] + shape.0 * pos[1]]
+    }
+}
+
+/// An integer variant of `is_passable_at`.
+pub fn is_passable_at_i(board: &[bool], shape: (usize, usize), pos: impl Into<[i32; 2]>) -> bool {
+    let pos = pos.into();
     let pos = [pos[0] as isize, pos[1] as isize];
     if pos[0] < 0 || shape.0 as isize <= pos[0] || pos[1] < 0 || shape.1 as isize <= pos[1] {
         false

@@ -227,7 +227,14 @@ impl SwarmRsApp {
                 "Entity labels",
             ));
 
-            ui.add(egui::Checkbox::new(&mut self.show_labels, "Label image"));
+            ui.horizontal_wrapped(|ui| {
+                ui.add(egui::Checkbox::new(&mut self.show_labels, "Label image"));
+
+                ui.add(egui::Checkbox::new(
+                    &mut self.app_data.game.enable_raycast_board,
+                    "Raycast image",
+                ));
+            });
         });
 
         ui.collapsing("Statistics", |ui| {

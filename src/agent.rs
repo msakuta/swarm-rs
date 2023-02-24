@@ -22,14 +22,13 @@ use crate::{
     behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource, PrintCommand},
     collision::{aabb_intersects, CollisionShape, Obb},
     entity::{Entity, MAX_LOG_ENTRIES},
-    game::is_passable_at,
-    game::{Board, Game, Profiler, Resource},
+    game::{is_passable_at_i, Game, Profiler, Resource},
     measure_time,
     qtree::{QTreePath, SearchTree},
     spawner::{SPAWNER_MAX_RESOURCE, SPAWNER_RADIUS},
 };
 use ::behavior_tree_lite::Context;
-use ::cgmath::{InnerSpace, MetricSpace, Vector2};
+use ::cgmath::{InnerSpace, MetricSpace, Vector2, Zero};
 use behavior_tree_lite::{error::LoadError, BehaviorResult, Blackboard, Lazy};
 
 use std::{
@@ -636,8 +635,7 @@ impl Agent {
                     let target_pos = com.0;
                     let ret = Box::new(self.is_position_visible(
                         target_pos,
-                        &game.board,
-                        (game.xs, game.ys),
+                        &game,
                         &mut game.triangle_profiler.borrow_mut(),
                     ));
                     return Some(ret);
@@ -778,23 +776,43 @@ impl Agent {
         }
     }
 
-    fn is_position_visible(
-        &self,
-        target: [f64; 2],
-        board: &Board,
-        shape: (usize, usize),
-        _profiler: &mut Profiler,
-    ) -> bool {
-        const INTERPOLATE_INTERVAL: f64 = AGENT_HALFLENGTH;
+    fn is_position_visible(&self, target: [f64; 2], game: &Game, _profiler: &mut Profiler) -> bool {
+        let board = &game.board;
+        let shape = (game.xs, game.ys);
 
         let self_pos = self.pos;
+        let self_vec = Vector2::from(self_pos);
+        let target_vec = Vector2::from(target);
 
-        let distance = Vector2::from(self_pos).distance(Vector2::from(target));
+        let distance = self_vec.distance(target_vec);
         if AGENT_VISIBLE_DISTANCE < distance {
             return false;
         }
-        !interpolation::interpolate(self_pos, target, INTERPOLATE_INTERVAL, |point| {
-            !is_passable_at(board, shape, point)
+        let Some(self_veci) = self_vec.cast::<i32>() else { return false };
+        let Some(target_veci) = target_vec.cast::<i32>() else { return false };
+        let delta = self_veci - target_veci;
+        let horizontal = delta.y.abs() < delta.x.abs();
+        let check_shape = if horizontal {
+            [Vector2::new(0, -1), Vector2::zero(), Vector2::new(0, 1)]
+        } else {
+            [Vector2::new(-1, 0), Vector2::zero(), Vector2::new(1, 0)]
+        };
+
+        let mut raycast_board = if game.enable_raycast_board {
+            Some(game.raycast_board.borrow_mut())
+        } else {
+            None
+        };
+
+        !interpolation::interpolate_i(self_veci, target_veci, |point| {
+            let point = Vector2::from(point);
+            check_shape.iter().any(|check_pix| {
+                let pix = point + check_pix;
+                if let Some(raycast_board) = &mut raycast_board {
+                    raycast_board[pix.x as usize + pix.y as usize * shape.0] += 1;
+                }
+                !is_passable_at_i(board, shape, pix)
+            })
         })
     }
 }

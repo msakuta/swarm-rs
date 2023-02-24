@@ -118,6 +118,19 @@ impl SwarmRsApp {
                 pos2(transformed.x as f32, transformed.y as f32)
             });
 
+            let image_getter = |app_data: &AppData| {
+                let (size, image) = app_data
+                    .game
+                    .occupancy_image()
+                    .unwrap_or_else(|| ([0, 0], vec![]));
+                let image = image
+                    .into_iter()
+                    .map(|b| [b, b, b])
+                    .flatten()
+                    .collect::<Vec<_>>();
+                egui::ColorImage::from_rgb(size, &image)
+            };
+
             if self.show_labels {
                 self.img_labels
                     .paint(&response, &painter, &self.app_data, |app_data| {
@@ -127,20 +140,42 @@ impl SwarmRsApp {
                             .unwrap_or_else(|| ([0, 0], vec![]));
                         egui::ColorImage::from_rgb(size, &image)
                     });
+            } else if self.app_data.game.enable_raycast_board {
+                let raycast_board = self.app_data.game.raycast_board.borrow();
+                let ray_dirty = raycast_board.iter().any(|p| *p != 0);
+                let ray_valid = raycast_board.len() == self.app_data.game.board.len();
+                if ray_dirty {
+                    self.img_gray.clear();
+                }
+                if ray_valid {
+                    self.img_gray.paint(
+                        &response,
+                        &painter,
+                        &self.app_data,
+                        |app_data: &AppData| {
+                            let (size, image) = app_data
+                                .game
+                                .occupancy_image()
+                                .unwrap_or_else(|| ([0, 0], vec![]));
+                            let image = image
+                                .into_iter()
+                                .zip(raycast_board.iter())
+                                .map(|(b, r)| {
+                                    let br = b.saturating_add(r * 32);
+                                    [br, br, b]
+                                })
+                                .flatten()
+                                .collect::<Vec<_>>();
+                            egui::ColorImage::from_rgb(size, &image)
+                        },
+                    )
+                } else {
+                    self.img_gray
+                        .paint(&response, &painter, &self.app_data, image_getter)
+                };
             } else {
                 self.img_gray
-                    .paint(&response, &painter, &self.app_data, |app_data| {
-                        let (size, image) = app_data
-                            .game
-                            .occupancy_image()
-                            .unwrap_or_else(|| ([0, 0], vec![]));
-                        let image = image
-                            .into_iter()
-                            .map(|b| std::iter::repeat(b).take(3))
-                            .flatten()
-                            .collect::<Vec<_>>();
-                        egui::ColorImage::from_rgb(size, &image)
-                    });
+                    .paint(&response, &painter, &self.app_data, image_getter);
             }
 
             render_search_tree(&self.app_data, &response, &painter);

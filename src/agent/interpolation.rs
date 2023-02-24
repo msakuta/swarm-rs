@@ -68,6 +68,36 @@ pub(crate) fn interpolate<P: LerpPoint>(
     return false;
 }
 
+fn lerp_i(a: Vector2<i32>, b: Vector2<i32>, f: f64) -> Vector2<i32> {
+    Vector2::new(
+        (a.x as f64 * (1. - f) + b.x as f64 * f + 0.5) as i32,
+        (a.y as f64 * (1. - f) + b.y as f64 * f + 0.5) as i32,
+    )
+}
+
+/// Integer interpolation. Interval is deterimned by Chebyshev distance, not Euclidean.
+pub(crate) fn interpolate_i<P: Into<Vector2<i32>>>(
+    start: P,
+    target: P,
+    mut f: impl FnMut(Vector2<i32>) -> bool,
+) -> bool {
+    let start_p = start.into();
+    let target_p = target.into();
+    let interpolates = (start_p.x - target_p.x)
+        .abs()
+        .max((start_p.y - target_p.y).abs());
+    if interpolates == 0 {
+        return f(start_p);
+    }
+    for i in 0..=interpolates {
+        let point = lerp_i(start_p, target_p, i as f64 / interpolates as f64);
+        if f(point) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /// Collision checking with steering model. It can interpolate curvature.
 pub(crate) fn interpolate_steer(
     start: &AgentState,
