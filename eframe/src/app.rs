@@ -352,7 +352,7 @@ impl SwarmRsApp {
     fn show_editor(&mut self, ui: &mut Ui) {
         let team_colors = [Color32::GREEN, Color32::RED];
 
-        ui.label(&self.app_data.message);
+        ui.label(self.app_data.get_message());
 
         ui.horizontal(|ui| {
             ui.label("BT to apply:");
@@ -375,13 +375,10 @@ impl SwarmRsApp {
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut self.app_data.new_file_name);
                     if ui.button("Save to a New file").clicked() {
-                        match vfs.save_file(&self.app_data.new_file_name, &self.app_data.bt_buffer)
+                        if let Err(e) =
+                            vfs.save_file(&self.app_data.new_file_name, &self.app_data.bt_buffer)
                         {
-                            Ok(_) => {
-                                self.app_data.message =
-                                    "Saved to a new file successfully!".to_owned()
-                            }
-                            Err(e) => self.app_data.message = format!("Save file error! {e}"),
+                            self.app_data.set_message(format!("Save file error! {e}"))
                         }
                     }
                 });
@@ -401,26 +398,35 @@ impl SwarmRsApp {
                                 Ok(content) => {
                                     self.app_data.current_file_name = item.clone();
                                     self.app_data.bt_buffer = content;
-                                    self.app_data.message = "File loaded successfully!".to_string()
                                 }
-                                Err(e) => self.app_data.message = format!("Load file error!: {e}"),
+                                Err(e) => {
+                                    self.app_data.set_message(format!("Load file error!: {e}"))
+                                }
                             }
                         }
                         if ui.button("Save").clicked() {
-                            match vfs.save_file(&item, &self.app_data.bt_buffer) {
-                                Ok(_) => {
-                                    self.app_data.message = "File saved successfully!".to_string()
-                                }
-                                Err(e) => self.app_data.message = format!("Save file error! {e}"),
+                            if let Err(e) = vfs.save_file(&item, &self.app_data.bt_buffer) {
+                                self.app_data.set_message(format!("Save file error! {e}"))
                             }
                         }
                         if ui.button("Delete").clicked() {
-                            match vfs.delete_file(&item) {
-                                Ok(_) => {
-                                    self.app_data.message = "File deleted successfully!".to_string()
-                                }
-                                Err(e) => self.app_data.message = format!("Delete file error! {e}"),
-                            }
+                            let item = item.clone();
+                            self.app_data.set_confirm_message(
+                                format!("Do you want to delete {item:?}?"),
+                                Box::new(move |this: &mut AppData| {
+                                    if let Some(mut vfs) = this.vfs.take() {
+                                        match vfs.delete_file(&item) {
+                                            Ok(_) => this.set_message(
+                                                "File deleted successfully!".to_string(),
+                                            ),
+                                            Err(e) => {
+                                                this.set_message(format!("Delete file error! {e}"))
+                                            }
+                                        }
+                                        this.vfs = Some(vfs);
+                                    }
+                                }),
+                            );
                         }
                         if ui.button("Apply").clicked() {
                             match vfs.get_file(&item) {
@@ -444,7 +450,7 @@ impl SwarmRsApp {
                                         } = item.clone();
                                     }
                                 }
-                                Err(e) => self.app_data.message = e,
+                                Err(e) => self.app_data.set_message(e),
                             }
                         }
                         for (bt_sources, color) in
@@ -504,6 +510,8 @@ impl eframe::App for SwarmRsApp {
             self.img_labels.clear();
         }
 
+        self.app_data.show_message(ctx);
+
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
         // Tip: a good default choice is to just keep the `CentralPanel`.
@@ -540,14 +548,5 @@ impl eframe::App for SwarmRsApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.paint_game(ui);
         });
-
-        if false {
-            egui::Window::new("Window").show(ctx, |ui| {
-                ui.label("Windows can be moved by dragging them.");
-                ui.label("They are automatically sized based on contents.");
-                ui.label("You can turn on resizing and scrolling if you like.");
-                ui.label("You would normally choose either panels OR windows.");
-            });
-        }
     }
 }

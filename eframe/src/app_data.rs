@@ -3,6 +3,7 @@ use ::swarm_rs::{
     game::{BoardParams, BoardType, Game, GameParams, TeamConfig},
     qtree::QTreeSearcher,
 };
+
 use swarm_rs::{game::UpdateResult, vfs::Vfs};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -22,7 +23,12 @@ pub struct AppData {
     pub(crate) selected_entity: Option<usize>,
     pub origin: [f64; 2],
     pub scale: f64,
-    pub message: String,
+    message: String,
+    /// Optional payload for detailed data about the error, can be long
+    message_payload: String,
+    message_visible: bool,
+    confirming: bool,
+    confirmed: Option<Box<dyn FnOnce(&mut Self)>>,
     pub(crate) big_message: String,
     pub big_message_time: f64,
     pub path_visible: bool,
@@ -90,6 +96,10 @@ impl AppData {
             origin: [0., 0.],
             scale,
             message: "".to_string(),
+            message_payload: "".to_string(),
+            message_visible: false,
+            confirming: false,
+            confirmed: None,
             big_message: "Game Start".to_string(),
             big_message_time: 5000.,
             path_visible: true,
@@ -163,16 +173,105 @@ impl AppData {
             }
             Ok((rest, _)) => {
                 let parsed_src = &src[..rest.as_ptr() as usize - src.as_ptr() as usize];
-                self.message = format!(
-                    "Behavior tree source ended unexpectedly at ({}) {:?}",
-                    count_newlines(parsed_src),
-                    rest
+                self.set_message_with_payload(
+                    format!(
+                        "Behavior tree source ended unexpectedly at ({})",
+                        count_newlines(parsed_src)
+                    ),
+                    format!("Rest: {rest}"),
                 );
                 false
             }
             Err(e) => {
-                self.message = format!("Behavior tree failed to parse: {}", e);
+                self.set_message(format!("Behavior tree failed to parse: {}", e));
                 false
+            }
+        }
+    }
+
+    pub(crate) fn get_message(&self) -> &str {
+        &self.message
+    }
+
+    pub(crate) fn set_message(&mut self, message: String) {
+        self.message = message;
+        self.message_payload = "".to_string();
+        self.message_visible = true;
+        self.confirming = false;
+    }
+
+    pub(crate) fn set_confirm_message(
+        &mut self,
+        message: String,
+        confirmed: Box<dyn FnOnce(&mut Self)>,
+    ) {
+        self.message = message;
+        self.message_payload = "".to_string();
+        self.message_visible = true;
+        self.confirming = true;
+        self.confirmed = Some(confirmed);
+    }
+
+    pub(crate) fn set_message_with_payload(&mut self, message: String, payload: String) {
+        self.message = message;
+        self.message_payload = payload;
+        self.message_visible = true;
+        self.confirming = false;
+    }
+
+    pub(crate) fn show_message(&mut self, ctx: &egui::Context) {
+        if !self.message.is_empty() {
+            let mut hide = false;
+            let mut confirmed = false;
+            egui::Window::new("Message")
+                .open(&mut self.message_visible)
+                .collapsible(false)
+                .fixed_size([
+                    400.,
+                    if !self.message_payload.is_empty() {
+                        400.
+                    } else {
+                        50.
+                    },
+                ])
+                .show(ctx, |ui| {
+                    ui.vertical_centered_justified(|ui| {
+                        ui.label(
+                            egui::RichText::new(&self.message)
+                                .font(egui::FontId::proportional(18.)),
+                        );
+
+                        if !self.message_payload.is_empty() {
+                            egui::ScrollArea::vertical().show(ui, |ui| {
+                                ui.add_enabled(
+                                    false,
+                                    egui::TextEdit::multiline(&mut self.message_payload)
+                                        .font(egui::TextStyle::Monospace)
+                                        .code_editor(),
+                                );
+                            });
+                        }
+                        if self.confirming {
+                            ui.horizontal_centered(|ui| {
+                                if ui.button("Ok").clicked() {
+                                    hide = true;
+                                    confirmed = true;
+                                }
+                                if ui.button("Cancel").clicked() {
+                                    hide = true;
+                                    self.confirmed = None;
+                                }
+                            });
+                        }
+                    });
+                });
+            if hide {
+                self.message_visible = false;
+            }
+            if confirmed {
+                if let Some(confirmed) = self.confirmed.take() {
+                    confirmed(self);
+                }
             }
         }
     }
