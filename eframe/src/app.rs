@@ -392,15 +392,19 @@ impl SwarmRsApp {
                         ui.label(&item);
                         if ui.button("Load").clicked() {
                             match vfs.get_file(&item) {
-                                Ok(content) => *contents_mut(&mut self.app_data) = Rc::new(content),
-                                Err(_e) => self.app_data.message = "Load file error!".to_owned(),
+                                Ok(content) => {
+                                    *contents_mut(&mut self.app_data) = Rc::new(content);
+                                    self.app_data.message = "File loaded successfully!".to_string()
+                                }
+                                Err(e) => self.app_data.message = format!("Load file error!: {e}"),
                             }
                         }
-                        #[cfg(target_arch = "wasm32")]
                         if ui.button("Save").clicked() {
                             match vfs.save_file(&item, &contents(self)) {
-                                Ok(_) => (),
-                                Err(_e) => self.app_data.message = "Save file error!".to_owned(),
+                                Ok(_) => {
+                                    self.app_data.message = "File saved successfully!".to_string()
+                                }
+                                Err(e) => self.app_data.message = format!("Save file error! {e}"),
                             }
                         }
                     });

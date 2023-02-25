@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 /// A virtual filesystem, which could be in-memory, in-disk or on local storage of the browser
 pub trait Vfs {
     fn list_files(&self) -> Vec<String>;
-    fn get_file(&self, file: &str) -> Result<String, ()>;
-    fn save_file(&mut self, file: &str, contents: &str) -> Result<(), ()>;
+    fn get_file(&self, file: &str) -> Result<String, String>;
+    fn save_file(&mut self, file: &str, contents: &str) -> Result<(), String>;
 }
 
 /// A reference implementation of [`Vfs`]. It serves static set of files, but won't retain changes between sessions.
@@ -38,11 +38,14 @@ impl Vfs for StaticVfs {
         self.files.keys().cloned().collect()
     }
 
-    fn get_file(&self, file: &str) -> Result<String, ()> {
-        self.files.get(file).map(|rc| rc.clone()).ok_or(())
+    fn get_file(&self, file: &str) -> Result<String, String> {
+        self.files
+            .get(file)
+            .map(|rc| rc.clone())
+            .ok_or("File not found".to_string())
     }
 
-    fn save_file(&mut self, file: &str, contents: &str) -> Result<(), ()> {
+    fn save_file(&mut self, file: &str, contents: &str) -> Result<(), String> {
         self.files.insert(file.to_string(), contents.to_owned());
         Ok(())
     }
@@ -67,13 +70,17 @@ impl Vfs for FileVfs {
         self.files.iter().cloned().collect()
     }
 
-    fn get_file(&self, file: &str) -> Result<String, ()> {
-        let dir = std::path::Path::new("../behavior_tree_config");
-        std::fs::read_to_string(dir.join(file)).map_err(|_| ())
+    fn get_file(&self, file: &str) -> Result<String, String> {
+        let dir = std::path::Path::new("behavior_tree_config");
+        let full_path = dir.join(file);
+        dbg!(&full_path);
+        std::fs::read_to_string(full_path).map_err(|e| e.to_string())
     }
 
-    fn save_file(&mut self, file: &str, contents: &str) -> Result<(), ()> {
-        std::fs::write(file, contents).map_err(|_| ())
+    fn save_file(&mut self, file: &str, contents: &str) -> Result<(), String> {
+        let dir = std::path::Path::new("behavior_tree_config");
+        let full_path = dir.join(file);
+        std::fs::write(full_path, contents).map_err(|e| e.to_string())
     }
 }
 
