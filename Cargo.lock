@@ -2629,10 +2629,13 @@ dependencies = [
  "console_error_panic_hook",
  "eframe",
  "egui",
+ "ron",
  "serde",
  "swarm-rs",
  "tracing-wasm",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

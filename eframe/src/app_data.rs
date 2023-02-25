@@ -3,7 +3,10 @@ use ::swarm_rs::{
     game::{BoardParams, BoardType, Game, GameParams, TeamConfig},
     qtree::QTreeSearcher,
 };
-use swarm_rs::game::UpdateResult;
+use swarm_rs::{
+    game::UpdateResult,
+    vfs::{StaticVfs, Vfs},
+};
 
 use std::rc::Rc;
 
@@ -26,6 +29,7 @@ pub struct AppData {
     /// This buffer is not yet applied to the game.
     pub(crate) teams: [TeamConfig; 2],
     pub(crate) global_render_time: f64,
+    pub(crate) vfs: Option<Box<dyn Vfs>>,
 }
 
 impl AppData {
@@ -58,6 +62,12 @@ impl AppData {
             r = teams[1].agent_source.len()
         );
 
+        #[cfg(target_arch = "wasm32")]
+        let vfs = crate::wasm_utils::LocalStorageVfs::new();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let vfs = StaticVfs::new();
+
         let mut game_params = GameParams::new();
         game_params.teams = teams.clone();
 
@@ -81,6 +91,7 @@ impl AppData {
             entity_trace_visible: false,
             teams,
             global_render_time: 0.,
+            vfs: Some(Box::new(vfs)),
         }
     }
 

@@ -5,7 +5,10 @@ use std::rc::Rc;
 use crate::{app_data::AppData, bg_image::BgImage};
 use cgmath::Matrix3;
 use egui::{Pos2, Ui};
-use swarm_rs::game::{BoardParams, BoardType, GameParams, UpdateResult};
+use swarm_rs::{
+    game::{BoardParams, BoardType, GameParams, UpdateResult},
+    vfs::Vfs,
+};
 
 const WINDOW_HEIGHT: f64 = 800.;
 
@@ -379,6 +382,30 @@ impl SwarmRsApp {
                 let file = file(self).to_owned();
                 self.app_data
                     .try_load_from_file(&file, &mut contents_mut, &game_params_mut);
+            }
+        });
+
+        ui.collapsing("Files", |ui| {
+            if let Some(mut vfs) = self.app_data.vfs.take() {
+                for item in vfs.list_files() {
+                    ui.horizontal(|ui| {
+                        ui.label(&item);
+                        if ui.button("Load").clicked() {
+                            match vfs.get_file(&item) {
+                                Ok(content) => *contents_mut(&mut self.app_data) = Rc::new(content),
+                                Err(_e) => self.app_data.message = "Load file error!".to_owned(),
+                            }
+                        }
+                        #[cfg(target_arch = "wasm32")]
+                        if ui.button("Save").clicked() {
+                            match vfs.save_file(&item, &contents(self)) {
+                                Ok(_) => (),
+                                Err(_e) => self.app_data.message = "Save file error!".to_owned(),
+                            }
+                        }
+                    });
+                }
+                self.app_data.vfs = Some(vfs);
             }
         });
 
