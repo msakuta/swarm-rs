@@ -411,8 +411,7 @@ impl SwarmRsApp {
                             // TODO: use black in light theme
                             file_name = file_name.underline().color(Color32::WHITE);
                         }
-                        ui.label(file_name);
-                        if ui.button("Load").clicked() {
+                        if ui.label(file_name).interact(egui::Sense::click()).clicked() {
                             let item = item.clone();
                             let load = move |app_data: &mut AppData, vfs: &mut Box<dyn Vfs>| match vfs.get_file(&item) {
                                 Ok(content) => {
