@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// A virtual filesystem, which could be in-memory, in-disk or on local storage of the browser
 pub trait Vfs {
@@ -7,7 +7,7 @@ pub trait Vfs {
     fn save_file(&mut self, file: &str, contents: &str) -> Result<(), ()>;
 }
 
-#[derive(Clone)]
+/// A reference implementation of [`Vfs`]. It serves static set of files, but won't retain changes between sessions.
 pub struct StaticVfs {
     pub files: HashMap<String, String>,
 }
@@ -45,6 +45,36 @@ impl Vfs for StaticVfs {
     fn save_file(&mut self, file: &str, contents: &str) -> Result<(), ()> {
         self.files.insert(file.to_string(), contents.to_owned());
         Ok(())
+    }
+}
+
+/// A virtual file system implemented in an actual file system.
+pub struct FileVfs {
+    pub files: HashSet<String>,
+}
+
+impl FileVfs {
+    pub fn new() -> Self {
+        let static_vfs = StaticVfs::new();
+        Self {
+            files: static_vfs.files.keys().cloned().collect(),
+        }
+    }
+}
+
+impl Vfs for FileVfs {
+    fn list_files(&self) -> Vec<String> {
+        self.files.iter().cloned().collect()
+    }
+
+    fn get_file(&self, file: &str) -> Result<String, ()> {
+        // let path = std::path::Path::new(file);
+        let dir = std::path::Path::new("../behavior_tree_config");
+        std::fs::read_to_string(dir.join(file)).map_err(|_| ())
+    }
+
+    fn save_file(&mut self, file: &str, contents: &str) -> Result<(), ()> {
+        std::fs::write(file, contents).map_err(|_| ())
     }
 }
 

@@ -5,7 +5,7 @@ use ::swarm_rs::{
 };
 use swarm_rs::{
     game::UpdateResult,
-    vfs::{StaticVfs, Vfs},
+    vfs::{FileVfs, StaticVfs, Vfs},
 };
 
 use std::rc::Rc;
@@ -66,7 +66,7 @@ impl AppData {
         let vfs = crate::wasm_utils::LocalStorageVfs::new();
 
         #[cfg(not(target_arch = "wasm32"))]
-        let vfs = StaticVfs::new();
+        let vfs = FileVfs::new();
 
         let mut game_params = GameParams::new();
         game_params.teams = teams.clone();

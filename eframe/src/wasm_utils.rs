@@ -45,7 +45,7 @@ impl Vfs for LocalStorageVfs {
             *entry = content.to_owned();
             let local_storage = web_sys::window().unwrap().local_storage().unwrap().unwrap();
             if let Ok(files) = ron::to_string(&self.files) {
-                local_storage.set("swarm-rs-btc", &files);
+                local_storage.set("swarm-rs-btc", &files).map_err(|_| ())?;
                 log(&format!("Saved {} bytes of VFS", files.len()));
                 return Ok(());
             }
