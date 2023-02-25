@@ -113,7 +113,8 @@ impl Vfs for FileVfs {
     fn save_file(&mut self, file: &str, contents: &str) -> Result<(), String> {
         let dir = Path::new(BTC_DIR);
         let full_path = dir.join(file);
-        let res = std::fs::write(full_path, contents).map_err(|e| e.to_string())?;
+        let res =
+            std::fs::write(full_path, expand_newlines(contents)).map_err(|e| e.to_string())?;
         self.files.insert(file.to_owned());
         Ok(res)
     }
@@ -131,7 +132,7 @@ impl Vfs for FileVfs {
     fn reset(&mut self) -> Result<(), String> {
         for (file, contents) in StaticVfs::new().files {
             let full_path = Path::new(BTC_DIR).join(&file);
-            std::fs::write(&full_path, contents)
+            std::fs::write(&full_path, expand_newlines(&contents))
                 .map_err(|e| format!("Error on writing {file}: {e}"))?;
         }
         *self = Self::new();
@@ -180,4 +181,14 @@ fn collapse_newlines(s: &str) -> String {
     // Can we skip replacing in *nix and newer Mac? Maybe, but it's such a fast operation
     // that we don't gain much by "optimizing" for the platform.
     s.replace("\r\n", "\n")
+}
+
+/// Oh Windows
+fn expand_newlines(s: &str) -> String {
+    // Is it worth replacing newlines to Windows format? Most editors support LF newlines nowadays,
+    // even the infamous notepad. However, git usually configures `core.autocrlf = true` on Windows,
+    // so not replacing LF with CRLF may lead to annoying diffs.
+    #[cfg(target_os = "windows")]
+    let s = s.replace("\n", "\r\n");
+    s.to_string()
 }
