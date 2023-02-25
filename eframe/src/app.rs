@@ -2,27 +2,20 @@ mod paint_game;
 
 use std::rc::Rc;
 
-use crate::{app_data::AppData, bg_image::BgImage};
-use cgmath::Matrix3;
-use egui::{Pos2, Ui};
-use swarm_rs::{
-    game::{BoardParams, BoardType, GameParams, UpdateResult},
-    vfs::Vfs,
+use crate::{
+    app_data::{AppData, BTEditor},
+    bg_image::BgImage,
 };
+use cgmath::Matrix3;
+use egui::{Color32, Pos2, RichText, Ui};
+use swarm_rs::game::{BoardParams, BoardType, GameParams, UpdateResult};
 
 const WINDOW_HEIGHT: f64 = 800.;
 
 #[derive(Debug, PartialEq)]
 enum Panel {
     Main,
-    GreenBTEditor,
-    RedBTEditor,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum BTEditor {
-    Agent,
-    Spawner,
+    BTEditor,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -44,9 +37,6 @@ pub struct SwarmRsApp {
     #[serde(skip)]
     open_panel: Panel,
 
-    #[serde(skip)]
-    open_bt_panel: BTEditor,
-
     show_labels: bool,
 
     #[serde(skip)]
@@ -60,7 +50,6 @@ pub struct SwarmRsApp {
     ys: usize,
     maze_expansions: usize,
     agent_count: usize,
-
     bt_source_file: [BTSourceFiles; 2],
 
     #[serde(skip)]
@@ -81,7 +70,6 @@ impl Default for SwarmRsApp {
             img_gray: BgImage::new(),
             img_labels: BgImage::new(),
             open_panel: Panel::Main,
-            open_bt_panel: BTEditor::Agent,
             show_labels: false,
             app_data: AppData::new(WINDOW_HEIGHT),
             draw_circle: false,
@@ -92,12 +80,12 @@ impl Default for SwarmRsApp {
             agent_count: 3,
             bt_source_file: [
                 BTSourceFiles {
-                    agent: "behavior_tree_config/green/agent.txt".to_owned(),
-                    spawner: "behavior_tree_config/green/spawner.txt".to_owned(),
+                    agent: "green/agent.txt".to_owned(),
+                    spawner: "green/spawner.txt".to_owned(),
                 },
                 BTSourceFiles {
-                    agent: "behavior_tree_config/red/agent.txt".to_owned(),
-                    spawner: "behavior_tree_config/red/spawner.txt".to_owned(),
+                    agent: "red/agent.txt".to_owned(),
+                    spawner: "red/spawner.txt".to_owned(),
                 },
             ],
             canvas_offset: Pos2::ZERO,
@@ -361,50 +349,104 @@ impl SwarmRsApp {
         });
     }
 
-    fn show_editor(
-        &mut self,
-        ui: &mut Ui,
-        contents: impl Fn(&Self) -> Rc<String>,
-        mut contents_mut: impl FnMut(&mut AppData) -> &mut Rc<String>,
-        game_params_mut: impl Fn(&mut GameParams) -> &mut Rc<String>,
-        file: impl Fn(&Self) -> &str,
-        mut file_mut: impl FnMut(&mut Self) -> &mut String,
-    ) {
+    fn show_editor(&mut self, ui: &mut Ui) {
+        let team_colors = [Color32::GREEN, Color32::RED];
+
         ui.label(&self.app_data.message);
 
         ui.horizontal(|ui| {
-            if ui.button("Apply").clicked() {
-                self.app_data
-                    .try_load_behavior_tree(contents(self).clone(), &game_params_mut);
-            }
-            ui.text_edit_singleline(file_mut(self));
-            if ui.button("Reload from file").clicked() {
-                let file = file(self).to_owned();
-                self.app_data
-                    .try_load_from_file(&file, &mut contents_mut, &game_params_mut);
+            ui.label("BT to apply:");
+            for (team, color) in team_colors.into_iter().enumerate() {
+                ui.radio_value(
+                    &mut self.app_data.selected_bt,
+                    (team, BTEditor::Agent),
+                    RichText::new("Agent").color(color),
+                );
+                ui.radio_value(
+                    &mut self.app_data.selected_bt,
+                    (team, BTEditor::Spawner),
+                    RichText::new("Spawner").color(color),
+                );
             }
         });
 
         ui.collapsing("Files", |ui| {
             if let Some(mut vfs) = self.app_data.vfs.take() {
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(&mut self.app_data.new_file_name);
+                    if ui.button("Save to a New file").clicked() {
+                        match vfs.save_file(&self.app_data.new_file_name, &self.app_data.bt_buffer)
+                        {
+                            Ok(_) => {
+                                self.app_data.message =
+                                    "Saved to a new file successfully!".to_owned()
+                            }
+                            Err(e) => self.app_data.message = format!("Save file error! {e}"),
+                        }
+                    }
+                });
+
                 for item in vfs.list_files() {
                     ui.horizontal(|ui| {
-                        ui.label(&item);
+                        ui.label(&format!(
+                            "[{}] {item}",
+                            if self.app_data.current_file_name == item {
+                                "*"
+                            } else {
+                                " "
+                            }
+                        ));
                         if ui.button("Load").clicked() {
                             match vfs.get_file(&item) {
                                 Ok(content) => {
-                                    *contents_mut(&mut self.app_data) = Rc::new(content);
+                                    self.app_data.current_file_name = item.clone();
+                                    self.app_data.bt_buffer = content;
                                     self.app_data.message = "File loaded successfully!".to_string()
                                 }
                                 Err(e) => self.app_data.message = format!("Load file error!: {e}"),
                             }
                         }
                         if ui.button("Save").clicked() {
-                            match vfs.save_file(&item, &contents(self)) {
+                            match vfs.save_file(&item, &self.app_data.bt_buffer) {
                                 Ok(_) => {
                                     self.app_data.message = "File saved successfully!".to_string()
                                 }
                                 Err(e) => self.app_data.message = format!("Save file error! {e}"),
+                            }
+                        }
+                        for (bt_sources, color) in
+                            self.bt_source_file.iter().zip(team_colors.into_iter())
+                        {
+                            if item == bt_sources.agent {
+                                ui.label(RichText::new("Agent").color(color));
+                            }
+                            if item == bt_sources.spawner {
+                                ui.label(RichText::new("Spawner").color(color));
+                            }
+                        }
+                        if ui.button("Apply").clicked() {
+                            match vfs.get_file(&item) {
+                                Ok(content) => {
+                                    let (team, bt_type) = self.app_data.selected_bt;
+                                    if self.app_data.try_load_behavior_tree(
+                                        Rc::new(content),
+                                        &mut |params: &mut GameParams| {
+                                            let tc = &mut params.teams[team];
+                                            match bt_type {
+                                                BTEditor::Agent => &mut tc.agent_source,
+                                                BTEditor::Spawner => &mut tc.spawner_source,
+                                            }
+                                        },
+                                    ) {
+                                        let bt_source =
+                                            &mut self.bt_source_file[self.app_data.selected_bt.0];
+                                        *match self.app_data.selected_bt.1 {
+                                            BTEditor::Agent => &mut bt_source.agent,
+                                            BTEditor::Spawner => &mut bt_source.spawner,
+                                        } = item.clone();
+                                    }
+                                }
+                                Err(e) => self.app_data.message = e,
                             }
                         }
                     });
@@ -414,7 +456,7 @@ impl SwarmRsApp {
         });
 
         egui::ScrollArea::vertical().show(ui, |ui| {
-            let source = Rc::make_mut(contents_mut(&mut self.app_data));
+            let source = &mut self.app_data.bt_buffer;
             ui.add(
                 egui::TextEdit::multiline(source)
                     .font(egui::TextStyle::Monospace)
@@ -424,48 +466,6 @@ impl SwarmRsApp {
                     .desired_width(f32::INFINITY),
             );
         });
-    }
-
-    fn bt_editor(&mut self, ui: &mut Ui, team: usize) {
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.open_bt_panel, BTEditor::Agent, "Agent");
-            ui.selectable_value(&mut self.open_bt_panel, BTEditor::Spawner, "Spawner");
-        });
-        let bt_type = self.open_bt_panel;
-
-        self.show_editor(
-            ui,
-            |app_data| {
-                let tc = &app_data.app_data.teams[team];
-                match bt_type {
-                    BTEditor::Agent => &tc.agent_source,
-                    BTEditor::Spawner => &tc.spawner_source,
-                }
-                .clone()
-            },
-            |app_data| {
-                let tc = &mut app_data.teams[team];
-                match bt_type {
-                    BTEditor::Agent => &mut tc.agent_source,
-                    BTEditor::Spawner => &mut tc.spawner_source,
-                }
-            },
-            |params| {
-                let tc = &mut params.teams[team];
-                match bt_type {
-                    BTEditor::Agent => &mut tc.agent_source,
-                    BTEditor::Spawner => &mut tc.spawner_source,
-                }
-            },
-            |app_data| match bt_type {
-                BTEditor::Agent => &app_data.bt_source_file[team].agent,
-                BTEditor::Spawner => &app_data.bt_source_file[team].spawner,
-            },
-            |app_data| match bt_type {
-                BTEditor::Agent => &mut app_data.bt_source_file[team].agent,
-                BTEditor::Spawner => &mut app_data.bt_source_file[team].spawner,
-            },
-        );
     }
 }
 
@@ -518,20 +518,14 @@ impl eframe::App for SwarmRsApp {
                 ui.selectable_value(&mut self.open_panel, Panel::Main, "Main");
                 ui.selectable_value(
                     &mut self.open_panel,
-                    Panel::GreenBTEditor,
-                    "Green behavior tree",
-                );
-                ui.selectable_value(
-                    &mut self.open_panel,
-                    Panel::RedBTEditor,
-                    "Red behavior tree",
+                    Panel::BTEditor,
+                    "Behavior tree editor",
                 );
             });
 
             match self.open_panel {
                 Panel::Main => self.show_panel_ui(ui),
-                Panel::GreenBTEditor => self.bt_editor(ui, 0),
-                Panel::RedBTEditor => self.bt_editor(ui, 1),
+                Panel::BTEditor => self.show_editor(ui),
             }
         });
 

@@ -5,10 +5,16 @@ use ::swarm_rs::{
 };
 use swarm_rs::{
     game::UpdateResult,
-    vfs::{FileVfs, StaticVfs, Vfs},
+    vfs::{FileVfs, Vfs},
 };
 
 use std::rc::Rc;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BTEditor {
+    Agent,
+    Spawner,
+}
 
 pub struct AppData {
     pub game: Game,
@@ -26,9 +32,12 @@ pub struct AppData {
     pub target_visible: bool,
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
-    /// This buffer is not yet applied to the game.
-    pub(crate) teams: [TeamConfig; 2],
     pub(crate) global_render_time: f64,
+    pub(crate) selected_bt: (usize, BTEditor),
+    pub(crate) new_file_name: String,
+    pub(crate) current_file_name: String,
+    /// This buffer is not yet applied to the game.
+    pub(crate) bt_buffer: String,
     pub(crate) vfs: Option<Box<dyn Vfs>>,
 }
 
@@ -89,8 +98,11 @@ impl AppData {
             target_visible: false,
             entity_label_visible: true,
             entity_trace_visible: false,
-            teams,
             global_render_time: 0.,
+            selected_bt: (0, BTEditor::Agent),
+            new_file_name: "agent.txt".to_owned(),
+            current_file_name: "".to_owned(),
+            bt_buffer: "".to_owned(),
             vfs: Some(Box::new(vfs)),
         }
     }
@@ -162,23 +174,6 @@ impl AppData {
                 self.message = format!("Behavior tree failed to parse: {}", e);
                 false
             }
-        }
-    }
-
-    pub fn try_load_from_file(
-        &mut self,
-        file: &str,
-        get_mut: &mut impl FnMut(&mut AppData) -> &mut Rc<String>,
-        setter: &impl Fn(&mut GameParams) -> &mut Rc<String>,
-    ) {
-        match std::fs::read_to_string(file) {
-            Ok(s) => {
-                let s = Rc::new(collapse_newlines(&s));
-                if self.try_load_behavior_tree(s.clone(), setter) {
-                    *get_mut(self) = s;
-                }
-            }
-            Err(e) => self.message = format!("Read file error! {e:?}"),
         }
     }
 }

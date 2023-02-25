@@ -36,20 +36,29 @@ impl Vfs for LocalStorageVfs {
         self.files.keys().cloned().collect()
     }
 
-    fn get_file(&self, path: &str) -> Result<String, ()> {
-        self.files.get(path).cloned().ok_or(())
+    fn get_file(&self, path: &str) -> Result<String, String> {
+        self.files
+            .get(path)
+            .cloned()
+            .ok_or_else(|| "File not found!".to_owned())
     }
 
-    fn save_file(&mut self, path: &str, content: &str) -> Result<(), ()> {
-        if let Some(entry) = self.files.get_mut(path) {
-            *entry = content.to_owned();
-            let local_storage = web_sys::window().unwrap().local_storage().unwrap().unwrap();
-            if let Ok(files) = ron::to_string(&self.files) {
-                local_storage.set("swarm-rs-btc", &files).map_err(|_| ())?;
+    fn save_file(&mut self, path: &str, content: &str) -> Result<(), String> {
+        let entry = self
+            .files
+            .entry(path.to_owned())
+            .or_insert_with(|| "".to_owned());
+        *entry = content.to_owned();
+        let local_storage = web_sys::window().unwrap().local_storage().unwrap().unwrap();
+        match ron::to_string(&self.files) {
+            Ok(files) => {
+                local_storage
+                    .set("swarm-rs-btc", &files)
+                    .map_err(|e| format!("localStorage: {e:?}"))?;
                 log(&format!("Saved {} bytes of VFS", files.len()));
-                return Ok(());
+                Ok(())
             }
+            Err(e) => Err(format!("Ron format error {e}")),
         }
-        Err(())
     }
 }
