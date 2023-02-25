@@ -44,6 +44,7 @@ pub struct AppData {
     pub(crate) current_file_name: String,
     /// This buffer is not yet applied to the game.
     pub(crate) bt_buffer: String,
+    pub(crate) dirty: bool,
     pub(crate) vfs: Option<Box<dyn Vfs>>,
 }
 
@@ -113,6 +114,7 @@ impl AppData {
             new_file_name: "agent.txt".to_owned(),
             current_file_name: "".to_owned(),
             bt_buffer: "".to_owned(),
+            dirty: false,
             vfs: Some(Box::new(vfs)),
         }
     }

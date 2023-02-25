@@ -396,19 +396,25 @@ impl SwarmRsApp {
 
                 for item in vfs.list_files() {
                     ui.horizontal(|ui| {
-                        ui.label(&format!(
-                            "[{}] {item}",
-                            if self.app_data.current_file_name == item {
+                        let mut file_name = RichText::new(&format!(
+                            "{}  {item}",
+                            if self.app_data.current_file_name == item && self.app_data.dirty {
                                 "*"
                             } else {
                                 " "
                             }
                         ));
+                        if self.app_data.current_file_name == item {
+                            // TODO: use black in light theme
+                            file_name = file_name.underline().color(Color32::WHITE);
+                        }
+                        ui.label(file_name);
                         if ui.button("Load").clicked() {
                             match vfs.get_file(&item) {
                                 Ok(content) => {
                                     self.app_data.current_file_name = item.clone();
                                     self.app_data.bt_buffer = content;
+                                    self.app_data.dirty = false;
                                 }
                                 Err(e) => {
                                     self.app_data.set_message(format!("Load file error!: {e}"))
@@ -418,6 +424,8 @@ impl SwarmRsApp {
                         if ui.button("Save").clicked() {
                             if let Err(e) = vfs.save_file(&item, &self.app_data.bt_buffer) {
                                 self.app_data.set_message(format!("Save file error! {e}"))
+                            } else {
+                                self.app_data.dirty = false;
                             }
                         }
                         if ui.button("Delete").clicked() {
@@ -440,28 +448,34 @@ impl SwarmRsApp {
                             );
                         }
                         if ui.button("Apply").clicked() {
-                            match vfs.get_file(&item) {
-                                Ok(content) => {
-                                    let (team, bt_type) = self.app_data.selected_bt;
-                                    if self.app_data.try_load_behavior_tree(
-                                        Rc::new(content),
-                                        &mut |params: &mut GameParams| {
-                                            let tc = &mut params.teams[team];
-                                            match bt_type {
-                                                BTEditor::Agent => &mut tc.agent_source,
-                                                BTEditor::Spawner => &mut tc.spawner_source,
-                                            }
-                                        },
-                                    ) {
-                                        let bt_source =
-                                            &mut self.bt_source_file[self.app_data.selected_bt.0];
-                                        *match self.app_data.selected_bt.1 {
-                                            BTEditor::Agent => &mut bt_source.agent,
-                                            BTEditor::Spawner => &mut bt_source.spawner,
-                                        } = item.clone();
+                            if self.app_data.dirty {
+                                self.app_data.set_message(
+                                    "Save the file before applying the behavior tree".to_owned(),
+                                );
+                            } else {
+                                match vfs.get_file(&item) {
+                                    Ok(content) => {
+                                        let (team, bt_type) = self.app_data.selected_bt;
+                                        if self.app_data.try_load_behavior_tree(
+                                            Rc::new(content),
+                                            &mut |params: &mut GameParams| {
+                                                let tc = &mut params.teams[team];
+                                                match bt_type {
+                                                    BTEditor::Agent => &mut tc.agent_source,
+                                                    BTEditor::Spawner => &mut tc.spawner_source,
+                                                }
+                                            },
+                                        ) {
+                                            let bt_source = &mut self.bt_source_file
+                                                [self.app_data.selected_bt.0];
+                                            *match self.app_data.selected_bt.1 {
+                                                BTEditor::Agent => &mut bt_source.agent,
+                                                BTEditor::Spawner => &mut bt_source.spawner,
+                                            } = item.clone();
+                                        }
                                     }
+                                    Err(e) => self.app_data.set_message(e),
                                 }
-                                Err(e) => self.app_data.set_message(e),
                             }
                         }
                         for (bt_sources, color) in
@@ -482,14 +496,19 @@ impl SwarmRsApp {
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             let source = &mut self.app_data.bt_buffer;
-            ui.add(
-                egui::TextEdit::multiline(source)
-                    .font(egui::TextStyle::Monospace)
-                    .code_editor()
-                    .desired_rows(10)
-                    .lock_focus(true)
-                    .desired_width(f32::INFINITY),
-            );
+            if ui
+                .add(
+                    egui::TextEdit::multiline(source)
+                        .font(egui::TextStyle::Monospace)
+                        .code_editor()
+                        .desired_rows(10)
+                        .lock_focus(true)
+                        .desired_width(f32::INFINITY),
+                )
+                .changed()
+            {
+                self.app_data.dirty = true;
+            };
         });
     }
 }
