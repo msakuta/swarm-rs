@@ -87,11 +87,50 @@ We have 2 versions of wasm application, using different GUI frameworks.
 ## How to edit the behavior tree
 
 There are tabs to switch the main panel to the editors on right top corner of the window.
-Each tab represents the type of the entities that use the behavior.
 
 You can edit the tree in-place with the integrated text editor, or edit it in a text editor and reload from file.
 If you want to use VSCode to edit, check out the [syntax highlighting extension](https://github.com/msakuta/rusty-behavior-tree-lite/tree/master/vscode-ext).
+In a native build, the files are served from [behavior_tree_config](./behavior_tree_config/) directory.
 
 ![editor-screenshot](screenshots/behavior-tree-editors.png)
 
-Currently, loading from file is not supported in Wasm version.
+In order to load a behavior tree to a type of entity, do this:
+
+* Select the type of entities (green Agent, green Spawner, etc.) in the radio buttons next to "BT to apply"
+* Click "Apply" button on the side of each file name
+
+It will assign the behavior tree to the type of entity and show it in a label next to the file buttons.
+
+### Error reporting message
+
+When a behavior tree is assigned, a syntax check will run on the behavior tree config file, and reports in a message box if there is an error.
+
+![image](screenshots/bt-error.png)
+
+### Delete confirmation
+
+
+Also there is a confirmation dialog for deleting a file, in order to prevent the user from accidentally deleting an important file.
+
+![image](screenshots/delete-confirmation.png)
+
+
+### "Dirty" editor buffer
+
+We do not have multiple buffers like fancy editors (technically we do, inside virtual filesystem, but they are considered "saved to disk").
+So, whenever you switch the file, you would lose the edited content. This "dirty" buffer is marked with a star.
+
+![image](screenshots/dirty-editor.png)
+
+If you try to open a file, it will warn you that it would lose your edits.
+
+![image](screenshots/discard-confirmation.png)
+
+
+### "Reset all" button
+
+The user may mess up the files, for example, erasing an entire file or overwriting one with another, and we want to have a way to recover from it. It is easy to happen when you are new to this game and editor experience.
+
+The "Reset all" button will reset all files to the built-in default, in both native and Wasm build. It is dangerous operation, so there is also a confirmation dialog.
+
+![image](screenshots/reset-all-confirmation.png)
