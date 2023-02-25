@@ -33,7 +33,9 @@ impl LocalStorageVfs {
 
 impl Vfs for LocalStorageVfs {
     fn list_files(&self) -> Vec<String> {
-        self.files.keys().cloned().collect()
+        let mut res: Vec<String> = self.files.keys().cloned().collect();
+        res.sort();
+        res
     }
 
     fn get_file(&self, path: &str) -> Result<String, String> {
@@ -60,5 +62,12 @@ impl Vfs for LocalStorageVfs {
             }
             Err(e) => Err(format!("Ron format error {e}")),
         }
+    }
+
+    fn delete_file(&mut self, file: &str) -> Result<(), String> {
+        self.files
+            .remove(file)
+            .map(|_| ())
+            .ok_or_else(|| "File not found".to_string())
     }
 }

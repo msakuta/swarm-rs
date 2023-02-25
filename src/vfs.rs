@@ -8,6 +8,7 @@ pub trait Vfs {
     fn list_files(&self) -> Vec<String>;
     fn get_file(&self, file: &str) -> Result<String, String>;
     fn save_file(&mut self, file: &str, contents: &str) -> Result<(), String>;
+    fn delete_file(&mut self, file: &str) -> Result<(), String>;
 }
 
 /// A reference implementation of [`Vfs`]. It serves static set of files, but won't retain changes between sessions.
@@ -54,6 +55,13 @@ impl Vfs for StaticVfs {
         self.files.insert(file.to_string(), contents.to_owned());
         Ok(())
     }
+
+    fn delete_file(&mut self, file: &str) -> Result<(), String> {
+        self.files
+            .remove(file)
+            .map(|_| ())
+            .ok_or_else(|| "File not found".to_string())
+    }
 }
 
 /// A virtual file system implemented in an actual file system.
@@ -94,11 +102,21 @@ impl Vfs for FileVfs {
     }
 
     fn save_file(&mut self, file: &str, contents: &str) -> Result<(), String> {
-        let dir = std::path::Path::new("behavior_tree_config");
+        let dir = Path::new("behavior_tree_config");
         let full_path = dir.join(file);
         let res = std::fs::write(full_path, contents).map_err(|e| e.to_string())?;
         self.files.insert(file.to_owned());
         Ok(res)
+    }
+
+    fn delete_file(&mut self, file: &str) -> Result<(), String> {
+        if self.files.remove(file) {
+            let full_path = Path::new("behavior_tree_config").join(file);
+            std::fs::remove_file(&full_path).map_err(|err| err.to_string())?;
+            Ok(())
+        } else {
+            Err("File not found".to_string())
+        }
     }
 }
 

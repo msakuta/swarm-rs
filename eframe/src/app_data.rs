@@ -3,10 +3,10 @@ use ::swarm_rs::{
     game::{BoardParams, BoardType, Game, GameParams, TeamConfig},
     qtree::QTreeSearcher,
 };
-use swarm_rs::{
-    game::UpdateResult,
-    vfs::{FileVfs, Vfs},
-};
+use swarm_rs::{game::UpdateResult, vfs::Vfs};
+
+#[cfg(not(target_arch = "wasm32"))]
+use swarm_rs::vfs::FileVfs;
 
 use std::rc::Rc;
 

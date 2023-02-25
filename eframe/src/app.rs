@@ -414,14 +414,12 @@ impl SwarmRsApp {
                                 Err(e) => self.app_data.message = format!("Save file error! {e}"),
                             }
                         }
-                        for (bt_sources, color) in
-                            self.bt_source_file.iter().zip(team_colors.into_iter())
-                        {
-                            if Path::new(&item) == Path::new(&bt_sources.agent) {
-                                ui.label(RichText::new("Agent").color(color));
-                            }
-                            if Path::new(&item) == Path::new(&bt_sources.spawner) {
-                                ui.label(RichText::new("Spawner").color(color));
+                        if ui.button("Delete").clicked() {
+                            match vfs.delete_file(&item) {
+                                Ok(_) => {
+                                    self.app_data.message = "File deleted successfully!".to_string()
+                                }
+                                Err(e) => self.app_data.message = format!("Delete file error! {e}"),
                             }
                         }
                         if ui.button("Apply").clicked() {
@@ -447,6 +445,16 @@ impl SwarmRsApp {
                                     }
                                 }
                                 Err(e) => self.app_data.message = e,
+                            }
+                        }
+                        for (bt_sources, color) in
+                            self.bt_source_file.iter().zip(team_colors.into_iter())
+                        {
+                            if Path::new(&item) == Path::new(&bt_sources.agent) {
+                                ui.label(RichText::new("Agent").color(color));
+                            }
+                            if Path::new(&item) == Path::new(&bt_sources.spawner) {
+                                ui.label(RichText::new("Spawner").color(color));
                             }
                         }
                     });
