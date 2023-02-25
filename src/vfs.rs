@@ -107,7 +107,9 @@ impl Vfs for FileVfs {
     fn get_file(&self, file: &str) -> Result<String, String> {
         let dir = Path::new(BTC_DIR);
         let full_path = dir.join(file);
-        std::fs::read_to_string(full_path).map_err(|e| e.to_string())
+        std::fs::read_to_string(full_path)
+            .map(|s| collapse_newlines(&s))
+            .map_err(|e| e.to_string())
     }
 
     fn save_file(&mut self, file: &str, contents: &str) -> Result<(), String> {
@@ -189,6 +191,18 @@ fn expand_newlines(s: &str) -> String {
     // even the infamous notepad. However, git usually configures `core.autocrlf = true` on Windows,
     // so not replacing LF with CRLF may lead to annoying diffs.
     #[cfg(target_os = "windows")]
-    let s = s.replace("\n", "\r\n");
+    let s = {
+        // Regex would be re.replace_all("[^\r]\n", "\r\n"), but I don't want to depend on regex library just for this!
+        let mut last_char = None;
+        let mut res = "".to_string();
+        for char in s.chars() {
+            if last_char != Some('\r') && char == '\n' {
+                res.push('\r');
+            }
+            res.push(char);
+            last_char = Some(char);
+        }
+        res
+    };
     s.to_string()
 }
