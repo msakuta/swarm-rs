@@ -8,7 +8,10 @@ use crate::{
 };
 use cgmath::Matrix3;
 use egui::{Color32, Pos2, RichText, Ui};
-use swarm_rs::game::{BoardParams, BoardType, GameParams, UpdateResult};
+use swarm_rs::{
+    game::{BoardParams, BoardType, GameParams, UpdateResult},
+    vfs::Vfs,
+};
 
 const WINDOW_HEIGHT: f64 = 800.;
 
@@ -410,15 +413,26 @@ impl SwarmRsApp {
                         }
                         ui.label(file_name);
                         if ui.button("Load").clicked() {
-                            match vfs.get_file(&item) {
+                            let item = item.clone();
+                            let load = move |app_data: &mut AppData, vfs: &mut Box<dyn Vfs>| match vfs.get_file(&item) {
                                 Ok(content) => {
-                                    self.app_data.current_file_name = item.clone();
-                                    self.app_data.bt_buffer = content;
-                                    self.app_data.dirty = false;
+                                    app_data.current_file_name = item.clone();
+                                    app_data.bt_buffer = content;
+                                    app_data.dirty = false;
                                 }
                                 Err(e) => {
-                                    self.app_data.set_message(format!("Load file error!: {e}"))
+                                    app_data.set_message(format!("Load file error!: {e}"))
                                 }
+                            };
+                            if self.app_data.dirty {
+                                self.app_data.set_confirm_message("The file is not saved. Is it ok to discard edits and load from file?".to_owned(), Box::new(move |app_data| {
+                                    if let Some(mut vfs) = app_data.vfs.take() {
+                                        load(app_data, &mut vfs);
+                                        app_data.vfs = Some(vfs);
+                                    }
+                                }));
+                            } else {
+                                load(&mut self.app_data, &mut vfs);
                             }
                         }
                         if ui.button("Save").clicked() {
