@@ -9,6 +9,8 @@ pub trait Vfs {
     fn get_file(&self, file: &str) -> Result<String, String>;
     fn save_file(&mut self, file: &str, contents: &str) -> Result<(), String>;
     fn delete_file(&mut self, file: &str) -> Result<(), String>;
+    /// Dangerous - it resets the whole filesystem!
+    fn reset(&mut self) -> Result<(), String>;
 }
 
 /// A reference implementation of [`Vfs`]. It serves static set of files, but won't retain changes between sessions.
@@ -62,7 +64,14 @@ impl Vfs for StaticVfs {
             .map(|_| ())
             .ok_or_else(|| "File not found".to_string())
     }
+
+    fn reset(&mut self) -> Result<(), String> {
+        *self = StaticVfs::new();
+        Ok(())
+    }
 }
+
+const BTC_DIR: &str = "./behavior_tree_config";
 
 /// A virtual file system implemented in an actual file system.
 pub struct FileVfs {
@@ -73,7 +82,7 @@ impl FileVfs {
     pub fn new() -> Self {
         let files = {
             let mut files = HashSet::new();
-            match visit_dirs_root(&Path::new("./behavior_tree_config"), &mut |file| {
+            match visit_dirs_root(&Path::new(BTC_DIR), &mut |file| {
                 files.insert(file.to_string_lossy().to_string());
             }) {
                 Ok(()) => files,
@@ -96,13 +105,13 @@ impl Vfs for FileVfs {
     }
 
     fn get_file(&self, file: &str) -> Result<String, String> {
-        let dir = std::path::Path::new("behavior_tree_config");
+        let dir = Path::new(BTC_DIR);
         let full_path = dir.join(file);
         std::fs::read_to_string(full_path).map_err(|e| e.to_string())
     }
 
     fn save_file(&mut self, file: &str, contents: &str) -> Result<(), String> {
-        let dir = Path::new("behavior_tree_config");
+        let dir = Path::new(BTC_DIR);
         let full_path = dir.join(file);
         let res = std::fs::write(full_path, contents).map_err(|e| e.to_string())?;
         self.files.insert(file.to_owned());
@@ -111,12 +120,22 @@ impl Vfs for FileVfs {
 
     fn delete_file(&mut self, file: &str) -> Result<(), String> {
         if self.files.remove(file) {
-            let full_path = Path::new("behavior_tree_config").join(file);
+            let full_path = Path::new(BTC_DIR).join(file);
             std::fs::remove_file(&full_path).map_err(|err| err.to_string())?;
             Ok(())
         } else {
             Err("File not found".to_string())
         }
+    }
+
+    fn reset(&mut self) -> Result<(), String> {
+        for (file, contents) in StaticVfs::new().files {
+            let full_path = Path::new(BTC_DIR).join(&file);
+            std::fs::write(&full_path, contents)
+                .map_err(|e| format!("Error on writing {file}: {e}"))?;
+        }
+        *self = Self::new();
+        Ok(())
     }
 }
 

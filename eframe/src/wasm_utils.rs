@@ -29,6 +29,21 @@ impl LocalStorageVfs {
             files: static_vfs.files,
         }
     }
+
+    /// Synchronize the local storage with on-memory data.
+    fn update_storage(&self) -> Result<(), String> {
+        let local_storage = web_sys::window().unwrap().local_storage().unwrap().unwrap();
+        match ron::to_string(&self.files) {
+            Ok(files) => {
+                local_storage
+                    .set("swarm-rs-btc", &files)
+                    .map_err(|e| format!("localStorage: {e:?}"))?;
+                log(&format!("Saved {} bytes of VFS", files.len()));
+                Ok(())
+            }
+            Err(e) => Err(format!("Ron format error {e}")),
+        }
+    }
 }
 
 impl Vfs for LocalStorageVfs {
@@ -51,23 +66,19 @@ impl Vfs for LocalStorageVfs {
             .entry(path.to_owned())
             .or_insert_with(|| "".to_owned());
         *entry = content.to_owned();
-        let local_storage = web_sys::window().unwrap().local_storage().unwrap().unwrap();
-        match ron::to_string(&self.files) {
-            Ok(files) => {
-                local_storage
-                    .set("swarm-rs-btc", &files)
-                    .map_err(|e| format!("localStorage: {e:?}"))?;
-                log(&format!("Saved {} bytes of VFS", files.len()));
-                Ok(())
-            }
-            Err(e) => Err(format!("Ron format error {e}")),
-        }
+        self.update_storage()
     }
 
     fn delete_file(&mut self, file: &str) -> Result<(), String> {
         self.files
             .remove(file)
             .map(|_| ())
-            .ok_or_else(|| "File not found".to_string())
+            .ok_or_else(|| "File not found".to_string())?;
+        self.update_storage()
+    }
+
+    fn reset(&mut self) -> Result<(), String> {
+        self.files = StaticVfs::new().files;
+        self.update_storage()
     }
 }

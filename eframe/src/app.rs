@@ -354,6 +354,19 @@ impl SwarmRsApp {
 
         ui.label(self.app_data.get_message());
 
+        if ui.button("Reset all").clicked() {
+            self.app_data.set_confirm_message(
+                "Are you sure you want to reset all the source codes?".to_string(),
+                Box::new(|app_data| {
+                    if let Some(ref mut vfs) = app_data.vfs {
+                        if let Err(e) = vfs.reset() {
+                            app_data.set_message(e);
+                        }
+                    }
+                }),
+            )
+        }
+
         ui.horizontal(|ui| {
             ui.label("BT to apply:");
             for (team, color) in team_colors.into_iter().enumerate() {
