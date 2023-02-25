@@ -352,8 +352,6 @@ impl SwarmRsApp {
     fn show_editor(&mut self, ui: &mut Ui) {
         let team_colors = [Color32::GREEN, Color32::RED];
 
-        ui.label(self.app_data.get_message());
-
         if ui.button("Reset all").clicked() {
             self.app_data.set_confirm_message(
                 "Are you sure you want to reset all the source codes?".to_string(),

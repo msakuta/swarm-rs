@@ -189,7 +189,7 @@ impl AppData {
         }
     }
 
-    pub(crate) fn get_message(&self) -> &str {
+    pub(crate) fn _get_message(&self) -> &str {
         &self.message
     }
 
