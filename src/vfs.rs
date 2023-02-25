@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
 /// A virtual filesystem, which could be in-memory, in-disk or on local storage of the browser
 pub trait Vfs {
@@ -35,7 +38,9 @@ impl StaticVfs {
 
 impl Vfs for StaticVfs {
     fn list_files(&self) -> Vec<String> {
-        self.files.keys().cloned().collect()
+        let mut res: Vec<String> = self.files.keys().cloned().collect();
+        res.sort();
+        res
     }
 
     fn get_file(&self, file: &str) -> Result<String, String> {
@@ -58,30 +63,79 @@ pub struct FileVfs {
 
 impl FileVfs {
     pub fn new() -> Self {
-        let static_vfs = StaticVfs::new();
-        Self {
-            files: static_vfs.files.keys().cloned().collect(),
-        }
+        let files = {
+            let mut files = HashSet::new();
+            match visit_dirs_root(&Path::new("./behavior_tree_config"), &mut |file| {
+                files.insert(file.to_string_lossy().to_string());
+            }) {
+                Ok(()) => files,
+                Err(_) => {
+                    eprintln!("Failed to open directory \"../behavior_tree_config\", falling back to static default...");
+                    let static_vfs = StaticVfs::new();
+                    static_vfs.files.keys().cloned().collect()
+                }
+            }
+        };
+        Self { files }
     }
 }
 
 impl Vfs for FileVfs {
     fn list_files(&self) -> Vec<String> {
-        self.files.iter().cloned().collect()
+        let mut res: Vec<String> = self.files.iter().cloned().collect();
+        res.sort();
+        res
     }
 
     fn get_file(&self, file: &str) -> Result<String, String> {
         let dir = std::path::Path::new("behavior_tree_config");
         let full_path = dir.join(file);
-        dbg!(&full_path);
         std::fs::read_to_string(full_path).map_err(|e| e.to_string())
     }
 
     fn save_file(&mut self, file: &str, contents: &str) -> Result<(), String> {
         let dir = std::path::Path::new("behavior_tree_config");
         let full_path = dir.join(file);
-        std::fs::write(full_path, contents).map_err(|e| e.to_string())
+        let res = std::fs::write(full_path, contents).map_err(|e| e.to_string())?;
+        self.files.insert(file.to_owned());
+        Ok(res)
     }
+}
+
+fn visit_dirs_root(dir: &Path, cb: &mut impl FnMut(&Path)) -> std::io::Result<()> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            visit_dirs(&path, Path::new(path.file_name().unwrap()), cb)?;
+        } else if let Some(filename) = path.file_name() {
+            let relpath = Path::new(filename);
+            cb(&relpath);
+        }
+    }
+    Ok(())
+}
+
+fn visit_dirs(dir: &Path, parent: &Path, cb: &mut impl FnMut(&Path)) -> std::io::Result<()> {
+    if dir.is_dir() {
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(filename) = path.file_name() {
+                    let parent = parent.join(filename);
+                    visit_dirs(&path, &parent, cb)?;
+                }
+            } else if let Some(filename) = path.file_name() {
+                let relpath = parent.join(filename);
+                cb(&relpath);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Windows still uses CRLF

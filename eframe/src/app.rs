@@ -1,6 +1,6 @@
 mod paint_game;
 
-use std::rc::Rc;
+use std::{path::Path, rc::Rc};
 
 use crate::{
     app_data::{AppData, BTEditor},
@@ -417,10 +417,10 @@ impl SwarmRsApp {
                         for (bt_sources, color) in
                             self.bt_source_file.iter().zip(team_colors.into_iter())
                         {
-                            if item == bt_sources.agent {
+                            if Path::new(&item) == Path::new(&bt_sources.agent) {
                                 ui.label(RichText::new("Agent").color(color));
                             }
-                            if item == bt_sources.spawner {
+                            if Path::new(&item) == Path::new(&bt_sources.spawner) {
                                 ui.label(RichText::new("Spawner").color(color));
                             }
                         }
