@@ -68,7 +68,6 @@ impl Vfs for FileVfs {
     }
 
     fn get_file(&self, file: &str) -> Result<String, ()> {
-        // let path = std::path::Path::new(file);
         let dir = std::path::Path::new("../behavior_tree_config");
         std::fs::read_to_string(dir.join(file)).map_err(|_| ())
     }

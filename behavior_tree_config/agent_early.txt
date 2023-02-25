@@ -1,0 +1,121 @@
+tree main = Sequence {
+    var fight = true
+    var fighter = false
+    GetClass(output -> class)
+    if (StringEq(lhs <- class, rhs <- "Fighter")) {
+        SetBool(value <- "true", output -> fighter)
+    }
+    GetResource(output -> resource)
+    Repeat (n <- "10000") {
+        if (fight || fighter) {
+            # Print(input <- "Fighting")
+            Fight
+        } else {
+            ForceSuccess {
+                GatherResource(switchToFight -> fight)
+            }
+            #Print(input <- "Got fight = {}", arg0 <- fight)
+            if (fight) {
+                ClearPath
+                ForceSuccess {
+                    ClearTarget
+                }
+            }
+        }
+    }
+}
+
+tree Fight = Sequence {
+    if (!HasTarget) {
+        FindEnemy
+    }
+    ForceSuccess {
+        if (TargetPos (pos -> targetPos) && IsTargetVisible (target <- targetPos)) {
+            FaceToTarget (target <- targetPos)
+            Shoot
+        } else {
+            FollowPathAndAvoid (fight <- "true")
+        }
+    }
+}
+
+tree GatherResource(out switchToFight) = Sequence {
+    if (IsSpawnerResourceFull) {
+        SetBool(value <- "true", output -> switchToFight)
+        !Print(input <- "Set swithToFight = {}", arg0 <- switchToFight)
+    }
+    if (IsResourceFull) {
+        FindSpawner
+        FollowPathAndAvoid (fight <- "false")
+        DepositResource
+    } else {
+        #if (!HasTarget) {
+            FindResource
+        #}
+        FollowPathAndAvoid
+        CollectResource
+    }
+}
+
+tree TryReverse = ReactiveSequence {
+    # Try to revese in an attempt to "unstack"
+    Drive (direction <- "backward")
+    Randomize (max <- "20", value -> timeoutValue)
+    Timeout (time <- timeoutValue)
+}
+
+tree FollowPathAndAvoid(in fight) = Sequence {
+    TargetPos (pos -> target_pos)
+    if (!HasPath) {
+        FindPathPlan (try_reverse <- "true")
+    }
+
+    # Try to search path every 50 ticks, even if we already have one, to update potentially moving target or obstacles
+    Throttle (time <- "100") {
+        Sequence {
+            # Attempt to find the closest enemy again
+            if (IsTrue(input <- fight)) {
+                Print (input <- "Finding a new target")
+                FindEnemy
+            }
+            FindPathPlan (try_reverse <- "false")
+        }
+    }
+
+    if (HasPath) {
+        #SimpleAvoidance
+        if (!FollowPath) {
+            Print (input <- "Blocked, finding path")
+            TryReverse
+            # Find path again if blocked
+            FindPath (target <- target_pos)
+            #AvoidancePlan
+        }
+    }
+}
+
+tree FindPathPlan(in try_reverse) = Sequence {
+    TargetPos (pos -> target_pos)
+    if (!FindPath (target <- target_pos, path -> path, fail_reason -> failReason) && !FindPath (target <- target_pos, ignore_obstacles <- "true", path -> path, fail_reason -> failReason)) {
+        Print (input <- "Failed to find path! reason: {}", arg0 <- failReason)
+        if (IsTrue(input <- try_reverse) && StringEq(lhs <- failReason, rhs <- "StartBlocked")) {
+            TryReverse
+        }
+    } else {
+        DigestPath (input <- path, output -> digest_path)
+        Print (input <- "found path: {}", arg0 <- digest_path)
+    }
+}
+
+tree AvoidancePlan = Sequence {
+    if (PathNextNode (output -> pathNext)) {
+        Randomize (min <- "20", max <- "100", value -> timeoutValue)
+        ReactiveFallback {
+            Avoidance (goal <- pathNext)
+            ForceFailure {
+                Timeout (time <- timeoutValue)
+            }
+            ClearAvoidance
+        }
+    }
+}
