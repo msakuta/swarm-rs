@@ -11,7 +11,7 @@ use self::{
     behavior_nodes::{
         build_tree, AvoidanceCommand, ClearAvoidanceCommand, ClearPathNode, ClearTarget,
         CollectResource, DepositResource, DriveCommand, FaceToTargetCommand, FindEnemyCommand,
-        FindPathCommand, FindResource, FindSpawner, FollowPathCommand, GetClass,
+        FindFog, FindPathCommand, FindResource, FindSpawner, FollowPathCommand, GetClass,
         GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode, IsResourceFull,
         IsSpawnerResourceFull, IsTargetVisibleCommand, MoveToCommand, ShootCommand,
         SimpleAvoidanceCommand, TargetIdNode, TargetPosCommand,
@@ -68,6 +68,7 @@ impl Bullet {
 pub(crate) enum AgentTarget {
     Entity(usize),
     Resource([f64; 2]),
+    Fog([f64; 2]),
 }
 
 #[derive(Debug)]
@@ -301,7 +302,7 @@ impl Agent {
                 let Ok(entity) = entity.try_borrow() else { return false };
                 entity.get_id() == id
             }),
-            AgentTarget::Resource(_) => true,
+            AgentTarget::Resource(_) | AgentTarget::Fog(_) => true,
         }
     }
 
@@ -443,6 +444,37 @@ impl Agent {
         BehaviorResult::Success
     }
 
+    pub(crate) fn find_fog(&mut self, game: &Game) -> bool {
+        let Some(pos) = Vector2::from(self.pos).cast::<i32>() else {
+            return false
+        };
+        let target = 'target: {
+            for range in 0..30 {
+                let fog = &game.fog[self.team];
+                let iy0 = (pos.y - range).max(0) as usize;
+                let iy1 = (pos.y + range).min(game.ys as i32) as usize;
+                let ix0 = (pos.x - range).max(0) as usize;
+                let ix1 = (pos.x + range).min(game.xs as i32) as usize;
+                for iy in iy0..=iy1 {
+                    for ix in ix0..=ix1 {
+                        let delta = pos - Vector2::new(ix as i32, iy as i32);
+                        if delta.magnitude2() < range.pow(2) {
+                            if game.is_passable_at([ix as f64, iy as f64])
+                                && !fog[ix + iy * game.xs]
+                            {
+                                break 'target [ix as f64, iy as f64];
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        };
+
+        self.target = Some(AgentTarget::Fog(target));
+        true
+    }
+
     pub(crate) fn shoot_bullet(&mut self, bullets: &mut Vec<Bullet>, target_pos: [f64; 2]) -> bool {
         if 0. < self.cooldown {
             return false;
@@ -578,6 +610,8 @@ impl Agent {
                     self.find_spawner(entities)
                 } else if f.downcast_ref::<FindResource>().is_some() {
                     return Some(Box::new(self.find_resource(game, &game.resources)));
+                } else if f.downcast_ref::<FindFog>().is_some() {
+                    return Some(Box::new(self.find_fog(game)));
                 } else if f.downcast_ref::<ClearTarget>().is_some() {
                     let had_target = self.target.is_some();
                     self.target = None;
@@ -611,7 +645,9 @@ impl Agent {
                                 println!("Target could not be found!");
                             }
                         }
-                        Some(AgentTarget::Resource(pos)) => return Some(Box::new(pos)),
+                        Some(AgentTarget::Resource(pos)) | Some(AgentTarget::Fog(pos)) => {
+                            return Some(Box::new(pos))
+                        }
                         _ => (),
                     }
                 } else if let Some(com) = f.downcast_ref::<FindPathCommand>() {

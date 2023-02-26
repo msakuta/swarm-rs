@@ -49,9 +49,12 @@ tree GatherResource(out switchToFight) = Sequence {
         FollowPathAndAvoid (fight <- "false")
         DepositResource
     } else {
-        #if (!HasTarget) {
-            FindResource
-        #}
+        if (!FindResource) {
+            Print(input <- "Finding fog")
+            FindFog
+            TargetPos(pos -> targetPos)
+            Print(input <- "Found fog at {}", arg0 <- targetPos)
+        }
         FollowPathAndAvoid
         CollectResource
     }

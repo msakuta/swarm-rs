@@ -21,6 +21,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("FindEnemy", boxify(|| FindEnemy));
     registry.register("FindSpawner", boxify(|| FindSpawner));
     registry.register("FindResource", boxify(|| FindResource));
+    registry.register("FindFog", boxify(|| FindFog));
     registry.register("ClearTarget", boxify(|| ClearTarget));
     registry.register("CollectResource", boxify(|| CollectResource));
     registry.register("DepositResource", boxify(|| DepositResource));
@@ -140,6 +141,25 @@ impl BehaviorNode for FindSpawner {
 pub(super) struct FindResource;
 
 impl BehaviorNode for FindResource {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if arg(&Self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap_or(false)
+        {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct FindFog;
+
+impl BehaviorNode for FindFog {
     fn tick(
         &mut self,
         arg: BehaviorCallback,
