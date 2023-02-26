@@ -435,10 +435,23 @@ impl SwarmRsApp {
                             }
                         }
                         if ui.button("Save").clicked() {
-                            if let Err(e) = vfs.save_file(&item, &self.app_data.bt_buffer) {
-                                self.app_data.set_message(format!("Save file error! {e}"))
+                            let item_copy = item.clone();
+                            let save = move |app_data: &mut AppData, vfs: &mut Box<dyn Vfs>| {
+                                if let Err(e) = vfs.save_file(&item_copy, &app_data.bt_buffer) {
+                                    app_data.set_message(format!("Save file error! {e}"))
+                                } else {
+                                    app_data.dirty = false;
+                                }
+                            };
+                            if self.app_data.current_file_name == item {
+                                save(&mut self.app_data, &mut vfs);
                             } else {
-                                self.app_data.dirty = false;
+                                self.app_data.set_confirm_message("You are going to write to a different file from original. Are you sure?".to_owned(), Box::new(move |app_data| {
+                                    if let Some(mut vfs) = app_data.vfs.take() {
+                                        save(app_data, &mut vfs);
+                                        app_data.vfs = Some(vfs);
+                                    }
+                                }));
                             }
                         }
                         if ui.button("Delete").clicked() {
