@@ -161,7 +161,7 @@ impl AppData {
         &mut self,
         src: Rc<String>,
         setter: &impl Fn(&mut GameParams) -> &mut Rc<String>,
-    ) -> bool {
+    ) -> Result<(), ()> {
         fn count_newlines(src: &str) -> usize {
             src.lines().count()
         }
@@ -170,8 +170,7 @@ impl AppData {
         match parse_file(&src) {
             Ok(("", _)) => {
                 *setter(&mut self.game_params) = src.clone();
-                self.message = format!("Behavior tree applied! {}", Rc::strong_count(&src));
-                true
+                Ok(())
             }
             Ok((rest, _)) => {
                 let parsed_src = &src[..rest.as_ptr() as usize - src.as_ptr() as usize];
@@ -182,12 +181,37 @@ impl AppData {
                     ),
                     format!("Rest: {rest}"),
                 );
-                false
+                Err(())
             }
             Err(e) => {
                 self.set_message(format!("Behavior tree failed to parse: {}", e));
-                false
+                Err(())
             }
+        }
+    }
+
+    pub(crate) fn apply_bt(
+        &mut self,
+        vfs: &dyn Vfs,
+        file_name: &str,
+        team: usize,
+        bt_type: BTEditor,
+    ) -> Result<(), String> {
+        let content = vfs.get_file(file_name)?;
+
+        if self
+            .try_load_behavior_tree(Rc::new(content), &mut |params: &mut GameParams| {
+                let tc = &mut params.teams[team];
+                match bt_type {
+                    BTEditor::Agent => &mut tc.agent_source,
+                    BTEditor::Spawner => &mut tc.spawner_source,
+                }
+            })
+            .is_ok()
+        {
+            Ok(())
+        } else {
+            Ok(()) //("Load behavior tree failed".to_owned())
         }
     }
 
