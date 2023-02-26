@@ -515,7 +515,13 @@ impl SwarmRsApp {
                                             BtType::Spawner => &mut bt_source.spawner,
                                         } = item.to_owned();
                                     }
-                                    Err(_e) => (),//self.app_data.set_message(e),
+                                    Err(e) => {
+                                        if !e.detail.is_empty() {
+                                            self.app_data.set_message_with_payload(e.title, e.detail);
+                                        } else {
+                                            self.app_data.set_message(e.title);
+                                        }
+                                    }
                                 }
                             }
                         }
