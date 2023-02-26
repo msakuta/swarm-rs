@@ -1,25 +1,24 @@
 mod paint_game;
 
-use std::rc::Rc;
+use std::{path::Path, rc::Rc};
 
-use crate::{app_data::AppData, bg_image::BgImage};
+use crate::{
+    app_data::{AppData, BTEditor},
+    bg_image::BgImage,
+};
 use cgmath::Matrix3;
-use egui::{Pos2, Ui};
-use swarm_rs::game::{BoardParams, BoardType, GameParams, UpdateResult};
+use egui::{Color32, Pos2, RichText, Ui};
+use swarm_rs::{
+    game::{BoardParams, BoardType, GameParams, UpdateResult},
+    vfs::Vfs,
+};
 
 const WINDOW_HEIGHT: f64 = 800.;
 
 #[derive(Debug, PartialEq)]
 enum Panel {
     Main,
-    GreenBTEditor,
-    RedBTEditor,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum BTEditor {
-    Agent,
-    Spawner,
+    BTEditor,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -41,9 +40,6 @@ pub struct SwarmRsApp {
     #[serde(skip)]
     open_panel: Panel,
 
-    #[serde(skip)]
-    open_bt_panel: BTEditor,
-
     show_labels: bool,
 
     #[serde(skip)]
@@ -57,7 +53,6 @@ pub struct SwarmRsApp {
     ys: usize,
     maze_expansions: usize,
     agent_count: usize,
-
     bt_source_file: [BTSourceFiles; 2],
 
     #[serde(skip)]
@@ -78,7 +73,6 @@ impl Default for SwarmRsApp {
             img_gray: BgImage::new(),
             img_labels: BgImage::new(),
             open_panel: Panel::Main,
-            open_bt_panel: BTEditor::Agent,
             show_labels: false,
             app_data: AppData::new(WINDOW_HEIGHT),
             draw_circle: false,
@@ -89,12 +83,12 @@ impl Default for SwarmRsApp {
             agent_count: 3,
             bt_source_file: [
                 BTSourceFiles {
-                    agent: "behavior_tree_config/green/agent.txt".to_owned(),
-                    spawner: "behavior_tree_config/green/spawner.txt".to_owned(),
+                    agent: "green/agent.txt".to_owned(),
+                    spawner: "green/spawner.txt".to_owned(),
                 },
                 BTSourceFiles {
-                    agent: "behavior_tree_config/red/agent.txt".to_owned(),
-                    spawner: "behavior_tree_config/red/spawner.txt".to_owned(),
+                    agent: "red/agent.txt".to_owned(),
+                    spawner: "red/spawner.txt".to_owned(),
                 },
             ],
             canvas_offset: Pos2::ZERO,
@@ -358,83 +352,190 @@ impl SwarmRsApp {
         });
     }
 
-    fn show_editor(
-        &mut self,
-        ui: &mut Ui,
-        contents: impl Fn(&Self) -> Rc<String>,
-        mut contents_mut: impl FnMut(&mut AppData) -> &mut Rc<String>,
-        game_params_mut: impl Fn(&mut GameParams) -> &mut Rc<String>,
-        file: impl Fn(&Self) -> &str,
-        mut file_mut: impl FnMut(&mut Self) -> &mut String,
-    ) {
-        ui.label(&self.app_data.message);
+    fn show_editor(&mut self, ui: &mut Ui) {
+        let team_colors = [Color32::GREEN, Color32::RED];
+
+        if ui.button("Reset all").clicked() {
+            self.app_data.set_confirm_message(
+                "Are you sure you want to reset all the source codes?".to_string(),
+                Box::new(|app_data| {
+                    if let Some(ref mut vfs) = app_data.vfs {
+                        if let Err(e) = vfs.reset() {
+                            app_data.set_message(e);
+                        }
+                    }
+                }),
+            )
+        }
 
         ui.horizontal(|ui| {
-            if ui.button("Apply").clicked() {
-                self.app_data
-                    .try_load_behavior_tree(contents(self).clone(), &game_params_mut);
+            ui.label("BT to apply:");
+            for (team, color) in team_colors.into_iter().enumerate() {
+                ui.radio_value(
+                    &mut self.app_data.selected_bt,
+                    (team, BTEditor::Agent),
+                    RichText::new("Agent").color(color),
+                );
+                ui.radio_value(
+                    &mut self.app_data.selected_bt,
+                    (team, BTEditor::Spawner),
+                    RichText::new("Spawner").color(color),
+                );
             }
-            ui.text_edit_singleline(file_mut(self));
-            if ui.button("Reload from file").clicked() {
-                let file = file(self).to_owned();
-                self.app_data
-                    .try_load_from_file(&file, &mut contents_mut, &game_params_mut);
+        });
+
+        ui.collapsing("Files", |ui| {
+            if let Some(mut vfs) = self.app_data.vfs.take() {
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(&mut self.app_data.new_file_name);
+                    if ui.button("Save to a New file").clicked() {
+                        if let Err(e) =
+                            vfs.save_file(&self.app_data.new_file_name, &self.app_data.bt_buffer)
+                        {
+                            self.app_data.set_message(format!("Save file error! {e}"))
+                        }
+                    }
+                });
+
+                for item in vfs.list_files() {
+                    ui.horizontal(|ui| {
+                        let mut file_name = RichText::new(&format!(
+                            "{}  {item}",
+                            if self.app_data.current_file_name == item && self.app_data.dirty {
+                                "*"
+                            } else {
+                                " "
+                            }
+                        ));
+                        if self.app_data.current_file_name == item {
+                            // TODO: use black in light theme
+                            file_name = file_name.underline().color(Color32::WHITE);
+                        }
+                        if ui.label(file_name).interact(egui::Sense::click()).clicked() {
+                            let item = item.clone();
+                            let load = move |app_data: &mut AppData, vfs: &mut Box<dyn Vfs>| match vfs.get_file(&item) {
+                                Ok(content) => {
+                                    app_data.current_file_name = item.clone();
+                                    app_data.bt_buffer = content;
+                                    app_data.dirty = false;
+                                }
+                                Err(e) => {
+                                    app_data.set_message(format!("Load file error!: {e}"))
+                                }
+                            };
+                            if self.app_data.dirty {
+                                self.app_data.set_confirm_message("The file is not saved. Is it ok to discard edits and load from file?".to_owned(), Box::new(move |app_data| {
+                                    if let Some(mut vfs) = app_data.vfs.take() {
+                                        load(app_data, &mut vfs);
+                                        app_data.vfs = Some(vfs);
+                                    }
+                                }));
+                            } else {
+                                load(&mut self.app_data, &mut vfs);
+                            }
+                        }
+                        if ui.button("Save").clicked() {
+                            let item_copy = item.clone();
+                            let save = move |app_data: &mut AppData, vfs: &mut Box<dyn Vfs>| {
+                                if let Err(e) = vfs.save_file(&item_copy, &app_data.bt_buffer) {
+                                    app_data.set_message(format!("Save file error! {e}"))
+                                } else {
+                                    app_data.dirty = false;
+                                }
+                            };
+                            if self.app_data.current_file_name == item {
+                                save(&mut self.app_data, &mut vfs);
+                            } else {
+                                self.app_data.set_confirm_message("You are going to write to a different file from original. Are you sure?".to_owned(), Box::new(move |app_data| {
+                                    if let Some(mut vfs) = app_data.vfs.take() {
+                                        save(app_data, &mut vfs);
+                                        app_data.vfs = Some(vfs);
+                                    }
+                                }));
+                            }
+                        }
+                        if ui.button("Delete").clicked() {
+                            let item = item.clone();
+                            self.app_data.set_confirm_message(
+                                format!("Do you want to delete {item:?}?"),
+                                Box::new(move |this: &mut AppData| {
+                                    if let Some(mut vfs) = this.vfs.take() {
+                                        match vfs.delete_file(&item) {
+                                            Ok(_) => this.set_message(
+                                                "File deleted successfully!".to_string(),
+                                            ),
+                                            Err(e) => {
+                                                this.set_message(format!("Delete file error! {e}"))
+                                            }
+                                        }
+                                        this.vfs = Some(vfs);
+                                    }
+                                }),
+                            );
+                        }
+                        if ui.button("Apply").clicked() {
+                            if self.app_data.dirty {
+                                self.app_data.set_message(
+                                    "Save the file before applying the behavior tree".to_owned(),
+                                );
+                            } else {
+                                match vfs.get_file(&item) {
+                                    Ok(content) => {
+                                        let (team, bt_type) = self.app_data.selected_bt;
+                                        if self.app_data.try_load_behavior_tree(
+                                            Rc::new(content),
+                                            &mut |params: &mut GameParams| {
+                                                let tc = &mut params.teams[team];
+                                                match bt_type {
+                                                    BTEditor::Agent => &mut tc.agent_source,
+                                                    BTEditor::Spawner => &mut tc.spawner_source,
+                                                }
+                                            },
+                                        ) {
+                                            let bt_source = &mut self.bt_source_file
+                                                [self.app_data.selected_bt.0];
+                                            *match self.app_data.selected_bt.1 {
+                                                BTEditor::Agent => &mut bt_source.agent,
+                                                BTEditor::Spawner => &mut bt_source.spawner,
+                                            } = item.clone();
+                                        }
+                                    }
+                                    Err(e) => self.app_data.set_message(e),
+                                }
+                            }
+                        }
+                        for (bt_sources, color) in
+                            self.bt_source_file.iter().zip(team_colors.into_iter())
+                        {
+                            if Path::new(&item) == Path::new(&bt_sources.agent) {
+                                ui.label(RichText::new("Agent").color(color));
+                            }
+                            if Path::new(&item) == Path::new(&bt_sources.spawner) {
+                                ui.label(RichText::new("Spawner").color(color));
+                            }
+                        }
+                    });
+                }
+                self.app_data.vfs = Some(vfs);
             }
         });
 
         egui::ScrollArea::vertical().show(ui, |ui| {
-            let source = Rc::make_mut(contents_mut(&mut self.app_data));
-            ui.add(
-                egui::TextEdit::multiline(source)
-                    .font(egui::TextStyle::Monospace)
-                    .code_editor()
-                    .desired_rows(10)
-                    .lock_focus(true)
-                    .desired_width(f32::INFINITY),
-            );
+            let source = &mut self.app_data.bt_buffer;
+            if ui
+                .add(
+                    egui::TextEdit::multiline(source)
+                        .font(egui::TextStyle::Monospace)
+                        .code_editor()
+                        .desired_rows(10)
+                        .lock_focus(true)
+                        .desired_width(f32::INFINITY),
+                )
+                .changed()
+            {
+                self.app_data.dirty = true;
+            };
         });
-    }
-
-    fn bt_editor(&mut self, ui: &mut Ui, team: usize) {
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.open_bt_panel, BTEditor::Agent, "Agent");
-            ui.selectable_value(&mut self.open_bt_panel, BTEditor::Spawner, "Spawner");
-        });
-        let bt_type = self.open_bt_panel;
-
-        self.show_editor(
-            ui,
-            |app_data| {
-                let tc = &app_data.app_data.teams[team];
-                match bt_type {
-                    BTEditor::Agent => &tc.agent_source,
-                    BTEditor::Spawner => &tc.spawner_source,
-                }
-                .clone()
-            },
-            |app_data| {
-                let tc = &mut app_data.teams[team];
-                match bt_type {
-                    BTEditor::Agent => &mut tc.agent_source,
-                    BTEditor::Spawner => &mut tc.spawner_source,
-                }
-            },
-            |params| {
-                let tc = &mut params.teams[team];
-                match bt_type {
-                    BTEditor::Agent => &mut tc.agent_source,
-                    BTEditor::Spawner => &mut tc.spawner_source,
-                }
-            },
-            |app_data| match bt_type {
-                BTEditor::Agent => &app_data.bt_source_file[team].agent,
-                BTEditor::Spawner => &app_data.bt_source_file[team].spawner,
-            },
-            |app_data| match bt_type {
-                BTEditor::Agent => &mut app_data.bt_source_file[team].agent,
-                BTEditor::Spawner => &mut app_data.bt_source_file[team].spawner,
-            },
-        );
     }
 }
 
@@ -465,6 +566,8 @@ impl eframe::App for SwarmRsApp {
             self.img_labels.clear();
         }
 
+        self.app_data.show_message(ctx);
+
         // Examples of how to create different panels and windows.
         // Pick whichever suits you.
         // Tip: a good default choice is to just keep the `CentralPanel`.
@@ -487,34 +590,19 @@ impl eframe::App for SwarmRsApp {
                 ui.selectable_value(&mut self.open_panel, Panel::Main, "Main");
                 ui.selectable_value(
                     &mut self.open_panel,
-                    Panel::GreenBTEditor,
-                    "Green behavior tree",
-                );
-                ui.selectable_value(
-                    &mut self.open_panel,
-                    Panel::RedBTEditor,
-                    "Red behavior tree",
+                    Panel::BTEditor,
+                    "Behavior tree editor",
                 );
             });
 
             match self.open_panel {
                 Panel::Main => self.show_panel_ui(ui),
-                Panel::GreenBTEditor => self.bt_editor(ui, 0),
-                Panel::RedBTEditor => self.bt_editor(ui, 1),
+                Panel::BTEditor => self.show_editor(ui),
             }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.paint_game(ui);
         });
-
-        if false {
-            egui::Window::new("Window").show(ctx, |ui| {
-                ui.label("Windows can be moved by dragging them.");
-                ui.label("They are automatically sized based on contents.");
-                ui.label("You can turn on resizing and scrolling if you like.");
-                ui.label("You would normally choose either panels OR windows.");
-            });
-        }
     }
 }
