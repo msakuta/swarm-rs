@@ -3,7 +3,7 @@ mod paint_game;
 use std::{path::Path, rc::Rc};
 
 use crate::{
-    app_data::{AppData, BTEditor},
+    app_data::{AppData, BtType},
     bg_image::BgImage,
 };
 use cgmath::Matrix3;
@@ -136,7 +136,7 @@ impl SwarmRsApp {
                     vfs.as_ref(),
                     &res.bt_source_file[team].agent,
                     team,
-                    BTEditor::Agent,
+                    BtType::Agent,
                 );
             }
             res.app_data.vfs = Some(vfs);
@@ -385,12 +385,12 @@ impl SwarmRsApp {
             for (team, color) in team_colors.into_iter().enumerate() {
                 ui.radio_value(
                     &mut self.app_data.selected_bt,
-                    (team, BTEditor::Agent),
+                    (team, BtType::Agent),
                     RichText::new("Agent").color(color),
                 );
                 ui.radio_value(
                     &mut self.app_data.selected_bt,
-                    (team, BTEditor::Spawner),
+                    (team, BtType::Spawner),
                     RichText::new("Spawner").color(color),
                 );
             }
@@ -497,8 +497,8 @@ impl SwarmRsApp {
                                         let bt_source = &mut self.bt_source_file
                                             [self.app_data.selected_bt.0];
                                         *match self.app_data.selected_bt.1 {
-                                            BTEditor::Agent => &mut bt_source.agent,
-                                            BTEditor::Spawner => &mut bt_source.spawner,
+                                            BtType::Agent => &mut bt_source.agent,
+                                            BtType::Spawner => &mut bt_source.spawner,
                                         } = item.to_owned();
                                     }
                                     Err(_e) => (),//self.app_data.set_message(e),

@@ -12,7 +12,7 @@ use swarm_rs::vfs::FileVfs;
 use std::rc::Rc;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum BTEditor {
+pub enum BtType {
     Agent,
     Spawner,
 }
@@ -39,7 +39,7 @@ pub struct AppData {
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
     pub(crate) global_render_time: f64,
-    pub(crate) selected_bt: (usize, BTEditor),
+    pub(crate) selected_bt: (usize, BtType),
     pub(crate) new_file_name: String,
     pub(crate) current_file_name: String,
     /// This buffer is not yet applied to the game.
@@ -110,7 +110,7 @@ impl AppData {
             entity_label_visible: true,
             entity_trace_visible: false,
             global_render_time: 0.,
-            selected_bt: (0, BTEditor::Agent),
+            selected_bt: (0, BtType::Agent),
             new_file_name: "agent.txt".to_owned(),
             current_file_name: "".to_owned(),
             bt_buffer: "".to_owned(),
@@ -195,7 +195,7 @@ impl AppData {
         vfs: &dyn Vfs,
         file_name: &str,
         team: usize,
-        bt_type: BTEditor,
+        bt_type: BtType,
     ) -> Result<(), String> {
         let content = vfs.get_file(file_name)?;
 
@@ -203,8 +203,8 @@ impl AppData {
             .try_load_behavior_tree(Rc::new(content), &mut |params: &mut GameParams| {
                 let tc = &mut params.teams[team];
                 match bt_type {
-                    BTEditor::Agent => &mut tc.agent_source,
-                    BTEditor::Spawner => &mut tc.spawner_source,
+                    BtType::Agent => &mut tc.agent_source,
+                    BtType::Spawner => &mut tc.spawner_source,
                 }
             })
             .is_ok()
