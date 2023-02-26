@@ -1,6 +1,6 @@
 mod paint_game;
 
-use std::{path::Path, rc::Rc};
+use std::path::Path;
 
 use crate::{
     app_data::{AppData, BtType},
@@ -9,7 +9,7 @@ use crate::{
 use cgmath::Matrix3;
 use egui::{Color32, Pos2, RichText, Ui};
 use swarm_rs::{
-    game::{BoardParams, BoardType, GameParams, UpdateResult},
+    game::{BoardParams, BoardType, UpdateResult},
     vfs::Vfs,
 };
 
@@ -130,17 +130,32 @@ impl SwarmRsApp {
             maze_expansions: res.maze_expansions,
         };
 
+        // "Consume" the error, since we don't have a good way to communicate the error on the startup of
+        // the program. At least it will show on console if you run native build.
+        let warn = |res| {
+            if let Err(e) = res {
+                eprintln!("WARNING: error on loading behavior tree: {e}")
+            }
+        };
+
+        // Restore behavior tree from previous selection. We need this because we don't store the whole content
+        // of the behavior tree in serialized eframe state. The behavior tree source code can be big.
         if let Some(vfs) = res.app_data.vfs.take() {
             for team in 0..2 {
-                res.app_data.apply_bt(
+                warn(res.app_data.apply_bt(
                     vfs.as_ref(),
                     &res.bt_source_file[team].agent,
-                    team,
-                    BtType::Agent,
-                );
+                    (team, BtType::Agent),
+                ));
+                warn(res.app_data.apply_bt(
+                    vfs.as_ref(),
+                    &res.bt_source_file[team].spawner,
+                    (team, BtType::Spawner),
+                ));
             }
             res.app_data.vfs = Some(vfs);
         }
+
         res.app_data.new_game(res.board_type, params, true);
 
         res
@@ -491,8 +506,7 @@ impl SwarmRsApp {
                                     "Save the file before applying the behavior tree".to_owned(),
                                 );
                             } else {
-                                let (team, bt_type) = self.app_data.selected_bt;
-                                match self.app_data.apply_bt(vfs.as_ref(), &item, team, bt_type) {
+                                match self.app_data.apply_bt(vfs.as_ref(), &item, self.app_data.selected_bt) {
                                     Ok(()) => {
                                         let bt_source = &mut self.bt_source_file
                                             [self.app_data.selected_bt.0];

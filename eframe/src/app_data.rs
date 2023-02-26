@@ -17,6 +17,8 @@ pub enum BtType {
     Spawner,
 }
 
+pub type BtTarget = (usize, BtType);
+
 pub struct AppData {
     pub game: Game,
     pub game_params: GameParams,
@@ -39,7 +41,7 @@ pub struct AppData {
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
     pub(crate) global_render_time: f64,
-    pub(crate) selected_bt: (usize, BtType),
+    pub(crate) selected_bt: BtTarget,
     pub(crate) new_file_name: String,
     pub(crate) current_file_name: String,
     /// This buffer is not yet applied to the game.
@@ -194,8 +196,7 @@ impl AppData {
         &mut self,
         vfs: &dyn Vfs,
         file_name: &str,
-        team: usize,
-        bt_type: BtType,
+        (team, bt_type): BtTarget,
     ) -> Result<(), String> {
         let content = vfs.get_file(file_name)?;
 
