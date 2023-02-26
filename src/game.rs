@@ -715,6 +715,14 @@ impl Game {
         }
     }
 
+    pub(crate) fn is_clear_fog_at(&self, team: usize, pos: [f64; 2]) -> bool {
+        if pos[0] < 0. || self.xs <= pos[0] as usize || pos[1] < 0. || self.ys <= pos[1] as usize {
+            false
+        } else {
+            self.fog[team][pos[0] as usize + pos[1] as usize * self.xs]
+        }
+    }
+
     // pub(crate) fn is_passable_at(board: &[bool], shape: (usize, usize), pos: [f64; 2]) -> bool {
     //     if pos[0] < 0. || shape.0 <= pos[0] as usize || pos[1] < 0. || shape.1 <= pos[1] as usize {
     //         false

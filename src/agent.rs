@@ -260,14 +260,18 @@ impl Agent {
         false
     }
 
-    pub(crate) fn find_enemy(&mut self, agents: &[RefCell<Entity>]) {
+    pub(crate) fn find_enemy(&mut self, game: &Game, agents: &[RefCell<Entity>]) {
         let best_agent = agents
             .iter()
             .filter_map(|a| a.try_borrow().ok())
             .filter(|a| {
                 let aid = a.get_id();
                 let ateam = a.get_team();
-                !self.unreachables.contains(&aid) && aid != self.id && ateam != self.team
+                let apos = a.get_pos();
+                game.is_clear_fog_at(self.team, apos)
+                    && !self.unreachables.contains(&aid)
+                    && aid != self.id
+                    && ateam != self.team
             })
             .filter_map(|a| {
                 let distance = Vector2::from(a.get_pos()).distance(Vector2::from(self.pos));
@@ -355,11 +359,14 @@ impl Agent {
         }
     }
 
-    pub(crate) fn find_resource(&mut self, resources: &[Resource]) -> bool {
+    pub(crate) fn find_resource(&mut self, game: &Game, resources: &[Resource]) -> bool {
         let best_resource = resources
             .iter()
             // .filter_map(|a| a.try_borrow().ok())
             .filter_map(|a| {
+                if !game.is_clear_fog_at(self.team, a.pos) {
+                    return None;
+                }
                 let distance = Vector2::from(a.pos).distance(Vector2::from(self.pos));
                 Some((distance, a))
             })
@@ -566,11 +573,11 @@ impl Agent {
                 } else if f.downcast_ref::<TargetIdNode>().is_some() {
                     return Some(Box::new(self.target));
                 } else if f.downcast_ref::<FindEnemyCommand>().is_some() {
-                    self.find_enemy(entities)
+                    self.find_enemy(game, entities)
                 } else if f.downcast_ref::<FindSpawner>().is_some() {
                     self.find_spawner(entities)
                 } else if f.downcast_ref::<FindResource>().is_some() {
-                    return Some(Box::new(self.find_resource(&game.resources)));
+                    return Some(Box::new(self.find_resource(game, &game.resources)));
                 } else if f.downcast_ref::<ClearTarget>().is_some() {
                     let had_target = self.target.is_some();
                     self.target = None;
