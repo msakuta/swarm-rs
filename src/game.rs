@@ -143,6 +143,7 @@ pub struct Game {
     pub bullets: Vec<Bullet>,
     pub resources: Vec<Resource>,
     pub interval: f64,
+    pub(crate) fog: [Board; 2],
     pub(crate) rng: Xor128,
     pub(crate) id_gen: usize,
     pub(crate) avoidance_mode: AvoidanceMode,
@@ -182,6 +183,9 @@ impl Game {
         let shape = (xs, ys);
         let (qtree, timer) = measure_time(|| Self::new_qtree(shape, &board, &[]));
 
+        let fog = vec![false; board.len()];
+        let fog = [fog.clone(), fog];
+
         println!("qtree time: {timer:?}");
 
         Self {
@@ -194,6 +198,7 @@ impl Game {
             bullets: vec![],
             resources: vec![],
             interval: 32.,
+            fog,
             rng: Xor128::new(9318245),
             id_gen,
             avoidance_mode: AvoidanceMode::RrtStar,
@@ -280,9 +285,12 @@ impl Game {
             BoardType::Maze => Self::create_maze_board(&params),
         };
 
+        let fog = vec![false; board.len()];
+
         self.qtree = Self::new_qtree(params.shape, &board, &[]);
         self.raycast_board = RefCell::new(vec![]);
         self.board = board;
+        self.fog = [fog.clone(), fog];
         self.mesh = mesh;
         self.entities = vec![];
         self.bullets = vec![];
@@ -715,15 +723,25 @@ impl Game {
     //     }
     // }
 
-    pub fn occupancy_image(&self) -> Option<([usize; 2], Vec<u8>)> {
+    pub fn occupancy_image(&self, fog_active: &[bool; 2]) -> Option<([usize; 2], Vec<u8>)> {
         const OBSTACLE_COLOR: u8 = 63u8;
         const BACKGROUND_COLOR: u8 = 127u8;
+
+        let (fa0, fa1) = (fog_active[0], fog_active[1]);
 
         Some((
             [self.xs, self.ys],
             self.board
                 .iter()
-                .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
+                .zip(self.fog[0].iter().zip(self.fog[1].iter()))
+                .map(|(p, (f0, f1))| {
+                    let c = if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR };
+                    if !fa0 && !fa1 || fa0 && *f0 || fa1 && *f1 {
+                        c
+                    } else {
+                        c / 2
+                    }
+                })
                 .collect::<Vec<_>>(),
         ))
     }

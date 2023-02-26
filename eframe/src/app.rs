@@ -258,6 +258,12 @@ impl SwarmRsApp {
                     "Raycast image",
                 ));
             });
+
+            ui.horizontal_wrapped(|ui| {
+                for (i, fog_active) in self.app_data.fog_active.iter_mut().enumerate() {
+                    ui.add(egui::Checkbox::new(fog_active, format!("Fog team {i}")));
+                }
+            });
         });
 
         ui.collapsing("Statistics", |ui| {

@@ -1,3 +1,5 @@
+use cgmath::{InnerSpace, Vector2};
+
 use crate::{
     agent::Agent,
     agent::{AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE},
@@ -235,17 +237,34 @@ impl Entity {
 
     pub(crate) fn update(
         &mut self,
-        app_data: &mut Game,
+        game: &mut Game,
         entities: &[RefCell<Entity>],
         bullets: &mut Vec<Bullet>,
     ) -> Vec<GameEvent> {
         let mut ret = vec![];
         match self {
             Entity::Agent(ref mut agent) => {
-                agent.update(app_data, entities, bullets);
+                agent.update(game, entities, bullets);
             }
             Entity::Spawner(ref mut spawner) => {
-                ret.extend(spawner.update(app_data, entities));
+                ret.extend(spawner.update(game, entities));
+            }
+        }
+
+        const VISION_RANGE: f64 = 10.;
+        let pos = Vector2::from(self.get_pos());
+        let fog = &mut game.fog[self.get_team()];
+        let iy0 = (pos.y - VISION_RANGE).max(0.) as usize;
+        let iy1 = (pos.y + VISION_RANGE).min(game.ys as f64) as usize;
+        let ix0 = (pos.x - VISION_RANGE).max(0.) as usize;
+        let ix1 = (pos.x + VISION_RANGE).min(game.xs as f64) as usize;
+        for iy in iy0..iy1 {
+            for ix in ix0..ix1 {
+                let delta = Vector2::from(pos) - Vector2::new(ix as f64, iy as f64);
+                if delta.magnitude2() < VISION_RANGE.powf(2.) {
+                    let p = &mut fog[ix + iy * game.xs];
+                    *p = true;
+                }
             }
         }
         ret
