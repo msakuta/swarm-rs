@@ -127,6 +127,13 @@ If you try to open a file, it will warn you that it would lose your edits.
 ![image](screenshots/discard-confirmation.png)
 
 
+### Overwrite another file confirmation
+
+When you try to save a file to a different file from original file, a confirmation dialog will show up.
+
+![image](screenshots/save-to-different-file.png)
+
+
 ### "Reset all" button
 
 The user may mess up the files, for example, erasing an entire file or overwriting one with another, and we want to have a way to recover from it. It is easy to happen when you are new to this game and editor experience.
