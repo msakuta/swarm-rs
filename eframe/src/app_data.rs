@@ -12,9 +12,43 @@ use swarm_rs::vfs::FileVfs;
 use std::rc::Rc;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum BTEditor {
+pub enum BtType {
     Agent,
     Spawner,
+}
+
+pub type BtTarget = (usize, BtType);
+
+/// An error type used internally in this GUI. It contains title for short summary,
+/// and an optional detailed explanation of the error (such as stack trace).
+/// An empty `detail` payload indicates this error has only title.
+#[derive(Debug)]
+pub struct MessageError {
+    pub title: String,
+    pub detail: String,
+}
+
+impl MessageError {
+    pub fn new(title: String, detail: String) -> Self {
+        Self { title, detail }
+    }
+}
+
+impl std::fmt::Display for MessageError {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(fmt, "{}: {}", self.title, self.detail)
+    }
+}
+
+impl std::error::Error for MessageError {}
+
+impl From<String> for MessageError {
+    fn from(s: String) -> Self {
+        Self {
+            title: s,
+            detail: "".to_owned(),
+        }
+    }
 }
 
 pub struct AppData {
@@ -39,7 +73,7 @@ pub struct AppData {
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
     pub(crate) global_render_time: f64,
-    pub(crate) selected_bt: (usize, BTEditor),
+    pub(crate) selected_bt: BtTarget,
     pub(crate) new_file_name: String,
     pub(crate) current_file_name: String,
     /// This buffer is not yet applied to the game.
@@ -110,7 +144,7 @@ impl AppData {
             entity_label_visible: true,
             entity_trace_visible: false,
             global_render_time: 0.,
-            selected_bt: (0, BTEditor::Agent),
+            selected_bt: (0, BtType::Agent),
             new_file_name: "agent.txt".to_owned(),
             current_file_name: "".to_owned(),
             bt_buffer: "".to_owned(),
@@ -161,7 +195,7 @@ impl AppData {
         &mut self,
         src: Rc<String>,
         setter: &impl Fn(&mut GameParams) -> &mut Rc<String>,
-    ) -> bool {
+    ) -> Result<(), MessageError> {
         fn count_newlines(src: &str) -> usize {
             src.lines().count()
         }
@@ -170,25 +204,37 @@ impl AppData {
         match parse_file(&src) {
             Ok(("", _)) => {
                 *setter(&mut self.game_params) = src.clone();
-                self.message = format!("Behavior tree applied! {}", Rc::strong_count(&src));
-                true
+                Ok(())
             }
             Ok((rest, _)) => {
                 let parsed_src = &src[..rest.as_ptr() as usize - src.as_ptr() as usize];
-                self.set_message_with_payload(
+                Err(MessageError::new(
                     format!(
                         "Behavior tree source ended unexpectedly at ({})",
                         count_newlines(parsed_src)
                     ),
                     format!("Rest: {rest}"),
-                );
-                false
+                ))
             }
-            Err(e) => {
-                self.set_message(format!("Behavior tree failed to parse: {}", e));
-                false
-            }
+            Err(e) => Err(format!("Behavior tree failed to parse: {}", e).into()),
         }
+    }
+
+    pub(crate) fn apply_bt(
+        &mut self,
+        vfs: &dyn Vfs,
+        file_name: &str,
+        (team, bt_type): BtTarget,
+    ) -> Result<(), MessageError> {
+        let content = vfs.get_file(file_name)?;
+
+        self.try_load_behavior_tree(Rc::new(content), &mut |params: &mut GameParams| {
+            let tc = &mut params.teams[team];
+            match bt_type {
+                BtType::Agent => &mut tc.agent_source,
+                BtType::Spawner => &mut tc.spawner_source,
+            }
+        })
     }
 
     pub(crate) fn _get_message(&self) -> &str {

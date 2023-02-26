@@ -1,15 +1,15 @@
 mod paint_game;
 
-use std::{path::Path, rc::Rc};
+use std::path::Path;
 
 use crate::{
-    app_data::{AppData, BTEditor},
+    app_data::{AppData, BtType},
     bg_image::BgImage,
 };
 use cgmath::Matrix3;
 use egui::{Color32, Pos2, RichText, Ui};
 use swarm_rs::{
-    game::{BoardParams, BoardType, GameParams, UpdateResult},
+    game::{BoardParams, BoardType, UpdateResult},
     vfs::Vfs,
 };
 
@@ -129,6 +129,33 @@ impl SwarmRsApp {
             simplify: 0.,
             maze_expansions: res.maze_expansions,
         };
+
+        // "Consume" the error, since we don't have a good way to communicate the error on the startup of
+        // the program. At least it will show on console if you run native build.
+        let warn = |res| {
+            if let Err(e) = res {
+                eprintln!("WARNING: error on loading behavior tree: {e}")
+            }
+        };
+
+        // Restore behavior tree from previous selection. We need this because we don't store the whole content
+        // of the behavior tree in serialized eframe state. The behavior tree source code can be big.
+        if let Some(vfs) = res.app_data.vfs.take() {
+            for team in 0..2 {
+                warn(res.app_data.apply_bt(
+                    vfs.as_ref(),
+                    &res.bt_source_file[team].agent,
+                    (team, BtType::Agent),
+                ));
+                warn(res.app_data.apply_bt(
+                    vfs.as_ref(),
+                    &res.bt_source_file[team].spawner,
+                    (team, BtType::Spawner),
+                ));
+            }
+            res.app_data.vfs = Some(vfs);
+        }
+
         res.app_data.new_game(res.board_type, params, true);
 
         res
@@ -373,12 +400,12 @@ impl SwarmRsApp {
             for (team, color) in team_colors.into_iter().enumerate() {
                 ui.radio_value(
                     &mut self.app_data.selected_bt,
-                    (team, BTEditor::Agent),
+                    (team, BtType::Agent),
                     RichText::new("Agent").color(color),
                 );
                 ui.radio_value(
                     &mut self.app_data.selected_bt,
-                    (team, BTEditor::Spawner),
+                    (team, BtType::Spawner),
                     RichText::new("Spawner").color(color),
                 );
             }
@@ -479,28 +506,22 @@ impl SwarmRsApp {
                                     "Save the file before applying the behavior tree".to_owned(),
                                 );
                             } else {
-                                match vfs.get_file(&item) {
-                                    Ok(content) => {
-                                        let (team, bt_type) = self.app_data.selected_bt;
-                                        if self.app_data.try_load_behavior_tree(
-                                            Rc::new(content),
-                                            &mut |params: &mut GameParams| {
-                                                let tc = &mut params.teams[team];
-                                                match bt_type {
-                                                    BTEditor::Agent => &mut tc.agent_source,
-                                                    BTEditor::Spawner => &mut tc.spawner_source,
-                                                }
-                                            },
-                                        ) {
-                                            let bt_source = &mut self.bt_source_file
-                                                [self.app_data.selected_bt.0];
-                                            *match self.app_data.selected_bt.1 {
-                                                BTEditor::Agent => &mut bt_source.agent,
-                                                BTEditor::Spawner => &mut bt_source.spawner,
-                                            } = item.clone();
+                                match self.app_data.apply_bt(vfs.as_ref(), &item, self.app_data.selected_bt) {
+                                    Ok(()) => {
+                                        let bt_source = &mut self.bt_source_file
+                                            [self.app_data.selected_bt.0];
+                                        *match self.app_data.selected_bt.1 {
+                                            BtType::Agent => &mut bt_source.agent,
+                                            BtType::Spawner => &mut bt_source.spawner,
+                                        } = item.to_owned();
+                                    }
+                                    Err(e) => {
+                                        if !e.detail.is_empty() {
+                                            self.app_data.set_message_with_payload(e.title, e.detail);
+                                        } else {
+                                            self.app_data.set_message(e.title);
                                         }
                                     }
-                                    Err(e) => self.app_data.set_message(e),
                                 }
                             }
                         }
