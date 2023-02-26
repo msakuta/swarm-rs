@@ -26,15 +26,25 @@ tree main = Sequence {
 }
 
 tree Fight = Sequence {
+    var isTargetFog
     if (!HasTarget) {
+        SetBool(value <- "false", output -> isTargetFog)
         FindEnemy
+        if (!HasTarget) {
+            ExploreFog
+            SetBool(value <- "true", output -> isTargetFog)
+        }
     }
-    ForceSuccess {
-        if (TargetPos (pos -> targetPos) && IsTargetVisible (target <- targetPos)) {
-            FaceToTarget (target <- targetPos)
-            Shoot
-        } else {
-            FollowPathAndAvoid (fight <- "true")
+    if (isTargetFog) {
+        Print (input <- "targetting fog, don't shoot.")
+    } else {
+        ForceSuccess {
+            if (TargetPos (pos -> targetPos) && IsTargetVisible (target <- targetPos)) {
+                FaceToTarget (target <- targetPos)
+                Shoot
+            } else {
+                FollowPathAndAvoid (fight <- "true")
+            }
         }
     }
 }
@@ -49,15 +59,21 @@ tree GatherResource(out switchToFight) = Sequence {
         FollowPathAndAvoid (fight <- "false")
         DepositResource
     } else {
-        if (!FindResource) {
-            Print(input <- "Finding fog")
-            FindFog
-            TargetPos(pos -> targetPos)
-            Print(input <- "Found fog at {}", arg0 <- targetPos)
+        if (FindResource) {
+            FollowPathAndAvoid (fight <- "false")
+            CollectResource
+        } else {
+            ExploreFog
         }
-        FollowPathAndAvoid
-        CollectResource
     }
+}
+
+tree ExploreFog = Sequence {
+    Print(input <- "Finding fog")
+    FindFog
+    TargetPos(pos -> targetPos)
+    Print(input <- "Found fog at {}", arg0 <- targetPos)
+    FollowPathAndAvoidUntilArrival
 }
 
 tree TryReverse = ReactiveSequence {
@@ -80,6 +96,11 @@ tree FollowPathAndAvoid(in fight) = Sequence {
             if (IsTrue(input <- fight)) {
                 Print (input <- "Finding a new target")
                 FindEnemy
+            } else {
+                if (IsTrue(input <- isTargetFog)) {
+                    Print (input <- "Finding a new target fog")
+                    FindFog
+                }
             }
             FindPathPlan (try_reverse <- "false")
         }
@@ -93,6 +114,38 @@ tree FollowPathAndAvoid(in fight) = Sequence {
             # Find path again if blocked
             FindPath (target <- target_pos)
             #AvoidancePlan
+        }
+    }
+}
+
+tree FollowPathAndAvoidUntilArrival = Sequence {
+    TargetPos (pos -> target_pos)
+    if (!HasPath) {
+        FindPathPlan (try_reverse <- "true")
+    }
+
+    # Try to search path every 50 ticks, even if we already have one, to update potentially moving target or obstacles
+    Throttle (time <- "100") {
+        Sequence {
+            # Attempt to find the closest enemy again
+            FindPathPlan (try_reverse <- "false")
+        }
+    }
+
+    if (HasPath) {
+        #SimpleAvoidance
+        var arrived = false
+        Print (input <- "Following path {}", arg0 <- target_pos)
+        Repeat (n <- "100") {
+            ReactiveSequence {
+                if (!FollowPath (arrived -> arrived)) {
+                    Print (input <- "Blocked, finding path")
+                    TryReverse
+                    # Find path again if blocked
+                    FindPath (target <- target_pos)
+                }
+                !arrived
+            }
         }
     }
 }

@@ -1,12 +1,12 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 use cgmath::{MetricSpace, Vector2};
 
 use super::{behavior_nodes::FindPathCommand, Agent, AgentTarget, AGENT_HALFLENGTH};
 use crate::{
-    game::Game,
+    game::{Game, Profiler},
     measure_time,
-    qtree::{qtree::PathFindError, QTreePathNode},
+    qtree::{qtree::PathFindError, QTreePathNode, QTreeSearcher},
     CellState,
 };
 
@@ -18,9 +18,6 @@ impl Agent {
     ) -> Result<Vec<QTreePathNode>, PathFindError> {
         let ((found_path, search_tree), time) = measure_time(|| {
             let qtree = &game.qtree;
-            fn ignore_id<'a>(ignore_ids: &'a [usize]) -> impl Fn(usize) -> bool + 'a {
-                |id| ignore_ids.iter().any(|i| *i == id)
-            }
             let target = com.target;
             if com.ignore_obstacles {
                 qtree.path_find(|_| true, self.pos, target, AGENT_HALFLENGTH * 1.5)
@@ -44,7 +41,7 @@ impl Agent {
         self.search_tree = Some(search_tree);
         match found_path {
             Ok(mut path) => {
-                self.shortcut_path(&mut path, game);
+                self.shortcut_path(&mut path, &game.qtree);
                 self.path = path.clone();
                 Ok(path)
             }
@@ -54,7 +51,7 @@ impl Agent {
 
     /// Shortcut last few nodes if it's still visible. It won't attempt to shortcut the whole path
     /// since line-of-sight check can be expensive.
-    fn shortcut_path(&mut self, path: &mut Vec<QTreePathNode>, game: &Game) {
+    fn shortcut_path(&mut self, path: &mut Vec<QTreePathNode>, qtree: &QTreeSearcher) {
         const MAX_SHORTCUT_DISTANCE: f64 = 10.;
         let current = self.pos;
         let ignore_id = self.id;
@@ -72,7 +69,7 @@ impl Agent {
             {
                 break;
             }
-            let ret = game.qtree.get_cache_map().is_position_visible(
+            let ret = qtree.get_cache_map().is_position_visible(
                 |cell_state| {
                     checks.set(checks.get() + 1);
                     match cell_state {
@@ -99,4 +96,28 @@ impl Agent {
             // ));
         }
     }
+
+    pub(super) fn find_path_many(
+        &mut self,
+        qtree: &QTreeSearcher,
+        path_find_profiler: &RefCell<Profiler>,
+        cond: impl FnMut([f64; 2]) -> bool,
+    ) -> Result<Vec<QTreePathNode>, PathFindError> {
+        let ((found_path, search_tree), time) =
+            measure_time(|| qtree.path_find_many(ignore_id(&[self.id]), self.pos, cond, 1.));
+        let _ = path_find_profiler.try_borrow_mut().map(|mut p| p.add(time));
+        self.search_tree = Some(search_tree);
+        match found_path {
+            Ok(mut path) => {
+                self.shortcut_path(&mut path, qtree);
+                self.path = path.clone();
+                Ok(path)
+            }
+            Err(err) => Err(err),
+        }
+    }
+}
+
+fn ignore_id<'a>(ignore_ids: &'a [usize]) -> impl Fn(usize) -> bool + 'a {
+    |id| ignore_ids.iter().any(|i| *i == id)
 }

@@ -141,6 +141,24 @@ impl QTreeSearcher {
         self.qtree.path_find(ignore, start, end, goal_radius)
     }
 
+    pub(crate) fn path_find_many(
+        &self,
+        ignore: impl Fn(usize) -> bool,
+        start: [f64; 2],
+        mut end: impl FnMut([f64; 2]) -> bool,
+        goal_radius: f64,
+    ) -> (Result<QTreePath, PathFindError>, SearchTree) {
+        self.qtree.path_find_many(
+            ignore,
+            start,
+            |idx| {
+                let center = self.qtree.idx_to_center(idx);
+                end(center)
+            },
+            goal_radius,
+        )
+    }
+
     pub fn check_collision(&self, aabb: &Aabb) -> bool {
         for x in aabb[0].floor() as i32..aabb[2].ceil() as i32 {
             for y in aabb[1].floor() as i32..aabb[3].ceil() as i32 {

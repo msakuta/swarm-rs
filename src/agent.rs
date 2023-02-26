@@ -167,6 +167,20 @@ impl Agent {
         })
     }
 
+    pub(crate) fn get_target_pos(&self, game: &Game) -> Option<[f64; 2]> {
+        self.target.and_then(|target| match target {
+            AgentTarget::Entity(id) => game.entities.iter().find_map(|entity| {
+                let entity = entity.try_borrow().ok()?;
+                if entity.get_id() == id {
+                    Some(entity.get_pos())
+                } else {
+                    None
+                }
+            }),
+            AgentTarget::Resource(pos) | AgentTarget::Fog(pos) => Some(pos),
+        })
+    }
+
     pub(crate) fn get_shape(&self) -> CollisionShape {
         CollisionShape::BBox(Obb {
             center: self.pos.into(),
@@ -444,35 +458,21 @@ impl Agent {
         BehaviorResult::Success
     }
 
-    pub(crate) fn find_fog(&mut self, game: &Game) -> bool {
-        let Some(pos) = Vector2::from(self.pos).cast::<i32>() else {
-            return false
-        };
-        let target = 'target: {
-            for range in 0..30 {
-                let fog = &game.fog[self.team];
-                let iy0 = (pos.y - range).max(0) as usize;
-                let iy1 = (pos.y + range).min(game.ys as i32) as usize;
-                let ix0 = (pos.x - range).max(0) as usize;
-                let ix1 = (pos.x + range).min(game.xs as i32) as usize;
-                for iy in iy0..=iy1 {
-                    for ix in ix0..=ix1 {
-                        let delta = pos - Vector2::new(ix as i32, iy as i32);
-                        if delta.magnitude2() < range.pow(2) {
-                            if game.is_passable_at([ix as f64, iy as f64])
-                                && !fog[ix + iy * game.xs]
-                            {
-                                break 'target [ix as f64, iy as f64];
-                            }
-                        }
-                    }
-                }
+    pub(crate) fn find_fog(&mut self, game: &mut Game) -> bool {
+        let team = self.team;
+        let qtree = &game.qtree;
+        let found_path = self.find_path_many(qtree, &game.path_find_profiler, |pos| {
+            game.is_passable_at(pos) && !game.is_clear_fog_at(team, pos)
+        });
+        let Ok(path) = found_path else { return false };
+        match path.first().copied() {
+            Some(node) => {
+                self.path = path;
+                self.target = Some(AgentTarget::Fog(node.pos));
+                true
             }
-            return false;
-        };
-
-        self.target = Some(AgentTarget::Fog(target));
-        true
+            _ => false,
+        }
     }
 
     pub(crate) fn shoot_bullet(&mut self, bullets: &mut Vec<Bullet>, target_pos: [f64; 2]) -> bool {

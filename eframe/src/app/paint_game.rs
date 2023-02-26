@@ -437,17 +437,10 @@ fn paint_agents(
         }
 
         if data.target_visible {
-            if let Some(target) = agent.get_target() {
-                if let Some(target) = game
-                    .entities
-                    .iter()
-                    .find(|agent| agent.borrow().get_id() == target)
-                {
-                    let target_pos = target.borrow().get_pos();
-                    let line = [pos, to_point(target_pos)];
+            if let Some(target_pos) = agent.get_target_pos(&data.game) {
+                let line = [pos, to_point(target_pos)];
 
-                    painter.line_segment(line, (1., brush));
-                }
+                painter.line_segment(line, (1., brush));
             }
         }
 

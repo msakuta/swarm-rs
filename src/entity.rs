@@ -93,6 +93,13 @@ impl Entity {
         }
     }
 
+    pub fn get_target_pos(&self, game: &Game) -> Option<[f64; 2]> {
+        match self {
+            Entity::Agent(agent) => agent.get_target_pos(game),
+            Entity::Spawner(_) => None,
+        }
+    }
+
     pub fn get_path(&self) -> Option<&[QTreePathNode]> {
         match self {
             Entity::Agent(agent) => Some(&agent.path),

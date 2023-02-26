@@ -391,6 +391,46 @@ impl QTree {
         (result, search_tree)
     }
 
+    /// Find many goals at the same time.
+    pub(crate) fn path_find_many(
+        &self,
+        ignore: impl Fn(usize) -> bool,
+        start: [f64; 2],
+        mut end: impl FnMut(QTreeIdx) -> bool,
+        goal_radius: f64,
+    ) -> (Result<QTreePath, PathFindError>, SearchTree) {
+        let mut result = Err(PathFindError::SearchFailed);
+        let Some(start_found) = self.find(start) else {
+            return (Err(PathFindError::StartBlocked), SearchTree::new())
+        };
+        if blocked(start_found.1, &ignore) {
+            dbg_println!("Start position {start:?} was occupied!");
+            return (Err(PathFindError::GoalBlocked), SearchTree::new());
+        }
+
+        let start_idx = (start_found.0, self.pos_to_idx(start, start_found.0));
+
+        dbg_println!("Start Searching from {start:?}");
+
+        let search_tree = self.explore(ignore, start_idx, |idx, state, closed_set| {
+            if end(idx) {
+                let mut path = vec![];
+                // The last node should directly connect to the goal
+                // path.push(QTreePathNode::new_with_qtree(end_idx, self));
+                path.push(QTreePathNode::new(self.idx_to_center(idx), goal_radius));
+                let mut node = Some(state);
+                while let Some(anode) = node {
+                    path.push(QTreePathNode::new_with_qtree(anode, self));
+                    node = closed_set.get(&anode).and_then(|bnode| bnode.came_from);
+                }
+                result = Ok(path);
+                return true;
+            }
+            false
+        });
+        (result, search_tree)
+    }
+
     /// Explore the quad tree structure from given start index. `terminate` will give a condition to terminate the search.
     /// Typically, it also constructs the path by tracking the tree in reverse.
     fn explore(
