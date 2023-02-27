@@ -1,7 +1,9 @@
 mod paint_game;
+mod syntax_highlighting;
 
 use std::{path::Path, rc::Rc};
 
+use self::syntax_highlighting::{highlight, CodeTheme};
 use crate::{
     app_data::{AppData, BTEditor},
     bg_image::BgImage,
@@ -520,6 +522,14 @@ impl SwarmRsApp {
             }
         });
 
+        let theme = CodeTheme::from_style(&ui.ctx().style());
+
+        let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
+            let mut layout_job = highlight(ui.ctx(), &theme, string);
+            layout_job.wrap.max_width = wrap_width;
+            ui.fonts().layout_job(layout_job)
+        };
+
         egui::ScrollArea::vertical().show(ui, |ui| {
             let source = &mut self.app_data.bt_buffer;
             if ui
@@ -529,7 +539,8 @@ impl SwarmRsApp {
                         .code_editor()
                         .desired_rows(10)
                         .lock_focus(true)
-                        .desired_width(f32::INFINITY),
+                        .desired_width(f32::INFINITY)
+                        .layouter(&mut layouter),
                 )
                 .changed()
             {
