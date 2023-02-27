@@ -23,6 +23,7 @@ cgmath = "0.18.0"
 wasm-bindgen = "0.2.84"
 web-sys = { version = "0.3.61", features = ["Storage", "Window"] }
 ron = "0.8.0"
+enum-map = { version = "2", features = ["serde"] }
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -33,3 +34,7 @@ wasm-bindgen-futures = "0.4"
 # native:
 # [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # tracing-subscriber = "0.3"
+
+[features]
+default = ["serde"]
+serde = []
