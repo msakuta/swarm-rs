@@ -316,6 +316,15 @@ impl SwarmRsApp {
                     profiler.get_count()
                 )
             });
+
+            ui.label({
+                let profiler = game.fow_raycast_profiler.borrow();
+                format!(
+                    "FoW raycast time: {:.06}ms, calls: {}",
+                    profiler.get_average() * 1e3,
+                    profiler.get_count()
+                )
+            });
         });
 
         ui.group(|ui| {

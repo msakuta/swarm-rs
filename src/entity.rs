@@ -5,6 +5,7 @@ use crate::{
     agent::{interpolation::interpolate_i, AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE},
     collision::CollisionShape,
     game::Game,
+    measure_time,
     qtree::QTreePathNode,
     spawner::{Spawner, SPAWNER_MAX_HEALTH, SPAWNER_MAX_RESOURCE},
 };
@@ -259,7 +260,8 @@ impl Entity {
         }
 
         if game.params.fow_raycasting {
-            self.fow_raycast(game);
+            let (_, time) = measure_time(|| self.fow_raycast(game));
+            game.fow_raycast_profiler.borrow_mut().add(time);
         } else {
             self.defog(game);
         }
