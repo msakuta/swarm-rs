@@ -2,7 +2,10 @@ use cgmath::{InnerSpace, Vector2};
 
 use crate::{
     agent::Agent,
-    agent::{AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE},
+    agent::{
+        interpolation::{interpolate_i, lerp},
+        AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE,
+    },
     collision::CollisionShape,
     game::Game,
     qtree::QTreePathNode,
@@ -258,7 +261,40 @@ impl Entity {
             }
         }
 
-        const VISION_RANGE: f64 = 10.;
+        if game.fow_raycasting {
+            self.fow_raycast(game);
+        } else {
+            self.defog(game);
+        }
+        ret
+    }
+
+    fn fow_raycast(&mut self, game: &mut Game) {
+        // The circumference of the range circle
+        const VISION_RANGE_CIRC: f64 = VISION_RANGE * 2. * std::f64::consts::PI;
+
+        let pos = Vector2::from(self.get_pos());
+
+        for i in 0..VISION_RANGE_CIRC as usize {
+            let theta = i as f64 * 2. * std::f64::consts::PI / VISION_RANGE_CIRC;
+            let end = pos + Vector2::new(theta.cos(), theta.sin()) * VISION_RANGE;
+            if let Some((pos, end)) = pos.cast().zip(end.cast()) {
+                interpolate_i(pos, end, |pos| {
+                    let res = !pos
+                        .cast()
+                        .map(|pos| game.is_passable_at(pos.into()))
+                        .unwrap_or(true);
+                    if !res {
+                        game.fog[self.get_team()][pos.x as usize + pos.y as usize * game.xs] = true;
+                    }
+                    res
+                });
+            }
+        }
+    }
+
+    /// Erase fog unconditionally within the radius
+    fn defog(&mut self, game: &mut Game) {
         let pos = Vector2::from(self.get_pos());
         let fog = &mut game.fog[self.get_team()];
         let iy0 = (pos.y - VISION_RANGE).max(0.) as usize;
@@ -274,6 +310,7 @@ impl Entity {
                 }
             }
         }
-        ret
     }
 }
+
+const VISION_RANGE: f64 = 10.;

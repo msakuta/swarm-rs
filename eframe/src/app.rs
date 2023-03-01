@@ -212,6 +212,11 @@ impl SwarmRsApp {
                 ui.label("Agents");
                 ui.add(egui::Slider::new(&mut self.agent_count, 1..=100));
             });
+
+            ui.checkbox(
+                &mut self.app_data.game_params.fow_raycasting,
+                "Fog raycasting",
+            );
         });
 
         ui.collapsing("View options", |ui| {

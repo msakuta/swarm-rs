@@ -117,6 +117,7 @@ pub struct GameParams {
     pub paused: bool,
     pub avoidance_expands: f64,
     pub agent_count: usize,
+    pub fow_raycasting: bool,
     pub teams: [TeamConfig; 2],
 }
 
@@ -127,6 +128,7 @@ impl GameParams {
             paused: false,
             avoidance_expands: 1.,
             agent_count: 3,
+            fow_raycasting: true,
             teams: Default::default(),
         }
     }
@@ -154,6 +156,8 @@ pub struct Game {
     pub qtree_profiler: RefCell<Profiler>,
     pub path_find_profiler: RefCell<Profiler>,
     pub agent_count: usize,
+    /// Use raycasting to check visibility to clear fog of war. It can be expensive.
+    pub(crate) fow_raycasting: bool,
     pub(crate) teams: [TeamConfig; 2],
     pub stats: [TeamStats; 2],
     pub qtree: QTreeSearcher,
@@ -203,6 +207,7 @@ impl Game {
             id_gen,
             avoidance_mode: AvoidanceMode::RrtStar,
             avoidance_expands: 1.,
+            fow_raycasting: true,
             temp_ents: vec![],
             triangle_profiler: RefCell::new(Profiler::new()),
             pixel_profiler: RefCell::new(Profiler::new()),
@@ -499,6 +504,7 @@ impl Game {
         self.avoidance_mode = params.avoidance_mode;
         self.avoidance_expands = params.avoidance_expands;
         self.agent_count = params.agent_count;
+        self.fow_raycasting = params.fow_raycasting;
         self.teams = params.teams.clone();
     }
 
