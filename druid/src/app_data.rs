@@ -104,7 +104,7 @@ impl AppData {
             maze_expansions: maze_expansion.to_string(),
             board_type: BoardType::Rooms,
             simplify_text: game.simplify.to_string(),
-            agent_count_text: game.agent_count.to_string(),
+            agent_count_text: game.params.agent_count.to_string(),
             game: Rc::new(RefCell::new(game)),
             game_params,
             line_mode: LineMode::None,

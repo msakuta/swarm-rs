@@ -158,7 +158,7 @@ pub struct Game {
     pub qtree_profiler: RefCell<Profiler>,
     pub path_find_profiler: RefCell<Profiler>,
     pub fow_raycast_profiler: RefCell<Profiler>,
-    pub(crate) params: GameParams,
+    pub params: GameParams,
     pub stats: [TeamStats; 2],
     pub qtree: QTreeSearcher,
 
@@ -735,7 +735,7 @@ impl Game {
 
     pub fn occupancy_image(&self, fog_active: &[bool; 2]) -> Option<([usize; 2], Vec<u8>)> {
         const OBSTACLE_COLOR: u8 = 80u8;
-        const BACKGROUND_COLOR: u8 = 127u8;
+        const BACKGROUND_COLOR: u8 = 191u8;
 
         if self.params.fow {
             let (fa0, fa1) = (fog_active[0], fog_active[1]);
