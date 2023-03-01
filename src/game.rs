@@ -117,6 +117,8 @@ pub struct GameParams {
     pub paused: bool,
     pub avoidance_expands: f64,
     pub agent_count: usize,
+    /// Fog of War, some area of the map is covered by lack of knowledge, adding some depth to the strategy.
+    pub fow: bool,
     /// Use raycasting to check visibility to clear fog of war. It can be expensive.
     pub fow_raycasting: bool,
     pub teams: [TeamConfig; 2],
@@ -129,6 +131,7 @@ impl GameParams {
             paused: false,
             avoidance_expands: 1.,
             agent_count: 3,
+            fow: true,
             fow_raycasting: true,
             teams: Default::default(),
         }
@@ -712,6 +715,9 @@ impl Game {
     }
 
     pub(crate) fn is_clear_fog_at(&self, team: usize, pos: [f64; 2]) -> bool {
+        if self.params.fow {
+            return true;
+        }
         if pos[0] < 0. || self.xs <= pos[0] as usize || pos[1] < 0. || self.ys <= pos[1] as usize {
             false
         } else {
@@ -728,26 +734,36 @@ impl Game {
     // }
 
     pub fn occupancy_image(&self, fog_active: &[bool; 2]) -> Option<([usize; 2], Vec<u8>)> {
-        const OBSTACLE_COLOR: u8 = 63u8;
+        const OBSTACLE_COLOR: u8 = 80u8;
         const BACKGROUND_COLOR: u8 = 127u8;
 
-        let (fa0, fa1) = (fog_active[0], fog_active[1]);
+        if self.params.fow {
+            let (fa0, fa1) = (fog_active[0], fog_active[1]);
 
-        Some((
-            [self.xs, self.ys],
-            self.board
-                .iter()
-                .zip(self.fog[0].iter().zip(self.fog[1].iter()))
-                .map(|(p, (f0, f1))| {
-                    let c = if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR };
-                    if !fa0 && !fa1 || fa0 && *f0 || fa1 && *f1 {
-                        c
-                    } else {
-                        c / 2
-                    }
-                })
-                .collect::<Vec<_>>(),
-        ))
+            Some((
+                [self.xs, self.ys],
+                self.board
+                    .iter()
+                    .zip(self.fog[0].iter().zip(self.fog[1].iter()))
+                    .map(|(p, (f0, f1))| {
+                        let c = if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR };
+                        if !fa0 && !fa1 || fa0 && *f0 || fa1 && *f1 {
+                            c
+                        } else {
+                            c / 2
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            ))
+        } else {
+            Some((
+                [self.xs, self.ys],
+                self.board
+                    .iter()
+                    .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
+                    .collect::<Vec<_>>(),
+            ))
+        }
     }
 
     pub fn labeled_image(&self) -> Option<([usize; 2], Vec<u8>)> {

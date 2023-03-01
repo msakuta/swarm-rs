@@ -259,11 +259,13 @@ impl Entity {
             }
         }
 
-        if game.params.fow_raycasting {
-            let (_, time) = measure_time(|| self.fow_raycast(game));
-            game.fow_raycast_profiler.borrow_mut().add(time);
-        } else {
-            self.defog(game);
+        if game.params.fow {
+            if game.params.fow_raycasting {
+                let (_, time) = measure_time(|| self.fow_raycast(game));
+                game.fow_raycast_profiler.borrow_mut().add(time);
+            } else {
+                self.defog(game);
+            }
         }
         ret
     }

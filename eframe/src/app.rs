@@ -213,10 +213,14 @@ impl SwarmRsApp {
                 ui.add(egui::Slider::new(&mut self.agent_count, 1..=100));
             });
 
-            ui.checkbox(
-                &mut self.app_data.game_params.fow_raycasting,
-                "Fog raycasting",
-            );
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.app_data.game_params.fow, "Fog of War");
+
+                ui.checkbox(
+                    &mut self.app_data.game_params.fow_raycasting,
+                    "Fog raycasting",
+                );
+            });
         });
 
         ui.collapsing("View options", |ui| {
