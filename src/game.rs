@@ -111,12 +111,13 @@ pub struct TeamStats {
 }
 
 #[cfg_attr(feature = "druid", derive(Data))]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GameParams {
     pub avoidance_mode: AvoidanceMode,
     pub paused: bool,
     pub avoidance_expands: f64,
     pub agent_count: usize,
+    /// Use raycasting to check visibility to clear fog of war. It can be expensive.
     pub fow_raycasting: bool,
     pub teams: [TeamConfig; 2],
 }
@@ -148,17 +149,12 @@ pub struct Game {
     pub(crate) fog: [Board; 2],
     pub(crate) rng: Xor128,
     pub(crate) id_gen: usize,
-    pub(crate) avoidance_mode: AvoidanceMode,
-    pub(crate) avoidance_expands: f64,
     pub temp_ents: Vec<TempEnt>,
     pub triangle_profiler: RefCell<Profiler>,
     pub pixel_profiler: RefCell<Profiler>,
     pub qtree_profiler: RefCell<Profiler>,
     pub path_find_profiler: RefCell<Profiler>,
-    pub agent_count: usize,
-    /// Use raycasting to check visibility to clear fog of war. It can be expensive.
-    pub(crate) fow_raycasting: bool,
-    pub(crate) teams: [TeamConfig; 2],
+    pub(crate) params: GameParams,
     pub stats: [TeamStats; 2],
     pub qtree: QTreeSearcher,
 
@@ -205,16 +201,12 @@ impl Game {
             fog,
             rng: Xor128::new(9318245),
             id_gen,
-            avoidance_mode: AvoidanceMode::RrtStar,
-            avoidance_expands: 1.,
-            fow_raycasting: true,
             temp_ents: vec![],
             triangle_profiler: RefCell::new(Profiler::new()),
             pixel_profiler: RefCell::new(Profiler::new()),
             qtree_profiler: RefCell::new(Profiler::new()),
             path_find_profiler: RefCell::new(Profiler::new()),
-            agent_count: 3,
-            teams: Default::default(),
+            params: GameParams::new(),
             stats: Default::default(),
             qtree,
             enable_raycast_board: false,
@@ -418,7 +410,7 @@ impl Game {
                 if static_ {
                     STATIC_SOURCE_FILE
                 } else {
-                    &self.teams[team].agent_source
+                    &self.params.teams[team].agent_source
                 },
             );
             match agent {
@@ -461,7 +453,7 @@ impl Game {
                     &mut self.id_gen,
                     pos_candidate,
                     team,
-                    &self.teams[team].spawner_source,
+                    &self.params.teams[team].spawner_source,
                 );
                 match spawner {
                     Ok(spawner) => return Some(Entity::Spawner(spawner)),
@@ -501,11 +493,7 @@ impl Game {
     }
 
     pub fn set_params(&mut self, params: &GameParams) {
-        self.avoidance_mode = params.avoidance_mode;
-        self.avoidance_expands = params.avoidance_expands;
-        self.agent_count = params.agent_count;
-        self.fow_raycasting = params.fow_raycasting;
-        self.teams = params.teams.clone();
+        self.params = params.clone();
     }
 
     pub fn update(&mut self) -> UpdateResult {

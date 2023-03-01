@@ -2,10 +2,7 @@ use cgmath::{InnerSpace, Vector2};
 
 use crate::{
     agent::Agent,
-    agent::{
-        interpolation::{interpolate_i, lerp},
-        AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE,
-    },
+    agent::{interpolation::interpolate_i, AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE},
     collision::CollisionShape,
     game::Game,
     qtree::QTreePathNode,
@@ -261,7 +258,7 @@ impl Entity {
             }
         }
 
-        if game.fow_raycasting {
+        if game.params.fow_raycasting {
             self.fow_raycast(game);
         } else {
             self.defog(game);

@@ -270,7 +270,7 @@ impl Agent {
         let mut env = SearchEnv {
             game,
             switch_back,
-            expand_states: game.avoidance_expands as usize,
+            expand_states: game.params.avoidance_expands as usize,
             skipped_nodes: 0,
             tree_size: 0,
             entities,
