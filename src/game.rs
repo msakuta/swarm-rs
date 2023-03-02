@@ -715,7 +715,7 @@ impl Game {
     }
 
     pub(crate) fn is_clear_fog_at(&self, team: usize, pos: [f64; 2]) -> bool {
-        if self.params.fow {
+        if !self.params.fow {
             return true;
         }
         if pos[0] < 0. || self.xs <= pos[0] as usize || pos[1] < 0. || self.ys <= pos[1] as usize {
