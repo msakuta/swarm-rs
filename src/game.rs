@@ -138,6 +138,8 @@ impl GameParams {
     }
 }
 
+type Fog = Vec<i32>;
+
 #[derive(Debug)]
 pub struct Game {
     pub(crate) xs: usize,
@@ -149,7 +151,8 @@ pub struct Game {
     pub bullets: Vec<Bullet>,
     pub resources: Vec<Resource>,
     pub interval: f64,
-    pub(crate) fog: [Board; 2],
+    /// The last updated age of each pixel. Newest updated pixels should have self.global_time.
+    pub(crate) fog: [Fog; 2],
     pub(crate) rng: Xor128,
     pub(crate) id_gen: usize,
     pub temp_ents: Vec<TempEnt>,
@@ -160,6 +163,7 @@ pub struct Game {
     pub fow_raycast_profiler: RefCell<Profiler>,
     pub params: GameParams,
     pub stats: [TeamStats; 2],
+    pub global_time: i32,
     pub qtree: QTreeSearcher,
 
     pub enable_raycast_board: bool,
@@ -187,7 +191,7 @@ impl Game {
         let shape = (xs, ys);
         let (qtree, timer) = measure_time(|| Self::new_qtree(shape, &board, &[]));
 
-        let fog = vec![false; board.len()];
+        let fog = vec![i32::MIN; board.len()];
         let fog = [fog.clone(), fog];
 
         println!("qtree time: {timer:?}");
@@ -213,6 +217,7 @@ impl Game {
             fow_raycast_profiler: RefCell::new(Profiler::new()),
             params: GameParams::new(),
             stats: Default::default(),
+            global_time: 0,
             qtree,
             enable_raycast_board: false,
             raycast_board: RefCell::new(vec![]),
@@ -287,7 +292,7 @@ impl Game {
             BoardType::Maze => Self::create_maze_board(&params),
         };
 
-        let fog = vec![false; board.len()];
+        let fog = vec![i32::MIN; board.len()];
 
         self.qtree = Self::new_qtree(params.shape, &board, &[]);
         self.raycast_board = RefCell::new(vec![]);
@@ -297,6 +302,7 @@ impl Game {
         self.entities = vec![];
         self.bullets = vec![];
         self.resources.clear();
+        self.global_time = 0;
     }
 
     fn new_qtree(
@@ -700,6 +706,8 @@ impl Game {
 
         self.try_new_resource();
 
+        self.global_time += 1;
+
         UpdateResult::Running
     }
 
@@ -721,7 +729,20 @@ impl Game {
         if pos[0] < 0. || self.xs <= pos[0] as usize || pos[1] < 0. || self.ys <= pos[1] as usize {
             false
         } else {
-            self.fog[team][pos[0] as usize + pos[1] as usize * self.xs]
+            self.global_time <= self.fog[team][pos[0] as usize + pos[1] as usize * self.xs]
+        }
+    }
+
+    pub(crate) fn is_fog_older_than(&self, team: usize, pos: [f64; 2], age: i32) -> bool {
+        if !self.params.fow {
+            return true;
+        }
+        if pos[0] < 0. || self.xs <= pos[0] as usize || pos[1] < 0. || self.ys <= pos[1] as usize {
+            false
+        } else {
+            age <= self
+                .global_time
+                .saturating_sub(self.fog[team][pos[0] as usize + pos[1] as usize * self.xs])
         }
     }
 
@@ -747,10 +768,18 @@ impl Game {
                     .zip(self.fog[0].iter().zip(self.fog[1].iter()))
                     .map(|(p, (f0, f1))| {
                         let c = if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR };
-                        if !fa0 && !fa1 || fa0 && *f0 || fa1 && *f1 {
+                        if !fa0 && !fa1 {
                             c
                         } else {
-                            c / 2
+                            const MAX_AGE: i32 = 1000;
+                            let age = self.global_time.saturating_sub(*if fa0 && fa1 {
+                                f0.max(f1)
+                            } else if fa0 {
+                                f0
+                            } else {
+                                f1
+                            });
+                            c.saturating_sub((c as i32 / 2 * age.min(MAX_AGE) / MAX_AGE) as u8)
                         }
                     })
                     .collect::<Vec<_>>(),

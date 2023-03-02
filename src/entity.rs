@@ -286,7 +286,8 @@ impl Entity {
                         .map(|pos| game.is_passable_at(pos.into()))
                         .unwrap_or(true);
                     if !res {
-                        game.fog[self.get_team()][pos.x as usize + pos.y as usize * game.xs] = true;
+                        game.fog[self.get_team()][pos.x as usize + pos.y as usize * game.xs] =
+                            game.global_time;
                     }
                     res
                 });
@@ -307,7 +308,7 @@ impl Entity {
                 let delta = Vector2::from(pos) - Vector2::new(ix as f64, iy as f64);
                 if delta.magnitude2() < VISION_RANGE.powf(2.) {
                     let p = &mut fog[ix + iy * game.xs];
-                    *p = true;
+                    *p = game.global_time;
                 }
             }
         }
