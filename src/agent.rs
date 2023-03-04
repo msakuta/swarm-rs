@@ -22,7 +22,7 @@ use crate::{
     behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource, PrintCommand},
     collision::{aabb_intersects, CollisionShape, Obb},
     entity::{Entity, MAX_LOG_ENTRIES},
-    fog_of_war::FOG_MAX_AGE,
+    fog_of_war::{EntityShadow, FOG_MAX_AGE},
     game::{is_passable_at_i, Game, Profiler, Resource},
     measure_time,
     qtree::{QTreePath, SearchTree},
@@ -305,8 +305,41 @@ impl Agent {
                 }
             });
 
-        if let Some((_dist, agent)) = best_agent {
-            self.target = Some(AgentTarget::Entity(agent.get_id()));
+        // Theoretically, a shadow entity could have shorter distance than know entities.
+        let best_shadow = game.fog[self.team]
+            .entities
+            .iter()
+            .map(|a| {
+                let distance = Vector2::from(a.pos).distance(Vector2::from(self.pos));
+                (distance, a)
+            })
+            .fold(None, |acc: Option<(f64, &EntityShadow)>, cur| {
+                if let Some(acc) = acc {
+                    if cur.0 < acc.0 {
+                        Some(cur)
+                    } else {
+                        Some(acc)
+                    }
+                } else {
+                    Some(cur)
+                }
+            });
+
+        match (best_agent, best_shadow) {
+            (Some(agent), Some(shadow)) => {
+                self.target = if agent.0 < shadow.0 {
+                    Some(AgentTarget::Entity(agent.1.get_id()))
+                } else {
+                    Some(AgentTarget::Entity(shadow.1.id))
+                };
+            }
+            (Some((_, agent)), None) => {
+                self.target = Some(AgentTarget::Entity(agent.get_id()));
+            }
+            (None, Some((_, shadow))) => {
+                self.target = Some(AgentTarget::Entity(shadow.id));
+            }
+            _ => self.target = None,
         }
     }
 
