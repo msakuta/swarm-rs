@@ -656,8 +656,31 @@ fn paint_resources(response: &Response, painter: &Painter, data: &AppData) {
         to_screen.transform_pos(((pos + offset) * data.scale as f32).to_pos2())
     };
 
-    for resource in &game.resources {
-        draw_resource(resource, to_point(resource.pos));
+    match (data.fog_active[0], data.fog_active[1]) {
+        (false, false) => {
+            for resource in &game.resources {
+                draw_resource(resource, to_point(resource.pos));
+            }
+        }
+        (true, false) => {
+            for resource in &game.fog[0].resources {
+                draw_resource(resource, to_point(resource.pos));
+            }
+        }
+        (false, true) => {
+            for resource in &game.fog[1].resources {
+                draw_resource(resource, to_point(resource.pos));
+            }
+        }
+        _ => {
+            for resource in game.fog[0]
+                .resources
+                .iter()
+                .chain(game.fog[1].resources.iter())
+            {
+                draw_resource(resource, to_point(resource.pos));
+            }
+        }
     }
 }
 

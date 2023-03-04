@@ -427,7 +427,7 @@ impl BehaviorNode for FollowPath {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(super) struct DriveCommand(pub f64);
 
 pub(super) struct DriveNode;
@@ -751,7 +751,7 @@ impl BehaviorNode for IsTargetVisibleNode {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(super) struct FaceToTargetCommand(pub [f64; 2]);
 
 pub(super) struct FaceToTargetNode;

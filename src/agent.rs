@@ -22,7 +22,7 @@ use crate::{
     behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource, PrintCommand},
     collision::{aabb_intersects, CollisionShape, Obb},
     entity::{Entity, MAX_LOG_ENTRIES},
-    game::{is_passable_at_i, Game, Profiler, Resource},
+    game::{is_passable_at_i, Game, Profiler, Resource, FOG_MAX_AGE},
     measure_time,
     qtree::{QTreePath, SearchTree},
     spawner::{SPAWNER_MAX_RESOURCE, SPAWNER_RADIUS},
@@ -374,14 +374,11 @@ impl Agent {
         }
     }
 
-    pub(crate) fn find_resource(&mut self, game: &Game, resources: &[Resource]) -> bool {
+    pub(crate) fn find_resource(&mut self, resources: &[Resource]) -> bool {
         let best_resource = resources
             .iter()
             // .filter_map(|a| a.try_borrow().ok())
             .filter_map(|a| {
-                if !game.is_clear_fog_at(self.team, a.pos) {
-                    return None;
-                }
                 let distance = Vector2::from(a.pos).distance(Vector2::from(self.pos));
                 Some((distance, a))
             })
@@ -462,7 +459,7 @@ impl Agent {
         let team = self.team;
         let qtree = &game.qtree;
         let found_path = self.find_path_many(qtree, &game.path_find_profiler, |pos| {
-            game.is_passable_at(pos) && !game.is_clear_fog_at(team, pos)
+            game.is_passable_at(pos) && game.is_fog_older_than(team, pos, FOG_MAX_AGE)
         });
         let Ok(path) = found_path else { return false };
         match path.first().copied() {
@@ -609,7 +606,7 @@ impl Agent {
                 } else if f.downcast_ref::<FindSpawner>().is_some() {
                     self.find_spawner(entities)
                 } else if f.downcast_ref::<FindResource>().is_some() {
-                    return Some(Box::new(self.find_resource(game, &game.resources)));
+                    return Some(Box::new(self.find_resource(&game.fog[self.team].resources)));
                 } else if f.downcast_ref::<FindFog>().is_some() {
                     return Some(Box::new(self.find_fog(game)));
                 } else if f.downcast_ref::<ClearTarget>().is_some() {

@@ -138,7 +138,23 @@ impl GameParams {
     }
 }
 
-type Fog = Vec<i32>;
+pub(crate) const FOG_MAX_AGE: i32 = 10000;
+
+/// A struct representing the subjective knowledge about the world state.
+#[derive(Debug, Clone)]
+pub struct FogOfWar {
+    pub fow: Vec<i32>,
+    pub resources: Vec<Resource>,
+}
+
+impl FogOfWar {
+    fn new(board: &Board) -> Self {
+        Self {
+            fow: vec![i32::MIN; board.len()],
+            resources: vec![],
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Game {
@@ -152,7 +168,7 @@ pub struct Game {
     pub resources: Vec<Resource>,
     pub interval: f64,
     /// The last updated age of each pixel. Newest updated pixels should have self.global_time.
-    pub(crate) fog: [Fog; 2],
+    pub fog: [FogOfWar; 2],
     pub(crate) rng: Xor128,
     pub(crate) id_gen: usize,
     pub temp_ents: Vec<TempEnt>,
@@ -191,7 +207,7 @@ impl Game {
         let shape = (xs, ys);
         let (qtree, timer) = measure_time(|| Self::new_qtree(shape, &board, &[]));
 
-        let fog = vec![i32::MIN; board.len()];
+        let fog = FogOfWar::new(&board);
         let fog = [fog.clone(), fog];
 
         println!("qtree time: {timer:?}");
@@ -292,7 +308,7 @@ impl Game {
             BoardType::Maze => Self::create_maze_board(&params),
         };
 
-        let fog = vec![i32::MIN; board.len()];
+        let fog = FogOfWar::new(&board);
 
         self.qtree = Self::new_qtree(params.shape, &board, &[]);
         self.raycast_board = RefCell::new(vec![]);
@@ -692,6 +708,25 @@ impl Game {
         // }
 
         for team in 0..2 {
+            // Clean up stale memory in visible area
+            let resources = std::mem::take(&mut self.fog[team].resources);
+            let mut resources: Vec<Resource> = resources
+                .into_iter()
+                .filter(|res| !self.is_clear_fog_at(team, res.pos))
+                .collect();
+
+            for resource in &self.resources {
+                if !self.is_clear_fog_at(team, resource.pos) {
+                    continue;
+                }
+                if resources.iter().all(|res| res.pos != resource.pos) {
+                    resources.push(resource.clone());
+                }
+            }
+
+            let fog = &mut self.fog[team];
+            fog.resources = resources;
+
             if !entities
                 .iter()
                 .any(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
@@ -729,7 +764,7 @@ impl Game {
         if pos[0] < 0. || self.xs <= pos[0] as usize || pos[1] < 0. || self.ys <= pos[1] as usize {
             false
         } else {
-            self.global_time <= self.fog[team][pos[0] as usize + pos[1] as usize * self.xs]
+            self.global_time <= self.fog[team].fow[pos[0] as usize + pos[1] as usize * self.xs]
         }
     }
 
@@ -742,7 +777,7 @@ impl Game {
         } else {
             age <= self
                 .global_time
-                .saturating_sub(self.fog[team][pos[0] as usize + pos[1] as usize * self.xs])
+                .saturating_sub(self.fog[team].fow[pos[0] as usize + pos[1] as usize * self.xs])
         }
     }
 
@@ -765,13 +800,12 @@ impl Game {
                 [self.xs, self.ys],
                 self.board
                     .iter()
-                    .zip(self.fog[0].iter().zip(self.fog[1].iter()))
+                    .zip(self.fog[0].fow.iter().zip(self.fog[1].fow.iter()))
                     .map(|(p, (f0, f1))| {
                         let c = if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR };
                         if !fa0 && !fa1 {
                             c
                         } else {
-                            const MAX_AGE: i32 = 1000;
                             let age = self.global_time.saturating_sub(*if fa0 && fa1 {
                                 f0.max(f1)
                             } else if fa0 {
@@ -779,7 +813,7 @@ impl Game {
                             } else {
                                 f1
                             });
-                            c.saturating_sub((c as i32 / 2 * age.min(MAX_AGE) / MAX_AGE) as u8)
+                            c.saturating_sub((c as i32 / 2 * age.min(FOG_MAX_AGE) / FOG_MAX_AGE) as u8)
                         }
                     })
                     .collect::<Vec<_>>(),
