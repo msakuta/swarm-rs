@@ -13,6 +13,7 @@ use crate::{
     agent::{Agent, AgentClass, AgentState, Bullet},
     collision::CollisionShape,
     entity::{Entity, GameEvent},
+    fog_of_war::{FogOfWar, FOG_MAX_AGE},
     measure_time,
     mesh::{create_mesh, Mesh, MeshResult},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
@@ -134,24 +135,6 @@ impl GameParams {
             fow: true,
             fow_raycasting: true,
             teams: Default::default(),
-        }
-    }
-}
-
-pub(crate) const FOG_MAX_AGE: i32 = 10000;
-
-/// A struct representing the subjective knowledge about the world state.
-#[derive(Debug, Clone)]
-pub struct FogOfWar {
-    pub fow: Vec<i32>,
-    pub resources: Vec<Resource>,
-}
-
-impl FogOfWar {
-    fn new(board: &Board) -> Self {
-        Self {
-            fow: vec![i32::MIN; board.len()],
-            resources: vec![],
         }
     }
 }
@@ -524,6 +507,8 @@ impl Game {
     }
 
     pub fn update(&mut self) -> UpdateResult {
+        self.global_time += 1;
+
         if self.enable_raycast_board {
             let mut raycast_board = self.raycast_board.borrow_mut();
             if raycast_board.len() != self.board.len() {
@@ -708,24 +693,8 @@ impl Game {
         // }
 
         for team in 0..2 {
-            // Clean up stale memory in visible area
-            let resources = std::mem::take(&mut self.fog[team].resources);
-            let mut resources: Vec<Resource> = resources
-                .into_iter()
-                .filter(|res| !self.is_clear_fog_at(team, res.pos))
-                .collect();
-
-            for resource in &self.resources {
-                if !self.is_clear_fog_at(team, resource.pos) {
-                    continue;
-                }
-                if resources.iter().all(|res| res.pos != resource.pos) {
-                    resources.push(resource.clone());
-                }
-            }
-
-            let fog = &mut self.fog[team];
-            fog.resources = resources;
+            self.fog_resource(team);
+            self.fog_entities(team, &entities);
 
             if !entities
                 .iter()
@@ -741,8 +710,6 @@ impl Game {
 
         self.try_new_resource();
 
-        self.global_time += 1;
-
         UpdateResult::Running
     }
 
@@ -757,7 +724,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn is_clear_fog_at(&self, team: usize, pos: [f64; 2]) -> bool {
+    pub fn is_clear_fog_at(&self, team: usize, pos: [f64; 2]) -> bool {
         if !self.params.fow {
             return true;
         }
@@ -813,7 +780,9 @@ impl Game {
                             } else {
                                 f1
                             });
-                            c.saturating_sub((c as i32 / 2 * age.min(FOG_MAX_AGE) / FOG_MAX_AGE) as u8)
+                            c.saturating_sub(
+                                (c as i32 / 2 * age.min(FOG_MAX_AGE) / FOG_MAX_AGE) as u8,
+                            )
                         }
                     })
                     .collect::<Vec<_>>(),
