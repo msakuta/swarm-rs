@@ -775,7 +775,11 @@ impl Game {
     //     }
     // }
 
-    pub fn occupancy_image(&self, fog_active: &[bool; 2]) -> Option<([usize; 2], Vec<u8>)> {
+    pub fn occupancy_image(
+        &self,
+        fog_active: &[bool; 2],
+        colored_fog: bool,
+    ) -> Option<([usize; 2], Vec<u8>)> {
         const OBSTACLE_COLOR: u8 = 80u8;
         const BACKGROUND_COLOR: u8 = 191u8;
 
@@ -789,25 +793,44 @@ impl Game {
                     .zip(self.fog[0].fow.iter().zip(self.fog[1].fow.iter()))
                     .map(|(p, (f0, f1))| {
                         let c = if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR };
-                        if !fa0 && !fa1 {
-                            c
-                        } else {
-                            let age = self.global_time.saturating_sub(*if fa0 && fa1 {
-                                f0.max(f1)
-                            } else if fa0 {
-                                f0
-                            } else {
-                                f1
-                            });
+
+                        let age_map = |time| {
+                            let age = self.global_time.saturating_sub(time);
                             if age == 0 {
                                 c
                             } else if age < FOG_MAX_AGE {
-                                c / 2
+                                (c as i32 * 2 / 3) as u8
                             } else {
-                                c / 4
+                                c / 2
                             }
+                        };
+
+                        if !fa0 && !fa1 {
+                            [c, c, c]
+                        } else if colored_fog {
+                            if fa0 && fa1 {
+                                let (c0, c1) = (age_map(*f0), age_map(*f1));
+                                [c1 / 2, c0 / 2, c1.max(c0)]
+                            } else if fa0 {
+                                let c0 = age_map(*f0);
+                                [c / 4, c0 / 2, c0]
+                            } else {
+                                let c1 = age_map(*f1);
+                                [c1 / 2, c / 4, c1]
+                            }
+                        } else {
+                            let age = if fa0 && fa1 {
+                                *f0.max(f1)
+                            } else if fa0 {
+                                *f0
+                            } else {
+                                *f1
+                            };
+                            let cc = age_map(age);
+                            [cc / 2, cc / 2, cc]
                         }
                     })
+                    .flatten()
                     .collect::<Vec<_>>(),
             ))
         } else {

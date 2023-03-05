@@ -272,6 +272,7 @@ impl SwarmRsApp {
                 for (i, fog_active) in self.app_data.fog_active.iter_mut().enumerate() {
                     ui.add(egui::Checkbox::new(fog_active, format!("Fog team {i}")));
                 }
+                ui.checkbox(&mut self.app_data.colored_fog, "Colored fog");
                 ui.checkbox(
                     &mut self.app_data.game_params.fow_raycast_visible,
                     "Fog raycast",

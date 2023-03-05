@@ -127,13 +127,8 @@ impl SwarmRsApp {
             let image_getter = |app_data: &AppData| {
                 let (size, image) = app_data
                     .game
-                    .occupancy_image(&app_data.fog_active)
+                    .occupancy_image(&app_data.fog_active, app_data.colored_fog)
                     .unwrap_or_else(|| ([0, 0], vec![]));
-                let image = image
-                    .into_iter()
-                    .map(|b| [b / 2, b / 2, b])
-                    .flatten()
-                    .collect::<Vec<_>>();
                 egui::ColorImage::from_rgb(size, &image)
             };
 
@@ -161,7 +156,7 @@ impl SwarmRsApp {
                         |app_data: &AppData| {
                             let (size, image) = app_data
                                 .game
-                                .occupancy_image(&app_data.fog_active)
+                                .occupancy_image(&app_data.fog_active, app_data.colored_fog)
                                 .unwrap_or_else(|| ([0, 0], vec![]));
                             let image = image
                                 .into_iter()
