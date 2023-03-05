@@ -122,6 +122,7 @@ pub struct GameParams {
     pub fow: bool,
     /// Use raycasting to check visibility to clear fog of war. It can be expensive.
     pub fow_raycasting: bool,
+    pub fow_raycast_visible: bool,
     pub teams: [TeamConfig; 2],
 }
 
@@ -134,6 +135,7 @@ impl GameParams {
             agent_count: 3,
             fow: true,
             fow_raycasting: true,
+            fow_raycast_visible: false,
             teams: Default::default(),
         }
     }
@@ -170,6 +172,7 @@ pub struct Game {
     pub raycast_board: RefCell<Vec<u8>>,
     pub fog_rays: Vec<Vec<[i32; 2]>>,
     pub fog_graph: Vec<Vec<[i32; 2]>>,
+    pub(crate) fog_graph_forward: Vec<Vec<[i32; 2]>>,
     pub fog_graph_real: Vec<Vec<[[i32; 2]; 2]>>,
 }
 
@@ -198,6 +201,8 @@ impl Game {
 
         println!("qtree time: {timer:?}");
 
+        let (fog_graph, fog_graph_forward) = precompute_ray_graph(VISION_RANGE as usize);
+
         Self {
             xs,
             ys,
@@ -224,7 +229,8 @@ impl Game {
             enable_raycast_board: false,
             raycast_board: RefCell::new(vec![]),
             fog_rays: vec![],
-            fog_graph: precompute_ray_graph(VISION_RANGE as usize),
+            fog_graph,
+            fog_graph_forward,
             fog_graph_real: vec![],
         }
     }
@@ -789,9 +795,13 @@ impl Game {
                             } else {
                                 f1
                             });
-                            c.saturating_sub(
-                                (c as i32 / 2 * age.min(FOG_MAX_AGE) / FOG_MAX_AGE) as u8,
-                            )
+                            if age == 0 {
+                                c
+                            } else if age < FOG_MAX_AGE {
+                                c / 2
+                            } else {
+                                c / 4
+                            }
                         }
                     })
                     .collect::<Vec<_>>(),
@@ -885,15 +895,17 @@ pub fn is_passable_at_i(board: &[bool], shape: (usize, usize), pos: impl Into<[i
     }
 }
 
-fn precompute_ray_graph(range: usize) -> Vec<Vec<[i32; 2]>> {
+fn precompute_ray_graph(range: usize) -> (Vec<Vec<[i32; 2]>>, Vec<Vec<[i32; 2]>>) {
     let mut graph = vec![vec![]; range * range];
+    let mut forward = vec![vec![]; range * range];
     for y in 0..range as i32 {
         for x in 0..range as i32 {
             interpolate_i([0, 0], [x, y], |p| {
                 graph[p.x as usize + p.y as usize * range].push([x, y].into());
+                forward[x as usize + y as usize * range].push(p.into());
                 false
             });
         }
     }
-    graph
+    (graph, forward)
 }

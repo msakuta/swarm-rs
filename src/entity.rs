@@ -320,12 +320,6 @@ impl Entity {
             }
         }
 
-        println!(
-            "passable: {} / {}",
-            visibility_map.iter().filter(|b| **b).count(),
-            visibility_map.len()
-        );
-
         let mut real_graph = vec![];
         for yf in 0..VISION_RANGE_FULL {
             let y = yf as i32 - VISION_RANGE_I + 1;
@@ -335,7 +329,21 @@ impl Entity {
                 if visibility_map[xf + yf * VISION_RANGE_FULL] {
                     game.fog[self.get_team()].fow[pos.x as usize + pos.y as usize * game.xs] =
                         game.global_time;
-                } else {
+                } else if game.params.fow_raycast_visible {
+                    if game.fog_graph_forward[graph_shape.idx(x.abs() as isize, y.abs() as isize)]
+                        .iter()
+                        .any(|forward| {
+                            let jxf = (forward[0] * x.signum() + VISION_RANGE_I - 1) as usize;
+                            let jyf = (forward[1] * y.signum() + VISION_RANGE_I - 1) as usize;
+                            if *forward == [x.abs(), y.abs()] {
+                                return false;
+                            }
+                            !visibility_map[jxf + jyf * VISION_RANGE_FULL]
+                        })
+                    {
+                        continue;
+                    }
+
                     for ys in [-1, 1] {
                         if ys * y < 0 {
                             continue;
