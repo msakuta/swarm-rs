@@ -343,29 +343,50 @@ fn paint_agents(bundle: (&Response, &Painter), app: &SwarmRsApp, view_transform:
         to_screen.transform_pos(((pos + offset) * data.scale as f32).to_pos2())
     };
 
-    let mut ray_duplicates = HashMap::new();
+    // let mut ray_duplicates = HashMap::new();
 
-    for ray in &game.fog_rays {
-        for point in ray {
-            *ray_duplicates.entry(point).or_insert(0) += 1;
-        }
+    // for ray in &game.fog_rays {
+    //     for point in ray {
+    //         *ray_duplicates.entry(point).or_insert(0) += 1;
+    //     }
+    // }
+
+    // for ray in &game.fog_rays {
+    //     let path = ray
+    //         .iter()
+    //         .map(|point| to_point([point[0] as f64 + 0.5, point[1] as f64 + 0.5]))
+    //         .collect();
+    //     bundle.1.add(PathShape::line(path, (1., Color32::WHITE)));
+    // }
+
+    // for (point, count) in &ray_duplicates {
+    //     if 1 < *count {
+    //         let pos = to_point([point[0] as f64 + 0.5, point[1] as f64 + 0.5]);
+    //         bundle.1.circle_filled(
+    //             pos,
+    //             ((*count).min(10) as f32 * 2.).sqrt(),
+    //             Color32::from_rgb(255, 127, 127),
+    //         );
+    //     }
+    // }
+
+    fn vec2f32(v: [impl Into<f32> + Copy; 2]) -> [f32; 2] {
+        [v[0].into(), v[1].into()]
     }
 
-    for ray in &game.fog_rays {
-        let path = ray
-            .iter()
-            .map(|point| to_point([point[0] as f64 + 0.5, point[1] as f64 + 0.5]))
-            .collect();
-        bundle.1.add(PathShape::line(path, (1., Color32::WHITE)));
+    fn vec2cast<T>(v: [impl Into<T> + Copy; 2]) -> [T; 2] {
+        [v[0].into(), v[1].into()]
     }
 
-    for (point, count) in &ray_duplicates {
-        if 1 < *count {
-            let pos = to_point([point[0] as f64 + 0.5, point[1] as f64 + 0.5]);
-            bundle.1.circle_filled(
-                pos,
-                ((*count).min(10) as f32 * 2.).sqrt(),
-                Color32::from_rgb(255, 127, 127),
+    fn vec2f64(v: [i32; 2]) -> [f64; 2] {
+        [v[0] as f64 + 0.5, v[1] as f64 + 0.5]
+    }
+
+    for graph in &game.fog_graph_real {
+        for pix in graph {
+            bundle.1.line_segment(
+                [to_point(vec2f64(pix[0])), to_point(vec2f64(pix[1]))],
+                (1., Color32::WHITE),
             );
         }
     }

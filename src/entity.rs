@@ -273,60 +273,88 @@ impl Entity {
     }
 
     fn fow_raycast(&mut self, game: &mut Game) {
-        // The circumference of the range circle
-        const VISION_RANGE_CIRC: f64 = VISION_RANGE * 2. * std::f64::consts::PI;
-
         let pos = Vector2::from(self.get_pos());
+        let pos_i = pos.cast::<i32>().unwrap();
 
-        fn circle_octant(range: usize, mut put: impl FnMut(usize, usize)) {
-            let mut y = range;
-            for x in 0..range {
-                let d = x * x + y * y < range * range;
-                if !d {
-                    y = y.saturating_sub(1);
+        const VISION_RANGE_U: usize = VISION_RANGE as usize;
+        const VISION_RANGE_I: i32 = VISION_RANGE as i32;
+        const VISION_RANGE_FULL: usize = VISION_RANGE_U * 2 - 1;
+
+        assert_eq!(game.fog_graph.len(), VISION_RANGE_U * VISION_RANGE_U);
+
+        let mut visibility_map = vec![true; VISION_RANGE_FULL * VISION_RANGE_FULL];
+        for yf in 0..VISION_RANGE_FULL {
+            let y = yf as i32 - VISION_RANGE_I + 1;
+            for xf in 0..VISION_RANGE_FULL {
+                let x = xf as i32 - VISION_RANGE_I + 1;
+                if VISION_RANGE_I * VISION_RANGE_I < x * x + y * y {
+                    visibility_map[xf + yf * VISION_RANGE_FULL] = false;
+                    continue;
                 }
-                if y < x {
-                    break;
+                let pos = pos_i + Vector2::new(x, y);
+                let res = game.is_passable_at(pos.cast::<f64>().unwrap().into());
+                if !res && visibility_map[xf + yf * VISION_RANGE_FULL] {
+                    visibility_map[xf + yf * VISION_RANGE_FULL] = false;
+
+                    let mut open_states = vec![[x as i32, y as i32]];
+                    while let Some(open_state) = open_states.pop() {
+                        for jyf in 0..VISION_RANGE_FULL {
+                            let jy = jyf as i32 - VISION_RANGE_I + 1;
+                            for jxf in 0..VISION_RANGE_FULL {
+                                let jx = jxf as i32 - VISION_RANGE_I + 1;
+                                let mut prev_state = game.fog_graph
+                                    [jx.abs() as usize + jy.abs() as usize * VISION_RANGE_U];
+                                if jx < 0 {
+                                    prev_state[0] *= -1;
+                                }
+                                if jy < 0 {
+                                    prev_state[1] *= -1;
+                                }
+                                if open_state == prev_state {
+                                    visibility_map[jxf + jyf * VISION_RANGE_FULL] = false;
+                                    let j_state = [jx as i32, jy as i32];
+                                    if j_state != prev_state {
+                                        open_states.push(j_state);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-                put(x, y);
             }
         }
 
-        let pos_i = pos.cast::<i32>().unwrap();
+        println!(
+            "passable: {} / {}",
+            visibility_map.iter().filter(|b| **b).count(),
+            visibility_map.len()
+        );
 
-        let mut interpolator = |end: [isize; 2]| {
-            if end[0] < 0 || game.xs as isize <= end[0] || end[1] < 0 || game.ys as isize <= end[1]
-            {
-                return;
-            }
-            let mut fog_ray = vec![];
-            interpolate_i(pos_i, Vector2::new(end[0] as i32, end[1] as i32), |pos| {
-                let res = !pos
-                    .cast()
-                    .map(|pos| game.is_passable_at(pos.into()))
-                    .unwrap_or(true);
-                if !res {
+        let mut real_graph = vec![];
+        for yf in 0..VISION_RANGE_FULL {
+            let y = yf as i32 - VISION_RANGE_I + 1;
+            for xf in 0..VISION_RANGE_FULL {
+                let x = xf as i32 - VISION_RANGE_I + 1;
+                if visibility_map[xf + yf * VISION_RANGE_FULL] {
+                    let pos = pos_i + Vector2::new(x, y).cast::<i32>().unwrap();
                     game.fog[self.get_team()].fow[pos.x as usize + pos.y as usize * game.xs] =
                         game.global_time;
-                    fog_ray.push([pos.x, pos.y]);
-                }
-                res
-            });
-            game.fog_rays.push(fog_ray);
-        };
-
-        circle_octant(VISION_RANGE as usize, |ux, uy| {
-            for ys in [-1, 1] {
-                for xs in [-1, 1] {
-                    let x = pos.x as isize + xs * ux as isize;
-                    let y = pos.y as isize + ys * uy as isize;
-                    interpolator([x, y]);
-                    let x = pos.x as isize + xs * uy as isize;
-                    let y = pos.y as isize + ys * ux as isize;
-                    interpolator([x, y]);
+                    let mut prev =
+                        game.fog_graph[x.abs() as usize + y.abs() as usize * VISION_RANGE_U];
+                    if x < 0 {
+                        prev[0] *= -1;
+                    }
+                    if y < 0 {
+                        prev[1] *= -1;
+                    }
+                    if prev != [0, 0] {
+                        real_graph.push([pos.into(), [pos_i.x + prev[0], pos_i.y + prev[1]]]);
+                    }
                 }
             }
-        });
+        }
+
+        game.fog_graph_real.push(real_graph);
     }
 
     /// Erase fog unconditionally within the radius
@@ -349,4 +377,4 @@ impl Entity {
     }
 }
 
-const VISION_RANGE: f64 = 15.;
+pub(crate) const VISION_RANGE: f64 = 15.;

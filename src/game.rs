@@ -12,7 +12,7 @@ use std::{
 use crate::{
     agent::{Agent, AgentClass, AgentState, Bullet},
     collision::CollisionShape,
-    entity::{Entity, GameEvent},
+    entity::{Entity, GameEvent, VISION_RANGE},
     fog_of_war::{FogOfWar, FOG_MAX_AGE},
     measure_time,
     mesh::{create_mesh, Mesh, MeshResult},
@@ -169,6 +169,8 @@ pub struct Game {
     /// A visualization of visited pixels by raycasting visibility checking
     pub raycast_board: RefCell<Vec<u8>>,
     pub fog_rays: Vec<Vec<[i32; 2]>>,
+    pub fog_graph: Vec<[i32; 2]>,
+    pub fog_graph_real: Vec<Vec<[[i32; 2]; 2]>>,
 }
 
 impl Game {
@@ -222,6 +224,8 @@ impl Game {
             enable_raycast_board: false,
             raycast_board: RefCell::new(vec![]),
             fog_rays: vec![],
+            fog_graph: precompute_ray_graph(VISION_RANGE as usize),
+            fog_graph_real: vec![],
         }
     }
 
@@ -512,6 +516,7 @@ impl Game {
         self.global_time += 1;
 
         self.fog_rays.clear();
+        self.fog_graph_real.clear();
 
         if self.enable_raycast_board {
             let mut raycast_board = self.raycast_board.borrow_mut();
@@ -878,4 +883,26 @@ pub fn is_passable_at_i(board: &[bool], shape: (usize, usize), pos: impl Into<[i
         let pos = [pos[0] as usize, pos[1] as usize];
         board[pos[0] + shape.0 * pos[1]]
     }
+}
+
+fn precompute_ray_graph(range: usize) -> Vec<[i32; 2]> {
+    let mut graph = vec![[0; 2]; range * range];
+    for y in 0..range as i32 {
+        for x in 0..range as i32 {
+            graph[x as usize + y as usize * range] = if x == 0 && y == 0 {
+                [0, 0]
+            } else if x == 0 {
+                [0, y - 1]
+            } else if y == 0 {
+                [x - 1, 0]
+            } else if x < y / 2 {
+                [x, y - 1]
+            } else if y < x / 2 {
+                [x - 1, y]
+            } else {
+                [x - 1, y - 1]
+            };
+        }
+    }
+    graph
 }
