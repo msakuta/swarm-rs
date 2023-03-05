@@ -2,11 +2,12 @@ use cgmath::{InnerSpace, Vector2};
 
 use crate::{
     agent::Agent,
-    agent::{interpolation::interpolate_i, AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE},
+    agent::{AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE},
     collision::CollisionShape,
     game::Game,
     measure_time,
     qtree::QTreePathNode,
+    shape::Idx,
     spawner::{Spawner, SPAWNER_MAX_HEALTH, SPAWNER_MAX_RESOURCE},
 };
 use std::{cell::RefCell, collections::VecDeque};
@@ -280,6 +281,8 @@ impl Entity {
         const VISION_RANGE_I: i32 = VISION_RANGE as i32;
         const VISION_RANGE_FULL: usize = VISION_RANGE_U * 2 - 1;
 
+        let graph_shape = (VISION_RANGE_U, VISION_RANGE_U);
+
         assert_eq!(game.fog_graph.len(), VISION_RANGE_U * VISION_RANGE_U);
 
         let mut visibility_map = vec![true; VISION_RANGE_FULL * VISION_RANGE_FULL];
@@ -296,27 +299,20 @@ impl Entity {
                 if !res && visibility_map[xf + yf * VISION_RANGE_FULL] {
                     visibility_map[xf + yf * VISION_RANGE_FULL] = false;
 
-                    let mut open_states = vec![[x as i32, y as i32]];
-                    while let Some(open_state) = open_states.pop() {
-                        for jyf in 0..VISION_RANGE_FULL {
-                            let jy = jyf as i32 - VISION_RANGE_I + 1;
-                            for jxf in 0..VISION_RANGE_FULL {
-                                let jx = jxf as i32 - VISION_RANGE_I + 1;
-                                let mut prev_state = game.fog_graph
-                                    [jx.abs() as usize + jy.abs() as usize * VISION_RANGE_U];
-                                if jx < 0 {
-                                    prev_state[0] *= -1;
-                                }
-                                if jy < 0 {
-                                    prev_state[1] *= -1;
-                                }
-                                if open_state == prev_state {
-                                    visibility_map[jxf + jyf * VISION_RANGE_FULL] = false;
-                                    let j_state = [jx as i32, jy as i32];
-                                    if j_state != prev_state {
-                                        open_states.push(j_state);
-                                    }
-                                }
+                    let ray_inverse =
+                        &game.fog_graph[graph_shape.idx(x.abs() as isize, y.abs() as isize)];
+                    for ys in [-1, 1] {
+                        if ys * y < 0 {
+                            continue;
+                        };
+                        for xs in [-1, 1] {
+                            if xs * x < 0 {
+                                continue;
+                            };
+                            for &[jx, jy] in ray_inverse {
+                                let jxf = (jx * xs + VISION_RANGE_I - 1) as usize;
+                                let jyf = (jy * ys + VISION_RANGE_I - 1) as usize;
+                                visibility_map[jxf + jyf * VISION_RANGE_FULL] = false;
                             }
                         }
                     }
@@ -335,20 +331,36 @@ impl Entity {
             let y = yf as i32 - VISION_RANGE_I + 1;
             for xf in 0..VISION_RANGE_FULL {
                 let x = xf as i32 - VISION_RANGE_I + 1;
+                let pos = pos_i + Vector2::new(x, y).cast::<i32>().unwrap();
                 if visibility_map[xf + yf * VISION_RANGE_FULL] {
-                    let pos = pos_i + Vector2::new(x, y).cast::<i32>().unwrap();
                     game.fog[self.get_team()].fow[pos.x as usize + pos.y as usize * game.xs] =
                         game.global_time;
-                    let mut prev =
-                        game.fog_graph[x.abs() as usize + y.abs() as usize * VISION_RANGE_U];
-                    if x < 0 {
-                        prev[0] *= -1;
-                    }
-                    if y < 0 {
-                        prev[1] *= -1;
-                    }
-                    if prev != [0, 0] {
-                        real_graph.push([pos.into(), [pos_i.x + prev[0], pos_i.y + prev[1]]]);
+                } else {
+                    for ys in [-1, 1] {
+                        if ys * y < 0 {
+                            continue;
+                        };
+                        for xs in [-1, 1] {
+                            if xs * x < 0 {
+                                continue;
+                            };
+                            for &(mut casted) in
+                                &game.fog_graph[graph_shape.idx(x.abs() as isize, y.abs() as isize)]
+                            {
+                                if xs < 0 {
+                                    casted[0] *= -1;
+                                }
+                                if ys < 0 {
+                                    casted[1] *= -1;
+                                }
+                                if casted != [0, 0] {
+                                    real_graph.push([
+                                        pos.into(),
+                                        [pos_i.x + casted[0], pos_i.y + casted[1]],
+                                    ]);
+                                }
+                            }
+                        }
                     }
                 }
             }

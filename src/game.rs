@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    agent::{Agent, AgentClass, AgentState, Bullet},
+    agent::{interpolation::interpolate_i, Agent, AgentClass, AgentState, Bullet},
     collision::CollisionShape,
     entity::{Entity, GameEvent, VISION_RANGE},
     fog_of_war::{FogOfWar, FOG_MAX_AGE},
@@ -169,7 +169,7 @@ pub struct Game {
     /// A visualization of visited pixels by raycasting visibility checking
     pub raycast_board: RefCell<Vec<u8>>,
     pub fog_rays: Vec<Vec<[i32; 2]>>,
-    pub fog_graph: Vec<[i32; 2]>,
+    pub fog_graph: Vec<Vec<[i32; 2]>>,
     pub fog_graph_real: Vec<Vec<[[i32; 2]; 2]>>,
 }
 
@@ -885,23 +885,14 @@ pub fn is_passable_at_i(board: &[bool], shape: (usize, usize), pos: impl Into<[i
     }
 }
 
-fn precompute_ray_graph(range: usize) -> Vec<[i32; 2]> {
-    let mut graph = vec![[0; 2]; range * range];
+fn precompute_ray_graph(range: usize) -> Vec<Vec<[i32; 2]>> {
+    let mut graph = vec![vec![]; range * range];
     for y in 0..range as i32 {
         for x in 0..range as i32 {
-            graph[x as usize + y as usize * range] = if x == 0 && y == 0 {
-                [0, 0]
-            } else if x == 0 {
-                [0, y - 1]
-            } else if y == 0 {
-                [x - 1, 0]
-            } else if x < y / 2 {
-                [x, y - 1]
-            } else if y < x / 2 {
-                [x - 1, y]
-            } else {
-                [x - 1, y - 1]
-            };
+            interpolate_i([0, 0], [x, y], |p| {
+                graph[p.x as usize + p.y as usize * range].push([x, y].into());
+                false
+            });
         }
     }
     graph
