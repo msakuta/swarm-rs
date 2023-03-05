@@ -282,43 +282,61 @@ impl Entity {
         const VISION_RANGE_FULL: usize = VISION_RANGE_U * 2 - 1;
 
         let graph_shape = (VISION_RANGE_U, VISION_RANGE_U);
+        let pos_a: [i32; 2] = pos_i.into();
 
-        assert_eq!(game.fog_graph.len(), VISION_RANGE_U * VISION_RANGE_U);
+        let visibility_map = if let Some(cache) =
+            game.fog_graph_cache
+                .get(&self.get_id())
+                .and_then(|(cache_pos, cache)| {
+                    if *cache_pos == pos_a {
+                        Some(cache)
+                    } else {
+                        None
+                    }
+                }) {
+            cache
+        } else {
+            assert_eq!(game.fog_graph.len(), VISION_RANGE_U * VISION_RANGE_U);
 
-        let mut visibility_map = vec![true; VISION_RANGE_FULL * VISION_RANGE_FULL];
-        for yf in 0..VISION_RANGE_FULL {
-            let y = yf as i32 - VISION_RANGE_I + 1;
-            for xf in 0..VISION_RANGE_FULL {
-                let x = xf as i32 - VISION_RANGE_I + 1;
-                if VISION_RANGE_I * VISION_RANGE_I < x * x + y * y {
-                    visibility_map[xf + yf * VISION_RANGE_FULL] = false;
-                    continue;
-                }
-                let pos = pos_i + Vector2::new(x, y);
-                let res = game.is_passable_at(pos.cast::<f64>().unwrap().into());
-                if !res && visibility_map[xf + yf * VISION_RANGE_FULL] {
-                    visibility_map[xf + yf * VISION_RANGE_FULL] = false;
+            let mut visibility_map = vec![true; VISION_RANGE_FULL * VISION_RANGE_FULL];
+            for yf in 0..VISION_RANGE_FULL {
+                let y = yf as i32 - VISION_RANGE_I + 1;
+                for xf in 0..VISION_RANGE_FULL {
+                    let x = xf as i32 - VISION_RANGE_I + 1;
+                    if VISION_RANGE_I * VISION_RANGE_I < x * x + y * y {
+                        visibility_map[xf + yf * VISION_RANGE_FULL] = false;
+                        continue;
+                    }
+                    let pos = pos_i + Vector2::new(x, y);
+                    let res = game.is_passable_at(pos.cast::<f64>().unwrap().into());
+                    if !res && visibility_map[xf + yf * VISION_RANGE_FULL] {
+                        visibility_map[xf + yf * VISION_RANGE_FULL] = false;
 
-                    let ray_inverse =
-                        &game.fog_graph[graph_shape.idx(x.abs() as isize, y.abs() as isize)];
-                    for ys in [-1, 1] {
-                        if ys * y < 0 {
-                            continue;
-                        };
-                        for xs in [-1, 1] {
-                            if xs * x < 0 {
+                        let ray_inverse =
+                            &game.fog_graph[graph_shape.idx(x.abs() as isize, y.abs() as isize)];
+                        for ys in [-1, 1] {
+                            if ys * y < 0 {
                                 continue;
                             };
-                            for &[jx, jy] in ray_inverse {
-                                let jxf = (jx * xs + VISION_RANGE_I - 1) as usize;
-                                let jyf = (jy * ys + VISION_RANGE_I - 1) as usize;
-                                visibility_map[jxf + jyf * VISION_RANGE_FULL] = false;
+                            for xs in [-1, 1] {
+                                if xs * x < 0 {
+                                    continue;
+                                };
+                                for &[jx, jy] in ray_inverse {
+                                    let jxf = (jx * xs + VISION_RANGE_I - 1) as usize;
+                                    let jyf = (jy * ys + VISION_RANGE_I - 1) as usize;
+                                    visibility_map[jxf + jyf * VISION_RANGE_FULL] = false;
+                                }
                             }
                         }
                     }
                 }
             }
-        }
+            game.fog_graph_cache
+                .insert(self.get_id(), (pos_i.into(), visibility_map));
+            let Some((_, cache)) = game.fog_graph_cache.get(&self.get_id()) else { return };
+            cache
+        };
 
         let mut real_graph = vec![];
         for yf in 0..VISION_RANGE_FULL {

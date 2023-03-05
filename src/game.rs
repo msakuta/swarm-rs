@@ -5,6 +5,7 @@ use cgmath::{InnerSpace, Vector2};
 
 use std::{
     cell::RefCell,
+    collections::HashMap,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering},
 };
@@ -13,7 +14,7 @@ use crate::{
     agent::{interpolation::interpolate_i, Agent, AgentClass, AgentState, Bullet},
     collision::CollisionShape,
     entity::{Entity, GameEvent, VISION_RANGE},
-    fog_of_war::{FogOfWar, FOG_MAX_AGE},
+    fog_of_war::{FogGraph, FogOfWar, FOG_MAX_AGE},
     measure_time,
     mesh::{create_mesh, Mesh, MeshResult},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
@@ -171,9 +172,10 @@ pub struct Game {
     /// A visualization of visited pixels by raycasting visibility checking
     pub raycast_board: RefCell<Vec<u8>>,
     pub fog_rays: Vec<Vec<[i32; 2]>>,
-    pub fog_graph: Vec<Vec<[i32; 2]>>,
-    pub(crate) fog_graph_forward: Vec<Vec<[i32; 2]>>,
+    pub fog_graph: FogGraph,
+    pub(crate) fog_graph_forward: FogGraph,
     pub fog_graph_real: Vec<Vec<[[i32; 2]; 2]>>,
+    pub(crate) fog_graph_cache: HashMap<usize, ([i32; 2], Vec<bool>)>,
 }
 
 impl Game {
@@ -232,6 +234,7 @@ impl Game {
             fog_graph,
             fog_graph_forward,
             fog_graph_real: vec![],
+            fog_graph_cache: HashMap::new(),
         }
     }
 
@@ -314,6 +317,7 @@ impl Game {
         self.bullets = vec![];
         self.resources.clear();
         self.global_time = 0;
+        self.fog_graph_cache.clear();
     }
 
     fn new_qtree(

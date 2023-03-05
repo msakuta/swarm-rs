@@ -43,6 +43,8 @@ impl From<&Entity> for EntityShadow {
     }
 }
 
+pub(crate) type FogGraph = Vec<Vec<[i32; 2]>>;
+
 impl Game {
     pub(crate) fn fog_resource(&mut self, team: usize) {
         // Clean up stale memory in visible area
