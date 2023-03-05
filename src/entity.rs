@@ -260,12 +260,14 @@ impl Entity {
         }
 
         if game.params.fow {
-            if game.params.fow_raycasting {
-                let (_, time) = measure_time(|| self.fow_raycast(game));
-                game.fow_raycast_profiler.borrow_mut().add(time);
-            } else {
-                self.defog(game);
-            }
+            let (_, time) = measure_time(|| {
+                if game.params.fow_raycasting {
+                    self.fow_raycast(game);
+                } else {
+                    self.defog(game);
+                }
+            });
+            game.fow_raycast_profiler.borrow_mut().add(time);
         }
         ret
     }
@@ -276,23 +278,55 @@ impl Entity {
 
         let pos = Vector2::from(self.get_pos());
 
-        for i in 0..VISION_RANGE_CIRC as usize {
-            let theta = i as f64 * 2. * std::f64::consts::PI / VISION_RANGE_CIRC;
-            let end = pos + Vector2::new(theta.cos(), theta.sin()) * VISION_RANGE;
-            if let Some((pos, end)) = pos.cast().zip(end.cast()) {
-                interpolate_i(pos, end, |pos| {
-                    let res = !pos
-                        .cast()
-                        .map(|pos| game.is_passable_at(pos.into()))
-                        .unwrap_or(true);
-                    if !res {
-                        game.fog[self.get_team()].fow[pos.x as usize + pos.y as usize * game.xs] =
-                            game.global_time;
-                    }
-                    res
-                });
+        fn circle_octant(range: usize, mut put: impl FnMut(usize, usize)) {
+            let mut y = range;
+            for x in 0..range {
+                let d = x * x + y * y < range * range;
+                if !d {
+                    y = y.saturating_sub(1);
+                }
+                if y < x {
+                    break;
+                }
+                put(x, y);
             }
         }
+
+        let pos_i = pos.cast::<i32>().unwrap();
+
+        let mut interpolator = |end: [isize; 2]| {
+            if end[0] < 0 || game.xs as isize <= end[0] || end[1] < 0 || game.ys as isize <= end[1]
+            {
+                return;
+            }
+            let mut fog_ray = vec![];
+            interpolate_i(pos_i, Vector2::new(end[0] as i32, end[1] as i32), |pos| {
+                let res = !pos
+                    .cast()
+                    .map(|pos| game.is_passable_at(pos.into()))
+                    .unwrap_or(true);
+                if !res {
+                    game.fog[self.get_team()].fow[pos.x as usize + pos.y as usize * game.xs] =
+                        game.global_time;
+                    fog_ray.push([pos.x, pos.y]);
+                }
+                res
+            });
+            game.fog_rays.push(fog_ray);
+        };
+
+        circle_octant(VISION_RANGE as usize, |ux, uy| {
+            for ys in [-1, 1] {
+                for xs in [-1, 1] {
+                    let x = pos.x as isize + xs * ux as isize;
+                    let y = pos.y as isize + ys * uy as isize;
+                    interpolator([x, y]);
+                    let x = pos.x as isize + xs * uy as isize;
+                    let y = pos.y as isize + ys * ux as isize;
+                    interpolator([x, y]);
+                }
+            }
+        });
     }
 
     /// Erase fog unconditionally within the radius
@@ -300,11 +334,11 @@ impl Entity {
         let pos = Vector2::from(self.get_pos());
         let fog = &mut game.fog[self.get_team()];
         let iy0 = (pos.y - VISION_RANGE).max(0.) as usize;
-        let iy1 = (pos.y + VISION_RANGE).min(game.ys as f64) as usize;
+        let iy1 = ((pos.y + VISION_RANGE) as usize).min(game.ys - 1) as usize;
         let ix0 = (pos.x - VISION_RANGE).max(0.) as usize;
-        let ix1 = (pos.x + VISION_RANGE).min(game.xs as f64) as usize;
-        for iy in iy0..iy1 {
-            for ix in ix0..ix1 {
+        let ix1 = ((pos.x + VISION_RANGE) as usize).min(game.xs - 1) as usize;
+        for iy in iy0..=iy1 {
+            for ix in ix0..=ix1 {
                 let delta = Vector2::from(pos) - Vector2::new(ix as f64, iy as f64);
                 if delta.magnitude2() < VISION_RANGE.powf(2.) {
                     let p = &mut fog.fow[ix + iy * game.xs];
@@ -315,4 +349,4 @@ impl Entity {
     }
 }
 
-const VISION_RANGE: f64 = 10.;
+const VISION_RANGE: f64 = 15.;

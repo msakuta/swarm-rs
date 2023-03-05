@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 
 use crate::app_data::AppData;
 use cgmath::{InnerSpace, Matrix2, Matrix3, MetricSpace, Point2, Rad, Transform, Vector2};
@@ -342,6 +342,33 @@ fn paint_agents(bundle: (&Response, &Painter), app: &SwarmRsApp, view_transform:
         let pos = Vec2::new(pos[0] as f32, pos[1] as f32);
         to_screen.transform_pos(((pos + offset) * data.scale as f32).to_pos2())
     };
+
+    let mut ray_duplicates = HashMap::new();
+
+    for ray in &game.fog_rays {
+        for point in ray {
+            *ray_duplicates.entry(point).or_insert(0) += 1;
+        }
+    }
+
+    for ray in &game.fog_rays {
+        let path = ray
+            .iter()
+            .map(|point| to_point([point[0] as f64 + 0.5, point[1] as f64 + 0.5]))
+            .collect();
+        bundle.1.add(PathShape::line(path, (1., Color32::WHITE)));
+    }
+
+    for (point, count) in &ray_duplicates {
+        if 1 < *count {
+            let pos = to_point([point[0] as f64 + 0.5, point[1] as f64 + 0.5]);
+            bundle.1.circle_filled(
+                pos,
+                ((*count).min(10) as f32 * 2.).sqrt(),
+                Color32::from_rgb(255, 127, 127),
+            );
+        }
+    }
 
     let filter_team = |team| {
         move |res: &&RefCell<Entity>| {

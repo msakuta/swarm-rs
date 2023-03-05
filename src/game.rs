@@ -168,6 +168,7 @@ pub struct Game {
     pub enable_raycast_board: bool,
     /// A visualization of visited pixels by raycasting visibility checking
     pub raycast_board: RefCell<Vec<u8>>,
+    pub fog_rays: Vec<Vec<[i32; 2]>>,
 }
 
 impl Game {
@@ -220,6 +221,7 @@ impl Game {
             qtree,
             enable_raycast_board: false,
             raycast_board: RefCell::new(vec![]),
+            fog_rays: vec![],
         }
     }
 
@@ -508,6 +510,8 @@ impl Game {
 
     pub fn update(&mut self) -> UpdateResult {
         self.global_time += 1;
+
+        self.fog_rays.clear();
 
         if self.enable_raycast_board {
             let mut raycast_board = self.raycast_board.borrow_mut();
