@@ -9,7 +9,9 @@ tree main = Sequence {
     Repeat (n <- "10000") {
         if (fight || fighter) {
             # Print(input <- "Fighting")
-            Fight
+            ForceSuccess {
+                Fight
+            }
         } else {
             ForceSuccess {
                 GatherResource(switchToFight -> fight)
@@ -27,16 +29,28 @@ tree main = Sequence {
 
 tree Fight = Sequence {
     var isTargetFog
-    if (!HasTarget) {
-        SetBool(value <- "false", output -> isTargetFog)
+    Throttle (time <- "100") {
+        SetBool (value <- "false", output -> isTargetFog)
         FindEnemy
         if (!HasTarget) {
-            ExploreFog
-            SetBool(value <- "true", output -> isTargetFog)
+            SetBool (value <- "true", output -> isTargetFog)
         }
     }
+
     if (isTargetFog) {
-        Print (input <- "targetting fog, don't shoot.")
+        ForceSuccess {
+            ExploreFog (fighting <- "true")
+        }
+        Print (input <- "targetting fog, don't shoot. target = {}", arg0 <- targetPos)
+
+        # Try re-targetting an enemy
+        FindEnemy
+
+        var targetType
+        GetTargetType (output -> targetType)
+        if (!StringEq(lhs <- targetType, rhs <- "Fog")) {
+            SetBool (value <- "false", output -> isTargetFog)
+        }
     } else {
         ForceSuccess {
             if (TargetPos (pos -> targetPos) && IsTargetVisible (target <- targetPos)) {
@@ -63,17 +77,17 @@ tree GatherResource(out switchToFight) = Sequence {
             FollowPathAndAvoid (fight <- "false")
             CollectResource
         } else {
-            ExploreFog
+            ExploreFog (fighting <- "false")
         }
     }
 }
 
-tree ExploreFog = Sequence {
+tree ExploreFog (in fighting) = Sequence {
     Print(input <- "Finding fog")
     FindFog
     TargetPos(pos -> targetPos)
     Print(input <- "Found fog at {}", arg0 <- targetPos)
-    FollowPathAndAvoidUntilArrival
+    FollowPathAndAvoidUntilArrival (fighting <- fighting)
 }
 
 tree TryReverse = ReactiveSequence {
@@ -118,13 +132,13 @@ tree FollowPathAndAvoid(in fight) = Sequence {
     }
 }
 
-tree FollowPathAndAvoidUntilArrival = Sequence {
+tree FollowPathAndAvoidUntilArrival(in fighting) = Sequence {
     TargetPos (pos -> target_pos)
     if (!HasPath) {
         FindPathPlan (try_reverse <- "true")
     }
 
-    # Try to search path every 50 ticks, even if we already have one, to update potentially moving target or obstacles
+    # Try to search path every 100 ticks, even if we already have one, to update potentially moving target or obstacles
     Throttle (time <- "100") {
         Sequence {
             # Attempt to find the closest enemy again

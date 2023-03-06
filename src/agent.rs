@@ -12,8 +12,8 @@ use self::{
         build_tree, AvoidanceCommand, ClearAvoidanceCommand, ClearPathNode, ClearTarget,
         CollectResource, DepositResource, DriveCommand, FaceToTargetCommand, FindEnemyCommand,
         FindFog, FindPathCommand, FindResource, FindSpawner, FollowPathCommand, GetClass,
-        GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode, IsResourceFull,
-        IsSpawnerResourceFull, IsTargetVisibleCommand, MoveToCommand, ShootCommand,
+        GetPathNextNodeCommand, GetStateCommand, GetTargetTypeNode, HasPathNode, HasTargetNode,
+        IsResourceFull, IsSpawnerResourceFull, IsTargetVisibleCommand, MoveToCommand, ShootCommand,
         SimpleAvoidanceCommand, TargetIdNode, TargetPosCommand,
     },
     motion::{MotionCommandResult, OrientToResult},
@@ -354,6 +354,17 @@ impl Agent {
         }
     }
 
+    fn get_target_type(&self) -> Option<Box<dyn std::any::Any>> {
+        Some(Box::new(
+            match self.target? {
+                AgentTarget::Entity(_) => "Entity",
+                AgentTarget::Fog(_) => "Fog",
+                AgentTarget::Resource(_) => "Resource",
+            }
+            .to_string(),
+        ))
+    }
+
     fn is_spawner_resource_full(&self, entities: &[RefCell<Entity>]) -> bool {
         entities
             .iter()
@@ -633,6 +644,8 @@ impl Agent {
                     return Some(Box::new(self.class));
                 } else if f.downcast_ref::<HasTargetNode>().is_some() {
                     return Some(Box::new(self.has_target(&entities)));
+                } else if f.downcast_ref::<GetTargetTypeNode>().is_some() {
+                    return self.get_target_type();
                 } else if f.downcast_ref::<TargetIdNode>().is_some() {
                     return Some(Box::new(self.target));
                 } else if f.downcast_ref::<FindEnemyCommand>().is_some() {

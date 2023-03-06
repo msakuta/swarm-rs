@@ -16,6 +16,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     common_tree_nodes(&mut registry);
     registry.register("GetClass", boxify(|| GetClass));
     registry.register("HasTarget", boxify(|| HasTargetNode));
+    registry.register("GetTargetType", boxify(|| GetTargetTypeNode));
     registry.register("TargetId", boxify(|| TargetIdNode));
     registry.register("TargetPos", boxify(|| TargetPosNode));
     registry.register("FindEnemy", boxify(|| FindEnemy));
@@ -90,6 +91,26 @@ impl BehaviorNode for HasTargetNode {
         } else {
             BehaviorResult::Fail
         }
+    }
+}
+
+pub(super) struct GetTargetTypeNode;
+
+impl BehaviorNode for GetTargetTypeNode {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_out("output")]
+    }
+
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let Some(result) = arg(&Self).and_then(|a| a.downcast_ref::<String>().cloned()) else {
+            return BehaviorResult::Fail;
+        };
+        ctx.set("output", result);
+        BehaviorResult::Success
     }
 }
 
