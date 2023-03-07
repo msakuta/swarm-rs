@@ -292,6 +292,14 @@ fn render_search_tree(data: &AppData, response: &Response, painter: &Painter) {
             continue;
         };
 
+        if data
+            .selected_entity
+            .map(|id| id != entity.get_id())
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
         let Some(st) = entity.get_search_tree() else {
             continue;
         };
