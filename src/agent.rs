@@ -25,7 +25,7 @@ use crate::{
     fog_of_war::{EntityShadow, FOG_MAX_AGE},
     game::{is_passable_at_i, Game, Profiler, Resource},
     measure_time,
-    qtree::{QTreePath, SearchTree},
+    qtree::{PathFindResponse, QTreePath, SearchTree},
     spawner::{SPAWNER_MAX_RESOURCE, SPAWNER_RADIUS},
 };
 use ::behavior_tree_lite::Context;
@@ -504,7 +504,11 @@ impl Agent {
         let team = self.team;
         let qtree = &game.qtree;
         let found_path = self.find_path_many(qtree, &game.path_find_profiler, |pos| {
-            game.is_passable_at(pos) && game.is_fog_older_than(team, pos, FOG_MAX_AGE)
+            if game.is_passable_at(pos) && game.is_fog_older_than(team, pos, FOG_MAX_AGE) {
+                PathFindResponse::Goal
+            } else {
+                PathFindResponse::Continue
+            }
         });
         let Ok(path) = found_path else { return false };
         match path.first().copied() {

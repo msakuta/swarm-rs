@@ -3,7 +3,7 @@ use std::{
     fmt::Display,
 };
 
-use super::{CellState, QTreePath, QTreePathNode, Rect, SearchTree};
+use super::{CellState, PathFindResponse, QTreePath, QTreePathNode, Rect, SearchTree};
 
 /// A quad tree to divide space for navigation.
 ///
@@ -333,6 +333,7 @@ impl QTree {
         ignore: impl Fn(usize) -> bool,
         start: [f64; 2],
         end: [f64; 2],
+        fog: &impl Fn([f64; 2]) -> bool,
         goal_radius: f64,
     ) -> (Result<QTreePath, PathFindError>, SearchTree) {
         let mut result = Err(PathFindError::SearchFailed);
@@ -384,9 +385,12 @@ impl QTree {
                     node = closed_set.get(&anode).and_then(|bnode| bnode.came_from);
                 }
                 result = Ok(path);
-                return true;
+                return PathFindResponse::Goal;
             }
-            false
+            if fog(self.idx_to_center(idx)) {
+                return PathFindResponse::Abandon;
+            }
+            PathFindResponse::Continue
         });
         (result, search_tree)
     }
@@ -396,7 +400,7 @@ impl QTree {
         &self,
         ignore: impl Fn(usize) -> bool,
         start: [f64; 2],
-        mut end: impl FnMut(QTreeIdx) -> bool,
+        mut end: impl FnMut(QTreeIdx) -> PathFindResponse,
         goal_radius: f64,
     ) -> (Result<QTreePath, PathFindError>, SearchTree) {
         let mut result = Err(PathFindError::SearchFailed);
@@ -413,20 +417,23 @@ impl QTree {
         dbg_println!("Start Searching from {start:?}");
 
         let search_tree = self.explore(ignore, start_idx, |idx, state, closed_set| {
-            if end(idx) {
-                let mut path = vec![];
-                // The last node should directly connect to the goal
-                // path.push(QTreePathNode::new_with_qtree(end_idx, self));
-                path.push(QTreePathNode::new(self.idx_to_center(idx), goal_radius));
-                let mut node = Some(state);
-                while let Some(anode) = node {
-                    path.push(QTreePathNode::new_with_qtree(anode, self));
-                    node = closed_set.get(&anode).and_then(|bnode| bnode.came_from);
+            let res = end(idx);
+            match res {
+                PathFindResponse::Goal => {
+                    let mut path = vec![];
+                    // The last node should directly connect to the goal
+                    // path.push(QTreePathNode::new_with_qtree(end_idx, self));
+                    path.push(QTreePathNode::new(self.idx_to_center(idx), goal_radius));
+                    let mut node = Some(state);
+                    while let Some(anode) = node {
+                        path.push(QTreePathNode::new_with_qtree(anode, self));
+                        node = closed_set.get(&anode).and_then(|bnode| bnode.came_from);
+                    }
+                    result = Ok(path);
+                    res
                 }
-                result = Ok(path);
-                return true;
+                _ => res,
             }
-            false
         });
         (result, search_tree)
     }
@@ -437,7 +444,11 @@ impl QTree {
         &self,
         ignore: impl Fn(usize) -> bool,
         start_idx: QTreeIdx,
-        mut terminate: impl FnMut(QTreeIdx, QTreeIdx, &HashMap<QTreeIdx, ClosedState>) -> bool,
+        mut terminate: impl FnMut(
+            QTreeIdx,
+            QTreeIdx,
+            &HashMap<QTreeIdx, ClosedState>,
+        ) -> PathFindResponse,
     ) -> SearchTree {
         let mut open_set = BinaryHeap::new();
 
@@ -466,8 +477,10 @@ impl QTree {
                 let nei_width = self.width(nei_level) as i32;
                 let nei_bottom = [nei_idx[0] * nei_width, nei_idx[1] * nei_width];
 
-                if terminate((nei_level, nei_idx), (state.level, state.idx), &closed_set) {
-                    return self.build_search_tree(closed_set);
+                match terminate((nei_level, nei_idx), (state.level, state.idx), &closed_set) {
+                    PathFindResponse::Goal => return self.build_search_tree(closed_set),
+                    PathFindResponse::Abandon => continue,
+                    _ => (),
                 }
                 let new_cost = state.cost + 1.;
                 let cell = self.levels[nei_level].get(&nei_idx);

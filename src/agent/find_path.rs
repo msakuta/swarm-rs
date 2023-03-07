@@ -4,9 +4,10 @@ use cgmath::{MetricSpace, Vector2};
 
 use super::{behavior_nodes::FindPathCommand, Agent, AgentTarget, AGENT_HALFLENGTH};
 use crate::{
+    fog_of_war::FOG_MAX_AGE,
     game::{Game, Profiler},
     measure_time,
-    qtree::{qtree::PathFindError, QTreePathNode, QTreeSearcher},
+    qtree::{qtree::PathFindError, PathFindResponse, QTreePathNode, QTreeSearcher},
     CellState,
 };
 
@@ -19,13 +20,15 @@ impl Agent {
         let ((found_path, search_tree), time) = measure_time(|| {
             let qtree = &game.qtree;
             let target = com.target;
+            let fog = |pos| game.is_fog_older_than(self.team, pos, FOG_MAX_AGE);
             if com.ignore_obstacles {
-                qtree.path_find(|_| true, self.pos, target, AGENT_HALFLENGTH * 1.5)
+                qtree.path_find(|_| true, self.pos, target, &fog, AGENT_HALFLENGTH * 1.5)
             } else if let Some(AgentTarget::Entity(tgt_id)) = self.target {
                 qtree.path_find(
                     ignore_id(&[self.id, tgt_id]),
                     self.pos,
                     target,
+                    &fog,
                     AGENT_HALFLENGTH * 1.5,
                 )
             } else {
@@ -33,6 +36,7 @@ impl Agent {
                     ignore_id(&[self.id]),
                     self.pos,
                     target,
+                    &fog,
                     AGENT_HALFLENGTH * 1.5,
                 )
             }
@@ -101,7 +105,7 @@ impl Agent {
         &mut self,
         qtree: &QTreeSearcher,
         path_find_profiler: &RefCell<Profiler>,
-        cond: impl FnMut([f64; 2]) -> bool,
+        cond: impl FnMut([f64; 2]) -> PathFindResponse,
     ) -> Result<Vec<QTreePathNode>, PathFindError> {
         let ((found_path, search_tree), time) =
             measure_time(|| qtree.path_find_many(ignore_id(&[self.id]), self.pos, cond, 1.));
