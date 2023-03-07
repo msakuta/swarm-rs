@@ -398,7 +398,7 @@ impl Game {
         static_: bool,
         randomness: f64,
     ) -> Option<Entity> {
-        const STATIC_SOURCE_FILE: &str = include_str!("../behavior_tree_config/test_obstacle.txt");
+        const STATIC_SOURCE_FILE: &str = include_str!("../behavior_tree_config/test_obstacle.btc");
         let rng = &mut self.rng;
         let id_gen = &mut self.id_gen;
         // let triangle_labels = &self.mesh.triangle_labels;

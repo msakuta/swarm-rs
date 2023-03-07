@@ -92,18 +92,18 @@ impl AppData {
         let teams = [
             TeamConfig {
                 agent_source: Rc::new(collapse_newlines(include_str!(
-                    "../../behavior_tree_config/green/agent.txt"
+                    "../../behavior_tree_config/green/agent.btc"
                 ))),
                 spawner_source: Rc::new(collapse_newlines(include_str!(
-                    "../../behavior_tree_config/green/spawner.txt"
+                    "../../behavior_tree_config/green/spawner.btc"
                 ))),
             },
             TeamConfig {
                 agent_source: Rc::new(collapse_newlines(include_str!(
-                    "../../behavior_tree_config/red/agent.txt"
+                    "../../behavior_tree_config/red/agent.btc"
                 ))),
                 spawner_source: Rc::new(collapse_newlines(include_str!(
-                    "../../behavior_tree_config/red/spawner.txt"
+                    "../../behavior_tree_config/red/spawner.btc"
                 ))),
             },
         ];

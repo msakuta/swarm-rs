@@ -21,20 +21,20 @@ pub struct StaticVfs {
 impl StaticVfs {
     pub fn new() -> Self {
         let green_agent =
-            collapse_newlines(include_str!("../behavior_tree_config/green/agent.txt"));
+            collapse_newlines(include_str!("../behavior_tree_config/green/agent.btc"));
         let green_spawner =
-            collapse_newlines(include_str!("../behavior_tree_config/green/spawner.txt"));
-        let red_agent = collapse_newlines(include_str!("../behavior_tree_config/red/agent.txt"));
+            collapse_newlines(include_str!("../behavior_tree_config/green/spawner.btc"));
+        let red_agent = collapse_newlines(include_str!("../behavior_tree_config/red/agent.btc"));
         let red_spawner =
-            collapse_newlines(include_str!("../behavior_tree_config/red/spawner.txt"));
+            collapse_newlines(include_str!("../behavior_tree_config/red/spawner.btc"));
         let agent_early =
-            collapse_newlines(include_str!("../behavior_tree_config/agent_early.txt"));
+            collapse_newlines(include_str!("../behavior_tree_config/agent_early.btc"));
         let mut files = HashMap::new();
-        files.insert("green/agent.txt".to_string(), green_agent.to_string());
-        files.insert("green/spawner.txt".to_string(), green_spawner.to_string());
-        files.insert("red/agent.txt".to_string(), red_agent.to_string());
-        files.insert("red/spawner.txt".to_string(), red_spawner.to_string());
-        files.insert("agent_early.txt".to_string(), agent_early.to_string());
+        files.insert("green/agent.btc".to_string(), green_agent.to_string());
+        files.insert("green/spawner.btc".to_string(), green_spawner.to_string());
+        files.insert("red/agent.btc".to_string(), red_agent.to_string());
+        files.insert("red/spawner.btc".to_string(), red_spawner.to_string());
+        files.insert("agent_early.btc".to_string(), agent_early.to_string());
         Self { files }
     }
 }
