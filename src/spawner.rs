@@ -123,7 +123,7 @@ impl Spawner {
                             .unwrap_or(false)
                     })
                     .count()
-                    < game.agent_count
+                    < game.params.agent_count
                     && rng.next() < 0.1
                 {
                     ret.push(GameEvent::SpawnAgent {

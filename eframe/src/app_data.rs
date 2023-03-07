@@ -70,6 +70,8 @@ pub struct AppData {
     pub qtree_visible: bool,
     pub qtree_search_visible: bool,
     pub target_visible: bool,
+    pub(crate) fog_active: [bool; 2],
+    pub(crate) colored_fog: bool,
     pub(crate) entity_label_visible: bool,
     pub(crate) entity_trace_visible: bool,
     pub(crate) global_render_time: f64,
@@ -90,18 +92,18 @@ impl AppData {
         let teams = [
             TeamConfig {
                 agent_source: Rc::new(collapse_newlines(include_str!(
-                    "../../behavior_tree_config/green/agent.txt"
+                    "../../behavior_tree_config/green/agent.btc"
                 ))),
                 spawner_source: Rc::new(collapse_newlines(include_str!(
-                    "../../behavior_tree_config/green/spawner.txt"
+                    "../../behavior_tree_config/green/spawner.btc"
                 ))),
             },
             TeamConfig {
                 agent_source: Rc::new(collapse_newlines(include_str!(
-                    "../../behavior_tree_config/red/agent.txt"
+                    "../../behavior_tree_config/red/agent.btc"
                 ))),
                 spawner_source: Rc::new(collapse_newlines(include_str!(
-                    "../../behavior_tree_config/red/spawner.txt"
+                    "../../behavior_tree_config/red/spawner.btc"
                 ))),
             },
         ];
@@ -141,6 +143,8 @@ impl AppData {
             qtree_visible: false,
             qtree_search_visible: false,
             target_visible: false,
+            fog_active: [true; 2],
+            colored_fog: false,
             entity_label_visible: true,
             entity_trace_visible: false,
             global_render_time: 0.,

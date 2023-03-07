@@ -16,11 +16,13 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     common_tree_nodes(&mut registry);
     registry.register("GetClass", boxify(|| GetClass));
     registry.register("HasTarget", boxify(|| HasTargetNode));
+    registry.register("GetTargetType", boxify(|| GetTargetTypeNode));
     registry.register("TargetId", boxify(|| TargetIdNode));
     registry.register("TargetPos", boxify(|| TargetPosNode));
     registry.register("FindEnemy", boxify(|| FindEnemy));
     registry.register("FindSpawner", boxify(|| FindSpawner));
     registry.register("FindResource", boxify(|| FindResource));
+    registry.register("FindFog", boxify(|| FindFog));
     registry.register("ClearTarget", boxify(|| ClearTarget));
     registry.register("CollectResource", boxify(|| CollectResource));
     registry.register("DepositResource", boxify(|| DepositResource));
@@ -92,6 +94,26 @@ impl BehaviorNode for HasTargetNode {
     }
 }
 
+pub(super) struct GetTargetTypeNode;
+
+impl BehaviorNode for GetTargetTypeNode {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_out("output")]
+    }
+
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let Some(result) = arg(&Self).and_then(|a| a.downcast_ref::<String>().cloned()) else {
+            return BehaviorResult::Fail;
+        };
+        ctx.set("output", result);
+        BehaviorResult::Success
+    }
+}
+
 pub(super) struct TargetIdNode;
 
 impl BehaviorNode for TargetIdNode {
@@ -140,6 +162,25 @@ impl BehaviorNode for FindSpawner {
 pub(super) struct FindResource;
 
 impl BehaviorNode for FindResource {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        if arg(&Self)
+            .and_then(|res| res.downcast_ref().copied())
+            .unwrap_or(false)
+        {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
+
+pub(super) struct FindFog;
+
+impl BehaviorNode for FindFog {
     fn tick(
         &mut self,
         arg: BehaviorCallback,
@@ -407,7 +448,7 @@ impl BehaviorNode for FollowPath {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(super) struct DriveCommand(pub f64);
 
 pub(super) struct DriveNode;
@@ -731,7 +772,7 @@ impl BehaviorNode for IsTargetVisibleNode {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(super) struct FaceToTargetCommand(pub [f64; 2]);
 
 pub(super) struct FaceToTargetNode;

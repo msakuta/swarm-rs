@@ -212,6 +212,15 @@ impl SwarmRsApp {
                 ui.label("Agents");
                 ui.add(egui::Slider::new(&mut self.agent_count, 1..=100));
             });
+
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut self.app_data.game_params.fow, "Fog of War");
+
+                ui.checkbox(
+                    &mut self.app_data.game_params.fow_raycasting,
+                    "Fog raycasting",
+                );
+            });
         });
 
         ui.collapsing("View options", |ui| {
@@ -258,6 +267,17 @@ impl SwarmRsApp {
                     "Raycast image",
                 ));
             });
+
+            ui.horizontal_wrapped(|ui| {
+                for (i, fog_active) in self.app_data.fog_active.iter_mut().enumerate() {
+                    ui.add(egui::Checkbox::new(fog_active, format!("Fog team {i}")));
+                }
+                ui.checkbox(&mut self.app_data.colored_fog, "Colored fog");
+                ui.checkbox(
+                    &mut self.app_data.game_params.fow_raycast_visible,
+                    "Fog raycast",
+                );
+            });
         });
 
         ui.collapsing("Statistics", |ui| {
@@ -301,6 +321,15 @@ impl SwarmRsApp {
                 let profiler = game.path_find_profiler.borrow();
                 format!(
                     "Path find time: {:.06}ms, calls: {}",
+                    profiler.get_average() * 1e3,
+                    profiler.get_count()
+                )
+            });
+
+            ui.label({
+                let profiler = game.fow_raycast_profiler.borrow();
+                format!(
+                    "FoW raycast time: {:.06}ms, calls: {}",
                     profiler.get_average() * 1e3,
                     profiler.get_count()
                 )

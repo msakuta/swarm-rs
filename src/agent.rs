@@ -11,9 +11,9 @@ use self::{
     behavior_nodes::{
         build_tree, AvoidanceCommand, ClearAvoidanceCommand, ClearPathNode, ClearTarget,
         CollectResource, DepositResource, DriveCommand, FaceToTargetCommand, FindEnemyCommand,
-        FindPathCommand, FindResource, FindSpawner, FollowPathCommand, GetClass,
-        GetPathNextNodeCommand, GetStateCommand, HasPathNode, HasTargetNode, IsResourceFull,
-        IsSpawnerResourceFull, IsTargetVisibleCommand, MoveToCommand, ShootCommand,
+        FindFog, FindPathCommand, FindResource, FindSpawner, FollowPathCommand, GetClass,
+        GetPathNextNodeCommand, GetStateCommand, GetTargetTypeNode, HasPathNode, HasTargetNode,
+        IsResourceFull, IsSpawnerResourceFull, IsTargetVisibleCommand, MoveToCommand, ShootCommand,
         SimpleAvoidanceCommand, TargetIdNode, TargetPosCommand,
     },
     motion::{MotionCommandResult, OrientToResult},
@@ -22,9 +22,10 @@ use crate::{
     behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource, PrintCommand},
     collision::{aabb_intersects, CollisionShape, Obb},
     entity::{Entity, MAX_LOG_ENTRIES},
+    fog_of_war::{EntityShadow, FOG_MAX_AGE},
     game::{is_passable_at_i, Game, Profiler, Resource},
     measure_time,
-    qtree::{QTreePath, SearchTree},
+    qtree::{PathFindResponse, QTreePath, SearchTree},
     spawner::{SPAWNER_MAX_RESOURCE, SPAWNER_RADIUS},
 };
 use ::behavior_tree_lite::Context;
@@ -68,6 +69,7 @@ impl Bullet {
 pub(crate) enum AgentTarget {
     Entity(usize),
     Resource([f64; 2]),
+    Fog([f64; 2]),
 }
 
 #[derive(Debug)]
@@ -166,6 +168,20 @@ impl Agent {
         })
     }
 
+    pub(crate) fn get_target_pos(&self, game: &Game) -> Option<[f64; 2]> {
+        self.target.and_then(|target| match target {
+            AgentTarget::Entity(id) => game.entities.iter().find_map(|entity| {
+                let entity = entity.try_borrow().ok()?;
+                if entity.get_id() == id {
+                    Some(entity.get_pos())
+                } else {
+                    None
+                }
+            }),
+            AgentTarget::Resource(pos) | AgentTarget::Fog(pos) => Some(pos),
+        })
+    }
+
     pub(crate) fn get_shape(&self) -> CollisionShape {
         CollisionShape::BBox(Obb {
             center: self.pos.into(),
@@ -260,14 +276,18 @@ impl Agent {
         false
     }
 
-    pub(crate) fn find_enemy(&mut self, agents: &[RefCell<Entity>]) {
+    pub(crate) fn find_enemy(&mut self, game: &Game, agents: &[RefCell<Entity>]) {
         let best_agent = agents
             .iter()
             .filter_map(|a| a.try_borrow().ok())
             .filter(|a| {
                 let aid = a.get_id();
                 let ateam = a.get_team();
-                !self.unreachables.contains(&aid) && aid != self.id && ateam != self.team
+                let apos = a.get_pos();
+                game.is_clear_fog_at(self.team, apos)
+                    && !self.unreachables.contains(&aid)
+                    && aid != self.id
+                    && ateam != self.team
             })
             .filter_map(|a| {
                 let distance = Vector2::from(a.get_pos()).distance(Vector2::from(self.pos));
@@ -285,8 +305,41 @@ impl Agent {
                 }
             });
 
-        if let Some((_dist, agent)) = best_agent {
-            self.target = Some(AgentTarget::Entity(agent.get_id()));
+        // Theoretically, a shadow entity could have shorter distance than know entities.
+        let best_shadow = game.fog[self.team]
+            .entities
+            .iter()
+            .map(|a| {
+                let distance = Vector2::from(a.pos).distance(Vector2::from(self.pos));
+                (distance, a)
+            })
+            .fold(None, |acc: Option<(f64, &EntityShadow)>, cur| {
+                if let Some(acc) = acc {
+                    if cur.0 < acc.0 {
+                        Some(cur)
+                    } else {
+                        Some(acc)
+                    }
+                } else {
+                    Some(cur)
+                }
+            });
+
+        match (best_agent, best_shadow) {
+            (Some(agent), Some(shadow)) => {
+                self.target = if agent.0 < shadow.0 {
+                    Some(AgentTarget::Entity(agent.1.get_id()))
+                } else {
+                    Some(AgentTarget::Entity(shadow.1.id))
+                };
+            }
+            (Some((_, agent)), None) => {
+                self.target = Some(AgentTarget::Entity(agent.get_id()));
+            }
+            (None, Some((_, shadow))) => {
+                self.target = Some(AgentTarget::Entity(shadow.id));
+            }
+            _ => self.target = None,
         }
     }
 
@@ -297,8 +350,19 @@ impl Agent {
                 let Ok(entity) = entity.try_borrow() else { return false };
                 entity.get_id() == id
             }),
-            AgentTarget::Resource(_) => true,
+            AgentTarget::Resource(_) | AgentTarget::Fog(_) => true,
         }
+    }
+
+    fn get_target_type(&self) -> Option<Box<dyn std::any::Any>> {
+        Some(Box::new(
+            match self.target? {
+                AgentTarget::Entity(_) => "Entity",
+                AgentTarget::Fog(_) => "Fog",
+                AgentTarget::Resource(_) => "Resource",
+            }
+            .to_string(),
+        ))
     }
 
     fn is_spawner_resource_full(&self, entities: &[RefCell<Entity>]) -> bool {
@@ -436,6 +500,27 @@ impl Agent {
         BehaviorResult::Success
     }
 
+    pub(crate) fn find_fog(&mut self, game: &mut Game) -> bool {
+        let team = self.team;
+        let qtree = &game.qtree;
+        let found_path = self.find_path_many(qtree, &game.path_find_profiler, |pos| {
+            if game.is_passable_at(pos) && game.is_fog_older_than(team, pos, FOG_MAX_AGE) {
+                PathFindResponse::Goal
+            } else {
+                PathFindResponse::Continue
+            }
+        });
+        let Ok(path) = found_path else { return false };
+        match path.first().copied() {
+            Some(node) => {
+                self.path = path;
+                self.target = Some(AgentTarget::Fog(node.pos));
+                true
+            }
+            _ => false,
+        }
+    }
+
     pub(crate) fn shoot_bullet(&mut self, bullets: &mut Vec<Bullet>, target_pos: [f64; 2]) -> bool {
         if 0. < self.cooldown {
             return false;
@@ -512,7 +597,7 @@ impl Agent {
             self.orient,
         ));
         let (res, time) = measure_time(|| {
-            self.avoidance_search(game, entities, cmd.back, false, game.avoidance_mode)
+            self.avoidance_search(game, entities, cmd.back, false, game.params.avoidance_mode)
         });
         // println!("Avoidance goal set to {:?}, returns {res:?}", self.goal);
         if let Ok(mut time_window) = TIME_WINDOW.lock() {
@@ -563,14 +648,18 @@ impl Agent {
                     return Some(Box::new(self.class));
                 } else if f.downcast_ref::<HasTargetNode>().is_some() {
                     return Some(Box::new(self.has_target(&entities)));
+                } else if f.downcast_ref::<GetTargetTypeNode>().is_some() {
+                    return self.get_target_type();
                 } else if f.downcast_ref::<TargetIdNode>().is_some() {
                     return Some(Box::new(self.target));
                 } else if f.downcast_ref::<FindEnemyCommand>().is_some() {
-                    self.find_enemy(entities)
+                    self.find_enemy(game, entities)
                 } else if f.downcast_ref::<FindSpawner>().is_some() {
                     self.find_spawner(entities)
                 } else if f.downcast_ref::<FindResource>().is_some() {
-                    return Some(Box::new(self.find_resource(&game.resources)));
+                    return Some(Box::new(self.find_resource(&game.fog[self.team].resources)));
+                } else if f.downcast_ref::<FindFog>().is_some() {
+                    return Some(Box::new(self.find_fog(game)));
                 } else if f.downcast_ref::<ClearTarget>().is_some() {
                     let had_target = self.target.is_some();
                     self.target = None;
@@ -604,7 +693,9 @@ impl Agent {
                                 println!("Target could not be found!");
                             }
                         }
-                        Some(AgentTarget::Resource(pos)) => return Some(Box::new(pos)),
+                        Some(AgentTarget::Resource(pos)) | Some(AgentTarget::Fog(pos)) => {
+                            return Some(Box::new(pos))
+                        }
                         _ => (),
                     }
                 } else if let Some(com) = f.downcast_ref::<FindPathCommand>() {
