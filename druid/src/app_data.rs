@@ -69,24 +69,24 @@ impl AppData {
         let scale = WINDOW_HEIGHT / game.shape().1 as f64;
         let maze_expansion = 2000;
 
-        const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/agent.txt";
-        const SPAWNER_SOURCE_FILE: &'static str = "behavior_tree_config/spawner.txt";
+        const AGENT_SOURCE_FILE: &'static str = "behavior_tree_config/green/agent.btc";
+        const SPAWNER_SOURCE_FILE: &'static str = "behavior_tree_config/green/spawner.btc";
 
         let teams = [
             TeamConfig {
                 agent_source: Rc::new(
-                    include_str!("../../behavior_tree_config/green/agent.txt").to_string(),
+                    include_str!("../../behavior_tree_config/green/agent.btc").to_string(),
                 ),
                 spawner_source: Rc::new(
-                    include_str!("../../behavior_tree_config/green/spawner.txt").to_string(),
+                    include_str!("../../behavior_tree_config/green/spawner.btc").to_string(),
                 ),
             },
             TeamConfig {
                 agent_source: Rc::new(
-                    include_str!("../../behavior_tree_config/red/agent.txt").to_string(),
+                    include_str!("../../behavior_tree_config/red/agent.btc").to_string(),
                 ),
                 spawner_source: Rc::new(
-                    include_str!("../../behavior_tree_config/red/spawner.txt").to_string(),
+                    include_str!("../../behavior_tree_config/red/spawner.btc").to_string(),
                 ),
             },
         ];
