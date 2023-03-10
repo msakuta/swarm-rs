@@ -838,7 +838,8 @@ impl Game {
                 [self.xs, self.ys],
                 self.board
                     .iter()
-                    .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
+                    .map(|p| [if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR }; 3])
+                    .flatten()
                     .collect::<Vec<_>>(),
             ))
         }
