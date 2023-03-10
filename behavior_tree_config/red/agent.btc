@@ -9,7 +9,9 @@ tree main = Sequence {
     Repeat (n <- "10000") {
         if (fight || fighter) {
             # Print(input <- "Fighting")
-            Fight
+            ForceSuccess {
+                Fight
+            }
         } else {
             ForceSuccess {
                 GatherResource(switchToFight -> fight)
@@ -26,15 +28,37 @@ tree main = Sequence {
 }
 
 tree Fight = Sequence {
-    if (!HasTarget) {
+    var isTargetFog
+    Throttle (time <- "100") {
+        SetBool (value <- "false", output -> isTargetFog)
         FindEnemy
+        if (!HasTarget) {
+            SetBool (value <- "true", output -> isTargetFog)
+        }
     }
-    ForceSuccess {
-        if (TargetPos (pos -> targetPos) && IsTargetVisible (target <- targetPos)) {
-            FaceToTarget (target <- targetPos)
-            Shoot
-        } else {
-            FollowPathAndAvoid (fight <- "true")
+
+    if (isTargetFog) {
+        ForceSuccess {
+            ExploreFog (fighting <- "true")
+        }
+        Print (input <- "targetting fog, don't shoot. target = {}", arg0 <- targetPos)
+
+        # Try re-targetting an enemy
+        FindEnemy
+
+        var targetType
+        GetTargetType (output -> targetType)
+        if (!StringEq(lhs <- targetType, rhs <- "Fog")) {
+            SetBool (value <- "false", output -> isTargetFog)
+        }
+    } else {
+        ForceSuccess {
+            if (TargetPos (pos -> targetPos) && IsTargetVisible (target <- targetPos)) {
+                FaceToTarget (target <- targetPos)
+                Shoot
+            } else {
+                FollowPathAndAvoid (fight <- "true")
+            }
         }
     }
 }
@@ -49,12 +73,21 @@ tree GatherResource(out switchToFight) = Sequence {
         FollowPathAndAvoid (fight <- "false")
         DepositResource
     } else {
-        #if (!HasTarget) {
-            FindResource
-        #}
-        FollowPathAndAvoid
-        CollectResource
+        if (FindResource) {
+            FollowPathAndAvoid (fight <- "false")
+            CollectResource
+        } else {
+            ExploreFog (fighting <- "false")
+        }
     }
+}
+
+tree ExploreFog (in fighting) = Sequence {
+    Print(input <- "Finding fog")
+    FindFog
+    TargetPos(pos -> targetPos)
+    Print(input <- "Found fog at {}", arg0 <- targetPos)
+    FollowPathAndAvoidUntilArrival (fighting <- fighting)
 }
 
 tree TryReverse = ReactiveSequence {
@@ -77,6 +110,11 @@ tree FollowPathAndAvoid(in fight) = Sequence {
             if (IsTrue(input <- fight)) {
                 Print (input <- "Finding a new target")
                 FindEnemy
+            } else {
+                if (IsTrue(input <- isTargetFog)) {
+                    Print (input <- "Finding a new target fog")
+                    FindFog
+                }
             }
             FindPathPlan (try_reverse <- "false")
         }
@@ -90,6 +128,38 @@ tree FollowPathAndAvoid(in fight) = Sequence {
             # Find path again if blocked
             FindPath (target <- target_pos)
             #AvoidancePlan
+        }
+    }
+}
+
+tree FollowPathAndAvoidUntilArrival(in fighting) = Sequence {
+    TargetPos (pos -> target_pos)
+    if (!HasPath) {
+        FindPathPlan (try_reverse <- "true")
+    }
+
+    # Try to search path every 100 ticks, even if we already have one, to update potentially moving target or obstacles
+    Throttle (time <- "100") {
+        Sequence {
+            # Attempt to find the closest enemy again
+            FindPathPlan (try_reverse <- "false")
+        }
+    }
+
+    if (HasPath) {
+        #SimpleAvoidance
+        var arrived = false
+        Print (input <- "Following path {}", arg0 <- target_pos)
+        Repeat (n <- "100") {
+            ReactiveSequence {
+                if (!FollowPath (arrived -> arrived)) {
+                    Print (input <- "Blocked, finding path")
+                    TryReverse
+                    # Find path again if blocked
+                    FindPath (target <- target_pos)
+                }
+                !arrived
+            }
         }
     }
 }

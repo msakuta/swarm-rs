@@ -12,6 +12,7 @@ mod macros;
 pub mod agent;
 mod collision;
 pub mod entity;
+pub mod fog_of_war;
 pub mod game;
 mod mesh;
 pub mod qtree;

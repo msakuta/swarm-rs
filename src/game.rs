@@ -5,14 +5,16 @@ use cgmath::{InnerSpace, Vector2};
 
 use std::{
     cell::RefCell,
+    collections::HashMap,
     rc::Rc,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
 use crate::{
-    agent::{Agent, AgentClass, AgentState, Bullet},
+    agent::{interpolation::interpolate_i, Agent, AgentClass, AgentState, Bullet},
     collision::CollisionShape,
-    entity::{Entity, GameEvent},
+    entity::{Entity, GameEvent, VISION_RANGE},
+    fog_of_war::{FogGraph, FogOfWar, FOG_MAX_AGE},
     measure_time,
     mesh::{create_mesh, Mesh, MeshResult},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
@@ -111,12 +113,17 @@ pub struct TeamStats {
 }
 
 #[cfg_attr(feature = "druid", derive(Data))]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GameParams {
     pub avoidance_mode: AvoidanceMode,
     pub paused: bool,
     pub avoidance_expands: f64,
     pub agent_count: usize,
+    /// Fog of War, some area of the map is covered by lack of knowledge, adding some depth to the strategy.
+    pub fow: bool,
+    /// Use raycasting to check visibility to clear fog of war. It can be expensive.
+    pub fow_raycasting: bool,
+    pub fow_raycast_visible: bool,
     pub teams: [TeamConfig; 2],
 }
 
@@ -127,6 +134,9 @@ impl GameParams {
             paused: false,
             avoidance_expands: 1.,
             agent_count: 3,
+            fow: true,
+            fow_raycasting: true,
+            fow_raycast_visible: false,
             teams: Default::default(),
         }
     }
@@ -143,23 +153,29 @@ pub struct Game {
     pub bullets: Vec<Bullet>,
     pub resources: Vec<Resource>,
     pub interval: f64,
+    /// The last updated age of each pixel. Newest updated pixels should have self.global_time.
+    pub fog: [FogOfWar; 2],
     pub(crate) rng: Xor128,
     pub(crate) id_gen: usize,
-    pub(crate) avoidance_mode: AvoidanceMode,
-    pub(crate) avoidance_expands: f64,
     pub temp_ents: Vec<TempEnt>,
     pub triangle_profiler: RefCell<Profiler>,
     pub pixel_profiler: RefCell<Profiler>,
     pub qtree_profiler: RefCell<Profiler>,
     pub path_find_profiler: RefCell<Profiler>,
-    pub agent_count: usize,
-    pub(crate) teams: [TeamConfig; 2],
+    pub fow_raycast_profiler: RefCell<Profiler>,
+    pub params: GameParams,
     pub stats: [TeamStats; 2],
+    pub global_time: i32,
     pub qtree: QTreeSearcher,
 
     pub enable_raycast_board: bool,
     /// A visualization of visited pixels by raycasting visibility checking
     pub raycast_board: RefCell<Vec<u8>>,
+    pub fog_rays: Vec<Vec<[i32; 2]>>,
+    pub fog_graph: FogGraph,
+    pub(crate) fog_graph_forward: FogGraph,
+    pub fog_graph_real: Vec<Vec<[[i32; 2]; 2]>>,
+    pub(crate) fog_graph_cache: HashMap<usize, ([i32; 2], Vec<bool>)>,
 }
 
 impl Game {
@@ -182,7 +198,12 @@ impl Game {
         let shape = (xs, ys);
         let (qtree, timer) = measure_time(|| Self::new_qtree(shape, &board, &[]));
 
+        let fog = FogOfWar::new(&board);
+        let fog = [fog.clone(), fog];
+
         println!("qtree time: {timer:?}");
+
+        let (fog_graph, fog_graph_forward) = precompute_ray_graph(VISION_RANGE as usize);
 
         Self {
             xs,
@@ -194,21 +215,26 @@ impl Game {
             bullets: vec![],
             resources: vec![],
             interval: 32.,
+            fog,
             rng: Xor128::new(9318245),
             id_gen,
-            avoidance_mode: AvoidanceMode::RrtStar,
-            avoidance_expands: 1.,
             temp_ents: vec![],
             triangle_profiler: RefCell::new(Profiler::new()),
             pixel_profiler: RefCell::new(Profiler::new()),
             qtree_profiler: RefCell::new(Profiler::new()),
             path_find_profiler: RefCell::new(Profiler::new()),
-            agent_count: 3,
-            teams: Default::default(),
+            fow_raycast_profiler: RefCell::new(Profiler::new()),
+            params: GameParams::new(),
             stats: Default::default(),
+            global_time: 0,
             qtree,
             enable_raycast_board: false,
             raycast_board: RefCell::new(vec![]),
+            fog_rays: vec![],
+            fog_graph,
+            fog_graph_forward,
+            fog_graph_real: vec![],
+            fog_graph_cache: HashMap::new(),
         }
     }
 
@@ -280,13 +306,18 @@ impl Game {
             BoardType::Maze => Self::create_maze_board(&params),
         };
 
+        let fog = FogOfWar::new(&board);
+
         self.qtree = Self::new_qtree(params.shape, &board, &[]);
         self.raycast_board = RefCell::new(vec![]);
         self.board = board;
+        self.fog = [fog.clone(), fog];
         self.mesh = mesh;
         self.entities = vec![];
         self.bullets = vec![];
         self.resources.clear();
+        self.global_time = 0;
+        self.fog_graph_cache.clear();
     }
 
     fn new_qtree(
@@ -367,7 +398,7 @@ impl Game {
         static_: bool,
         randomness: f64,
     ) -> Option<Entity> {
-        const STATIC_SOURCE_FILE: &str = include_str!("../behavior_tree_config/test_obstacle.txt");
+        const STATIC_SOURCE_FILE: &str = include_str!("../behavior_tree_config/test_obstacle.btc");
         let rng = &mut self.rng;
         let id_gen = &mut self.id_gen;
         // let triangle_labels = &self.mesh.triangle_labels;
@@ -405,7 +436,7 @@ impl Game {
                 if static_ {
                     STATIC_SOURCE_FILE
                 } else {
-                    &self.teams[team].agent_source
+                    &self.params.teams[team].agent_source
                 },
             );
             match agent {
@@ -448,7 +479,7 @@ impl Game {
                     &mut self.id_gen,
                     pos_candidate,
                     team,
-                    &self.teams[team].spawner_source,
+                    &self.params.teams[team].spawner_source,
                 );
                 match spawner {
                     Ok(spawner) => return Some(Entity::Spawner(spawner)),
@@ -488,13 +519,15 @@ impl Game {
     }
 
     pub fn set_params(&mut self, params: &GameParams) {
-        self.avoidance_mode = params.avoidance_mode;
-        self.avoidance_expands = params.avoidance_expands;
-        self.agent_count = params.agent_count;
-        self.teams = params.teams.clone();
+        self.params = params.clone();
     }
 
     pub fn update(&mut self) -> UpdateResult {
+        self.global_time += 1;
+
+        self.fog_rays.clear();
+        self.fog_graph_real.clear();
+
         if self.enable_raycast_board {
             let mut raycast_board = self.raycast_board.borrow_mut();
             if raycast_board.len() != self.board.len() {
@@ -679,6 +712,9 @@ impl Game {
         // }
 
         for team in 0..2 {
+            self.fog_resource(team);
+            self.fog_entities(team, &entities);
+
             if !entities
                 .iter()
                 .any(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
@@ -707,6 +743,30 @@ impl Game {
         }
     }
 
+    pub fn is_clear_fog_at(&self, team: usize, pos: [f64; 2]) -> bool {
+        if !self.params.fow {
+            return true;
+        }
+        if pos[0] < 0. || self.xs <= pos[0] as usize || pos[1] < 0. || self.ys <= pos[1] as usize {
+            false
+        } else {
+            self.global_time <= self.fog[team].fow[pos[0] as usize + pos[1] as usize * self.xs]
+        }
+    }
+
+    pub(crate) fn is_fog_older_than(&self, team: usize, pos: [f64; 2], age: i32) -> bool {
+        if !self.params.fow {
+            return true;
+        }
+        if pos[0] < 0. || self.xs <= pos[0] as usize || pos[1] < 0. || self.ys <= pos[1] as usize {
+            false
+        } else {
+            age <= self
+                .global_time
+                .saturating_sub(self.fog[team].fow[pos[0] as usize + pos[1] as usize * self.xs])
+        }
+    }
+
     // pub(crate) fn is_passable_at(board: &[bool], shape: (usize, usize), pos: [f64; 2]) -> bool {
     //     if pos[0] < 0. || shape.0 <= pos[0] as usize || pos[1] < 0. || shape.1 <= pos[1] as usize {
     //         false
@@ -715,17 +775,73 @@ impl Game {
     //     }
     // }
 
-    pub fn occupancy_image(&self) -> Option<([usize; 2], Vec<u8>)> {
-        const OBSTACLE_COLOR: u8 = 63u8;
-        const BACKGROUND_COLOR: u8 = 127u8;
+    pub fn occupancy_image(
+        &self,
+        fog_active: &[bool; 2],
+        colored_fog: bool,
+    ) -> Option<([usize; 2], Vec<u8>)> {
+        const OBSTACLE_COLOR: u8 = 80u8;
+        const BACKGROUND_COLOR: u8 = 191u8;
 
-        Some((
-            [self.xs, self.ys],
-            self.board
-                .iter()
-                .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
-                .collect::<Vec<_>>(),
-        ))
+        if self.params.fow {
+            let (fa0, fa1) = (fog_active[0], fog_active[1]);
+
+            Some((
+                [self.xs, self.ys],
+                self.board
+                    .iter()
+                    .zip(self.fog[0].fow.iter().zip(self.fog[1].fow.iter()))
+                    .map(|(p, (f0, f1))| {
+                        let c = if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR };
+
+                        let age_map = |time| {
+                            let age = self.global_time.saturating_sub(time);
+                            if age == 0 {
+                                c
+                            } else if age < FOG_MAX_AGE {
+                                (c as i32 * 2 / 3) as u8
+                            } else {
+                                c / 2
+                            }
+                        };
+
+                        if !fa0 && !fa1 {
+                            [c, c, c]
+                        } else if colored_fog {
+                            if fa0 && fa1 {
+                                let (c0, c1) = (age_map(*f0), age_map(*f1));
+                                [c1 / 2, c0 / 2, c1.max(c0)]
+                            } else if fa0 {
+                                let c0 = age_map(*f0);
+                                [c / 4, c0 / 2, c0]
+                            } else {
+                                let c1 = age_map(*f1);
+                                [c1 / 2, c / 4, c1]
+                            }
+                        } else {
+                            let age = if fa0 && fa1 {
+                                *f0.max(f1)
+                            } else if fa0 {
+                                *f0
+                            } else {
+                                *f1
+                            };
+                            let cc = age_map(age);
+                            [cc / 2, cc / 2, cc]
+                        }
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>(),
+            ))
+        } else {
+            Some((
+                [self.xs, self.ys],
+                self.board
+                    .iter()
+                    .map(|p| if *p { BACKGROUND_COLOR } else { OBSTACLE_COLOR })
+                    .collect::<Vec<_>>(),
+            ))
+        }
     }
 
     pub fn labeled_image(&self) -> Option<([usize; 2], Vec<u8>)> {
@@ -804,4 +920,19 @@ pub fn is_passable_at_i(board: &[bool], shape: (usize, usize), pos: impl Into<[i
         let pos = [pos[0] as usize, pos[1] as usize];
         board[pos[0] + shape.0 * pos[1]]
     }
+}
+
+fn precompute_ray_graph(range: usize) -> (Vec<Vec<[i32; 2]>>, Vec<Vec<[i32; 2]>>) {
+    let mut graph = vec![vec![]; range * range];
+    let mut forward = vec![vec![]; range * range];
+    for y in 0..range as i32 {
+        for x in 0..range as i32 {
+            interpolate_i([0, 0], [x, y], |p| {
+                graph[p.x as usize + p.y as usize * range].push([x, y].into());
+                forward[x as usize + y as usize * range].push(p.into());
+                false
+            });
+        }
+    }
+    (graph, forward)
 }

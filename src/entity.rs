@@ -1,9 +1,13 @@
+use cgmath::{InnerSpace, Vector2};
+
 use crate::{
     agent::Agent,
     agent::{AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE},
     collision::CollisionShape,
     game::Game,
+    measure_time,
     qtree::QTreePathNode,
+    shape::Idx,
     spawner::{Spawner, SPAWNER_MAX_HEALTH, SPAWNER_MAX_RESOURCE},
 };
 use std::{cell::RefCell, collections::VecDeque};
@@ -87,6 +91,13 @@ impl Entity {
     pub fn get_target(&self) -> Option<usize> {
         match self {
             Entity::Agent(agent) => agent.get_target(),
+            Entity::Spawner(_) => None,
+        }
+    }
+
+    pub fn get_target_pos(&self, game: &Game) -> Option<[f64; 2]> {
+        match self {
+            Entity::Agent(agent) => agent.get_target_pos(game),
             Entity::Spawner(_) => None,
         }
     }
@@ -235,19 +246,173 @@ impl Entity {
 
     pub(crate) fn update(
         &mut self,
-        app_data: &mut Game,
+        game: &mut Game,
         entities: &[RefCell<Entity>],
         bullets: &mut Vec<Bullet>,
     ) -> Vec<GameEvent> {
         let mut ret = vec![];
         match self {
             Entity::Agent(ref mut agent) => {
-                agent.update(app_data, entities, bullets);
+                agent.update(game, entities, bullets);
             }
             Entity::Spawner(ref mut spawner) => {
-                ret.extend(spawner.update(app_data, entities));
+                ret.extend(spawner.update(game, entities));
             }
+        }
+
+        if game.params.fow {
+            let (_, time) = measure_time(|| {
+                if game.params.fow_raycasting {
+                    self.fow_raycast(game);
+                } else {
+                    self.defog(game);
+                }
+            });
+            game.fow_raycast_profiler.borrow_mut().add(time);
         }
         ret
     }
+
+    fn fow_raycast(&mut self, game: &mut Game) {
+        let pos = Vector2::from(self.get_pos());
+        let pos_i = pos.cast::<i32>().unwrap();
+
+        const VISION_RANGE_U: usize = VISION_RANGE as usize;
+        const VISION_RANGE_I: i32 = VISION_RANGE as i32;
+        const VISION_RANGE_FULL: usize = VISION_RANGE_U * 2 - 1;
+
+        let graph_shape = (VISION_RANGE_U, VISION_RANGE_U);
+        let pos_a: [i32; 2] = pos_i.into();
+
+        let visibility_map = if let Some(cache) =
+            game.fog_graph_cache
+                .get(&self.get_id())
+                .and_then(|(cache_pos, cache)| {
+                    if *cache_pos == pos_a {
+                        Some(cache)
+                    } else {
+                        None
+                    }
+                }) {
+            cache
+        } else {
+            assert_eq!(game.fog_graph.len(), VISION_RANGE_U * VISION_RANGE_U);
+
+            let mut visibility_map = vec![true; VISION_RANGE_FULL * VISION_RANGE_FULL];
+            for yf in 0..VISION_RANGE_FULL {
+                let y = yf as i32 - VISION_RANGE_I + 1;
+                for xf in 0..VISION_RANGE_FULL {
+                    let x = xf as i32 - VISION_RANGE_I + 1;
+                    if VISION_RANGE_I * VISION_RANGE_I < x * x + y * y {
+                        visibility_map[xf + yf * VISION_RANGE_FULL] = false;
+                        continue;
+                    }
+                    let pos = pos_i + Vector2::new(x, y);
+                    let res = game.is_passable_at(pos.cast::<f64>().unwrap().into());
+                    if !res && visibility_map[xf + yf * VISION_RANGE_FULL] {
+                        visibility_map[xf + yf * VISION_RANGE_FULL] = false;
+
+                        let ray_inverse =
+                            &game.fog_graph[graph_shape.idx(x.abs() as isize, y.abs() as isize)];
+                        for ys in [-1, 1] {
+                            if ys * y < 0 {
+                                continue;
+                            };
+                            for xs in [-1, 1] {
+                                if xs * x < 0 {
+                                    continue;
+                                };
+                                for &[jx, jy] in ray_inverse {
+                                    let jxf = (jx * xs + VISION_RANGE_I - 1) as usize;
+                                    let jyf = (jy * ys + VISION_RANGE_I - 1) as usize;
+                                    visibility_map[jxf + jyf * VISION_RANGE_FULL] = false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            game.fog_graph_cache
+                .insert(self.get_id(), (pos_i.into(), visibility_map));
+            let Some((_, cache)) = game.fog_graph_cache.get(&self.get_id()) else { return };
+            cache
+        };
+
+        let mut real_graph = vec![];
+        for yf in 0..VISION_RANGE_FULL {
+            let y = yf as i32 - VISION_RANGE_I + 1;
+            for xf in 0..VISION_RANGE_FULL {
+                let x = xf as i32 - VISION_RANGE_I + 1;
+                let pos = pos_i + Vector2::new(x, y).cast::<i32>().unwrap();
+                if visibility_map[xf + yf * VISION_RANGE_FULL] {
+                    game.fog[self.get_team()].fow[pos.x as usize + pos.y as usize * game.xs] =
+                        game.global_time;
+                } else if game.params.fow_raycast_visible {
+                    if game.fog_graph_forward[graph_shape.idx(x.abs() as isize, y.abs() as isize)]
+                        .iter()
+                        .any(|forward| {
+                            let jxf = (forward[0] * x.signum() + VISION_RANGE_I - 1) as usize;
+                            let jyf = (forward[1] * y.signum() + VISION_RANGE_I - 1) as usize;
+                            if *forward == [x.abs(), y.abs()] {
+                                return false;
+                            }
+                            !visibility_map[jxf + jyf * VISION_RANGE_FULL]
+                        })
+                    {
+                        continue;
+                    }
+
+                    for ys in [-1, 1] {
+                        if ys * y < 0 {
+                            continue;
+                        };
+                        for xs in [-1, 1] {
+                            if xs * x < 0 {
+                                continue;
+                            };
+                            for &(mut casted) in
+                                &game.fog_graph[graph_shape.idx(x.abs() as isize, y.abs() as isize)]
+                            {
+                                if xs < 0 {
+                                    casted[0] *= -1;
+                                }
+                                if ys < 0 {
+                                    casted[1] *= -1;
+                                }
+                                if casted != [0, 0] {
+                                    real_graph.push([
+                                        pos.into(),
+                                        [pos_i.x + casted[0], pos_i.y + casted[1]],
+                                    ]);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        game.fog_graph_real.push(real_graph);
+    }
+
+    /// Erase fog unconditionally within the radius
+    fn defog(&mut self, game: &mut Game) {
+        let pos = Vector2::from(self.get_pos());
+        let fog = &mut game.fog[self.get_team()];
+        let iy0 = (pos.y - VISION_RANGE).max(0.) as usize;
+        let iy1 = ((pos.y + VISION_RANGE) as usize).min(game.ys - 1) as usize;
+        let ix0 = (pos.x - VISION_RANGE).max(0.) as usize;
+        let ix1 = ((pos.x + VISION_RANGE) as usize).min(game.xs - 1) as usize;
+        for iy in iy0..=iy1 {
+            for ix in ix0..=ix1 {
+                let delta = Vector2::from(pos) - Vector2::new(ix as f64, iy as f64);
+                if delta.magnitude2() < VISION_RANGE.powf(2.) {
+                    let p = &mut fog.fow[ix + iy * game.xs];
+                    *p = game.global_time;
+                }
+            }
+        }
+    }
 }
+
+pub(crate) const VISION_RANGE: f64 = 15.;

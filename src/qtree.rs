@@ -32,6 +32,12 @@ const DEBUG: bool = false;
 
 pub(crate) type Rect = [i32; 4];
 
+pub(crate) enum PathFindResponse {
+    Continue,
+    Abandon,
+    Goal,
+}
+
 /// A navigation mesh that can find a path and update quickly using quad tree.
 ///
 /// It consists of two parts; actual quad tree and bitmap cache to allow updating
@@ -136,9 +142,28 @@ impl QTreeSearcher {
         ignore: impl Fn(usize) -> bool,
         start: [f64; 2],
         end: [f64; 2],
+        fog: &impl Fn([f64; 2]) -> bool,
         goal_radius: f64,
     ) -> (Result<QTreePath, PathFindError>, SearchTree) {
-        self.qtree.path_find(ignore, start, end, goal_radius)
+        self.qtree.path_find(ignore, start, end, fog, goal_radius)
+    }
+
+    pub(crate) fn path_find_many(
+        &self,
+        ignore: impl Fn(usize) -> bool,
+        start: [f64; 2],
+        mut end: impl FnMut([f64; 2]) -> PathFindResponse,
+        goal_radius: f64,
+    ) -> (Result<QTreePath, PathFindError>, SearchTree) {
+        self.qtree.path_find_many(
+            ignore,
+            start,
+            |idx| {
+                let center = self.qtree.idx_to_center(idx);
+                end(center)
+            },
+            goal_radius,
+        )
     }
 
     pub fn check_collision(&self, aabb: &Aabb) -> bool {

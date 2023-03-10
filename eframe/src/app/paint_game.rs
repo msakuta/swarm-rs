@@ -1,9 +1,15 @@
+use std::cell::RefCell;
+
 use crate::app_data::AppData;
 use cgmath::{InnerSpace, Matrix2, Matrix3, MetricSpace, Point2, Rad, Transform, Vector2};
-use eframe::epaint::{self, PathShape};
+use eframe::{
+    emath::RectTransform,
+    epaint::{self, PathShape},
+};
 use egui::{pos2, Align2, Color32, FontId, Frame, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2};
 use swarm_rs::{
     agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
+    entity::Entity,
     game::Resource,
     qtree::FRESH_TICKS,
     Bullet, CellState,
@@ -121,13 +127,8 @@ impl SwarmRsApp {
             let image_getter = |app_data: &AppData| {
                 let (size, image) = app_data
                     .game
-                    .occupancy_image()
+                    .occupancy_image(&app_data.fog_active, app_data.colored_fog)
                     .unwrap_or_else(|| ([0, 0], vec![]));
-                let image = image
-                    .into_iter()
-                    .map(|b| [b, b, b])
-                    .flatten()
-                    .collect::<Vec<_>>();
                 egui::ColorImage::from_rgb(size, &image)
             };
 
@@ -144,7 +145,7 @@ impl SwarmRsApp {
                 let raycast_board = self.app_data.game.raycast_board.borrow();
                 let ray_dirty = raycast_board.iter().any(|p| *p != 0);
                 let ray_valid = raycast_board.len() == self.app_data.game.board.len();
-                if ray_dirty {
+                if ray_dirty || true {
                     self.img_gray.clear();
                 }
                 if ray_valid {
@@ -155,7 +156,7 @@ impl SwarmRsApp {
                         |app_data: &AppData| {
                             let (size, image) = app_data
                                 .game
-                                .occupancy_image()
+                                .occupancy_image(&app_data.fog_active, app_data.colored_fog)
                                 .unwrap_or_else(|| ([0, 0], vec![]));
                             let image = image
                                 .into_iter()
@@ -174,6 +175,7 @@ impl SwarmRsApp {
                         .paint(&response, &painter, &self.app_data, image_getter)
                 };
             } else {
+                self.img_gray.clear();
                 self.img_gray
                     .paint(&response, &painter, &self.app_data, image_getter);
             }
@@ -184,7 +186,7 @@ impl SwarmRsApp {
 
             paint_resources(&response, &painter, &self.app_data);
 
-            paint_agents(&response, &painter, self, &self.view_transform());
+            paint_agents((&response, &painter), self, &self.view_transform());
 
             paint_bullets(&response, &painter, &self.app_data);
 
@@ -290,6 +292,14 @@ fn render_search_tree(data: &AppData, response: &Response, painter: &Painter) {
             continue;
         };
 
+        if data
+            .selected_entity
+            .map(|id| id != entity.get_id())
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
         let Some(st) = entity.get_search_tree() else {
             continue;
         };
@@ -312,252 +322,307 @@ fn render_search_tree(data: &AppData, response: &Response, painter: &Painter) {
     }
 }
 
-fn paint_agents(
-    response: &Response,
-    painter: &Painter,
-    app: &SwarmRsApp,
-    view_transform: &Matrix3<f64>,
-) {
+const AGENT_COLORS: [Color32; 2] = [
+    Color32::from_rgb(0, 255, 127),
+    Color32::from_rgb(255, 0, 63),
+];
+
+const SELECTED_COLOR: Color32 = Color32::WHITE;
+
+fn paint_agents(bundle: (&Response, &Painter), app: &SwarmRsApp, view_transform: &Matrix3<f64>) {
+    let (response, _painter) = bundle;
     let data = &app.app_data;
     let to_screen = egui::emath::RectTransform::from_to(
         Rect::from_min_size(Pos2::ZERO, response.rect.size()),
         response.rect,
     );
 
-    const AGENT_COLORS: [Color32; 2] = [
-        Color32::from_rgb(0, 255, 127),
-        Color32::from_rgb(255, 0, 63),
-    ];
-
-    const SELECTED_COLOR: Color32 = Color32::WHITE;
-
     let game = &data.game;
 
-    let entities = &game.entities;
-
     let offset = Vec2::new(data.origin[0] as f32, data.origin[1] as f32);
-
-    let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
 
     let to_point = |pos: [f64; 2]| {
         let pos = Vec2::new(pos[0] as f32, pos[1] as f32);
         to_screen.transform_pos(((pos + offset) * data.scale as f32).to_pos2())
     };
 
-    for agent in entities.iter() {
-        let agent = agent.borrow();
-        let agent_pos = agent.get_pos();
+    fn vec2f64(v: [i32; 2]) -> [f64; 2] {
+        [v[0] as f64 + 0.5, v[1] as f64 + 0.5]
+    }
+
+    for graph in &game.fog_graph_real {
+        for pix in graph {
+            bundle.1.line_segment(
+                [to_point(vec2f64(pix[0])), to_point(vec2f64(pix[1]))],
+                (1., Color32::WHITE),
+            );
+        }
+    }
+
+    let filter_team = |team| {
+        move |res: &&RefCell<Entity>| {
+            let entity = res.borrow();
+            entity.get_team() == team || game.is_clear_fog_at(team, entity.get_pos())
+        }
+    };
+
+    match (data.fog_active[0], data.fog_active[1]) {
+        (false, false) | (true, true) => {
+            for agent in game.entities.iter() {
+                paint_real_agent(bundle, app, agent, view_transform, &to_point, to_screen);
+            }
+        }
+        (true, false) => {
+            for agent in game.entities.iter().filter(filter_team(0)) {
+                paint_real_agent(bundle, app, agent, view_transform, &to_point, to_screen);
+            }
+            paint_shadow_agents(bundle.1, app, 0, &to_point);
+        }
+        (false, true) => {
+            for agent in game.entities.iter().filter(filter_team(1)) {
+                paint_real_agent(bundle, app, agent, view_transform, &to_point, to_screen);
+            }
+            paint_shadow_agents(bundle.1, app, 1, to_point);
+        }
+    }
+}
+
+fn paint_real_agent(
+    (_response, painter): (&Response, &Painter),
+    app: &SwarmRsApp,
+    agent: &RefCell<Entity>,
+    view_transform: &Matrix3<f64>,
+    to_point: &impl Fn([f64; 2]) -> Pos2,
+    to_screen: RectTransform,
+) {
+    let data = &app.app_data;
+    let draw_rectangle = 1. / AGENT_HALFLENGTH < data.scale;
+
+    let agent = agent.borrow();
+    let agent_pos = agent.get_pos();
+    let pos = to_point(agent_pos);
+    let brush = if app.app_data.selected_entity == Some(agent.get_id()) {
+        SELECTED_COLOR
+    } else {
+        AGENT_COLORS[agent.get_team() % AGENT_COLORS.len()]
+    };
+    painter.circle_filled(pos, 5., brush);
+
+    if !agent.is_agent() {
+        painter.circle_stroke(
+            pos,
+            10.,
+            Stroke {
+                color: brush,
+                width: 3.,
+            },
+        );
+    }
+
+    let resource = agent.resource();
+    if 0 < resource {
+        use std::f64::consts::PI;
+        let f = resource as f64 * 2. * PI / agent.max_resource() as f64;
+        let count = 10; // There is no reason to pick this value, but it seems to work fine.
+        for (i0, i1) in (0..count).zip(1..=count) {
+            let theta0 = (i0 as f64 / count as f64 * f) as f32;
+            let theta1 = (i1 as f64 / count as f64 * f) as f32;
+            let p0 = Vec2::new(theta0.sin(), -theta0.cos()) * 7.5 + pos.to_vec2();
+            let p1 = Vec2::new(theta1.sin(), -theta1.cos()) * 7.5 + pos.to_vec2();
+            painter.line_segment(
+                [p0.to_pos2(), p1.to_pos2()],
+                Stroke {
+                    color: Color32::YELLOW,
+                    width: 2.5,
+                },
+            );
+        }
+    }
+
+    let agent_pos = agent.get_pos();
+    let agent_pos = Vector2::from(agent_pos);
+    let view_pos = to_point(agent_pos.into());
+
+    if let Some(orient) = agent.get_orient() {
+        let class = agent.get_class().unwrap_or(AgentClass::Worker);
+        let length = if matches!(class, AgentClass::Fighter) {
+            20.
+        } else {
+            10.
+        };
+        let dest = egui::pos2(
+            view_pos.x + (orient.cos() * length) as f32,
+            view_pos.y + (orient.sin() * length) as f32,
+        );
+        let orient_line = [view_pos, dest];
+        painter.line_segment(
+            orient_line,
+            Stroke {
+                color: brush,
+                width: 3.,
+            },
+        );
+
+        if draw_rectangle {
+            let mut path = vec![];
+            let rotation = Matrix2::from_angle(Rad(orient));
+            class.vertices(|v| {
+                let vertex = rotation * Vector2::from(v) + agent_pos;
+                path.push(to_point(vertex.into()));
+            });
+            painter.add(PathShape::closed_line(path, (1., brush)));
+        }
+    } else {
+        let aabb = agent.get_aabb();
+        let rect = Rect {
+            min: to_point([aabb[0], aabb[1]]),
+            max: to_point([aabb[2], aabb[3]]),
+        };
+        painter.rect_stroke(
+            rect,
+            0.,
+            Stroke {
+                color: brush,
+                width: 1.,
+            },
+        );
+    }
+
+    if data.target_visible {
+        if let Some(target_pos) = agent.get_target_pos(&data.game) {
+            let line = [pos, to_point(target_pos)];
+
+            painter.line_segment(line, (1., brush));
+        }
+    }
+
+    if data.path_visible {
+        let mut path = 'avoidance_path: {
+            let Some(path) = agent
+                .get_avoidance_path_array() else {
+                    break 'avoidance_path vec![];
+                };
+            if path.len() == 0 {
+                break 'avoidance_path vec![];
+            }
+            let path = if let Some(goal) = agent.get_goal() {
+                path.iter()
+                    .copied()
+                    .chain(std::iter::once([goal.x, goal.y]))
+                    .map(to_point)
+                    .collect::<Vec<Pos2>>()
+            } else {
+                path.iter().copied().map(to_point).collect::<Vec<Pos2>>()
+            };
+            path
+        };
+        if let Some(global_path) = agent.get_path() {
+            path.extend(global_path.iter().map(|node| to_point(node.pos)));
+            path.push(view_pos);
+            if app.draw_circle {
+                for point in global_path {
+                    let circle = to_point(point.pos);
+                    painter.circle_stroke(circle, (point.radius * data.scale) as f32, (1., brush));
+                }
+            }
+        }
+        painter.add(PathShape::line(path, (1., brush)));
+    }
+
+    if data.entity_trace_visible {
+        if let Some(deque) = agent.get_trace() {
+            let iter = deque.iter().copied().map(to_point).collect();
+            let path = PathShape::line(
+                iter,
+                (
+                    0.5,
+                    Color32::from_rgba_unmultiplied(brush.r(), brush.g(), brush.b(), 127),
+                ),
+            );
+            painter.add(path);
+        }
+    }
+
+    if data.entity_label_visible {
+        let text = if let Some(target) = agent.get_target() {
+            format!("{} ({})", agent.get_id(), target)
+        } else {
+            format!("{} (?)", agent.get_id())
+        };
+        painter.text(pos, Align2::CENTER_TOP, text, FontId::monospace(16.), brush);
+    }
+
+    if 5. < data.scale {
+        let health = agent.get_health_rate() as f32;
+        let view_pos_left = transform_point(view_transform, [agent_pos.x - 1., agent_pos.y - 1.]);
+        let view_pos_right = transform_point(view_transform, [agent_pos.x + 1., agent_pos.y - 1.]);
+        if matches!(agent.get_class(), Some(AgentClass::Fighter)) {
+            let base = pos2(view_pos_left.x as f32, view_pos_left.y as f32) + Vec2::new(8., -5.);
+            let cross = vec![
+                to_screen.transform_pos(base + Vec2::new(-8., -25.)),
+                to_screen.transform_pos(base + Vec2::new(0., -20.)),
+                to_screen.transform_pos(base + Vec2::new(8., -25.)),
+                to_screen.transform_pos(base + Vec2::new(8., -20.)),
+                to_screen.transform_pos(base + Vec2::new(0., -15.)),
+                to_screen.transform_pos(base + Vec2::new(-8., -20.)),
+            ];
+            painter.add(PathShape::convex_polygon(
+                vec![cross[0], cross[1], cross[4], cross[5]],
+                brush,
+                Stroke::NONE,
+            ));
+            painter.add(PathShape::convex_polygon(
+                vec![cross[1], cross[2], cross[3], cross[4]],
+                brush,
+                Stroke::NONE,
+            ));
+            painter.add(PathShape::closed_line(cross, (1., Color32::YELLOW)));
+        }
+        let l = (view_pos_left.x) as f32;
+        let r = (view_pos_right.x) as f32;
+        let t = (view_pos_left.y - 15.) as f32;
+        let b = (view_pos_left.y - 10.) as f32;
+        let rect = Rect {
+            min: pos2(l, t),
+            max: pos2(r, b),
+        };
+        painter.rect_filled(to_screen.transform_rect(rect), 0., Color32::RED);
+        let health_rect = Rect {
+            min: pos2(l, t),
+            max: pos2(l + health * (r - l), b),
+        };
+        painter.rect_filled(
+            to_screen.transform_rect(health_rect),
+            0.,
+            Color32::from_rgb(0, 191, 0),
+        );
+    }
+}
+
+fn paint_shadow_agents(
+    painter: &Painter,
+    app: &SwarmRsApp,
+    team: usize,
+    to_point: impl Fn([f64; 2]) -> Pos2,
+) {
+    for entity in &app.app_data.game.fog[team].entities {
+        let agent_pos = entity.pos;
         let pos = to_point(agent_pos);
-        let brush = if data.selected_entity == Some(agent.get_id()) {
+        let brush = if app.app_data.selected_entity == Some(entity.id) {
             SELECTED_COLOR
         } else {
-            AGENT_COLORS[agent.get_team() % AGENT_COLORS.len()]
+            AGENT_COLORS[(team + 1) % AGENT_COLORS.len()]
         };
         painter.circle_filled(pos, 5., brush);
 
-        if !agent.is_agent() {
-            painter.circle_stroke(
-                pos,
-                10.,
-                Stroke {
-                    color: brush,
-                    width: 3.,
-                },
-            );
-        }
-
-        let resource = agent.resource();
-        if 0 < resource {
-            use std::f64::consts::PI;
-            let f = resource as f64 * 2. * PI / agent.max_resource() as f64;
-            let count = 10; // There is no reason to pick this value, but it seems to work fine.
-            for (i0, i1) in (0..count).zip(1..=count) {
-                let theta0 = (i0 as f64 / count as f64 * f) as f32;
-                let theta1 = (i1 as f64 / count as f64 * f) as f32;
-                let p0 = Vec2::new(theta0.sin(), -theta0.cos()) * 7.5 + pos.to_vec2();
-                let p1 = Vec2::new(theta1.sin(), -theta1.cos()) * 7.5 + pos.to_vec2();
-                painter.line_segment(
-                    [p0.to_pos2(), p1.to_pos2()],
-                    Stroke {
-                        color: Color32::YELLOW,
-                        width: 2.5,
-                    },
-                );
-            }
-        }
-
-        let agent_pos = agent.get_pos();
-        let agent_pos = Vector2::from(agent_pos);
-        let view_pos = to_point(agent_pos.into());
-
-        if let Some(orient) = agent.get_orient() {
-            let class = agent.get_class().unwrap_or(AgentClass::Worker);
-            let length = if matches!(class, AgentClass::Fighter) {
-                20.
-            } else {
-                10.
-            };
-            let dest = egui::pos2(
-                view_pos.x + (orient.cos() * length) as f32,
-                view_pos.y + (orient.sin() * length) as f32,
-            );
-            let orient_line = [view_pos, dest];
-            painter.line_segment(
-                orient_line,
-                Stroke {
-                    color: brush,
-                    width: 3.,
-                },
-            );
-
-            if draw_rectangle {
-                let mut path = vec![];
-                let rotation = Matrix2::from_angle(Rad(orient));
-                class.vertices(|v| {
-                    let vertex = rotation * Vector2::from(v) + agent_pos;
-                    path.push(to_point(vertex.into()));
-                });
-                painter.add(PathShape::closed_line(path, (1., brush)));
-            }
-        } else {
-            let aabb = agent.get_aabb();
-            let rect = Rect {
-                min: to_point([aabb[0], aabb[1]]),
-                max: to_point([aabb[2], aabb[3]]),
-            };
-            painter.rect_stroke(
-                rect,
-                0.,
-                Stroke {
-                    color: brush,
-                    width: 1.,
-                },
-            );
-        }
-
-        if data.target_visible {
-            if let Some(target) = agent.get_target() {
-                if let Some(target) = game
-                    .entities
-                    .iter()
-                    .find(|agent| agent.borrow().get_id() == target)
-                {
-                    let target_pos = target.borrow().get_pos();
-                    let line = [pos, to_point(target_pos)];
-
-                    painter.line_segment(line, (1., brush));
-                }
-            }
-        }
-
-        if data.path_visible {
-            let mut path = 'avoidance_path: {
-                let Some(path) = agent
-                    .get_avoidance_path_array() else {
-                        break 'avoidance_path vec![];
-                    };
-                if path.len() == 0 {
-                    break 'avoidance_path vec![];
-                }
-                let path = if let Some(goal) = agent.get_goal() {
-                    path.iter()
-                        .copied()
-                        .chain(std::iter::once([goal.x, goal.y]))
-                        .map(to_point)
-                        .collect::<Vec<Pos2>>()
-                } else {
-                    path.iter().copied().map(to_point).collect::<Vec<Pos2>>()
-                };
-                path
-            };
-            if let Some(global_path) = agent.get_path() {
-                path.extend(global_path.iter().map(|node| to_point(node.pos)));
-                path.push(view_pos);
-                if app.draw_circle {
-                    for point in global_path {
-                        let circle = to_point(point.pos);
-                        painter.circle_stroke(
-                            circle,
-                            (point.radius * data.scale) as f32,
-                            (1., brush),
-                        );
-                    }
-                }
-            }
-            painter.add(PathShape::line(path, (1., brush)));
-        }
-
-        if data.entity_trace_visible {
-            if let Some(deque) = agent.get_trace() {
-                let iter = deque.iter().copied().map(to_point).collect();
-                let path = PathShape::line(
-                    iter,
-                    (
-                        0.5,
-                        Color32::from_rgba_unmultiplied(brush.r(), brush.g(), brush.b(), 127),
-                    ),
-                );
-                painter.add(path);
-            }
-        }
-
-        if data.entity_label_visible {
-            let text = if let Some(target) = agent.get_target() {
-                format!("{} ({})", agent.get_id(), target)
-            } else {
-                format!("{} (?)", agent.get_id())
-            };
-            painter.text(pos, Align2::CENTER_TOP, text, FontId::monospace(16.), brush);
-        }
-
-        if 5. < data.scale {
-            let health = agent.get_health_rate() as f32;
-            let view_pos_left =
-                transform_point(view_transform, [agent_pos.x - 1., agent_pos.y - 1.]);
-            let view_pos_right =
-                transform_point(view_transform, [agent_pos.x + 1., agent_pos.y - 1.]);
-            if matches!(agent.get_class(), Some(AgentClass::Fighter)) {
-                let base =
-                    pos2(view_pos_left.x as f32, view_pos_left.y as f32) + Vec2::new(8., -5.);
-                let cross = vec![
-                    to_screen.transform_pos(base + Vec2::new(-8., -25.)),
-                    to_screen.transform_pos(base + Vec2::new(0., -20.)),
-                    to_screen.transform_pos(base + Vec2::new(8., -25.)),
-                    to_screen.transform_pos(base + Vec2::new(8., -20.)),
-                    to_screen.transform_pos(base + Vec2::new(0., -15.)),
-                    to_screen.transform_pos(base + Vec2::new(-8., -20.)),
-                ];
-                painter.add(PathShape::convex_polygon(
-                    vec![cross[0], cross[1], cross[4], cross[5]],
-                    brush,
-                    Stroke::NONE,
-                ));
-                painter.add(PathShape::convex_polygon(
-                    vec![cross[1], cross[2], cross[3], cross[4]],
-                    brush,
-                    Stroke::NONE,
-                ));
-                painter.add(PathShape::closed_line(cross, (1., Color32::YELLOW)));
-            }
-            let l = (view_pos_left.x) as f32;
-            let r = (view_pos_right.x) as f32;
-            let t = (view_pos_left.y - 15.) as f32;
-            let b = (view_pos_left.y - 10.) as f32;
-            let rect = Rect {
-                min: pos2(l, t),
-                max: pos2(r, b),
-            };
-            painter.rect_filled(to_screen.transform_rect(rect), 0., Color32::RED);
-            let health_rect = Rect {
-                min: pos2(l, t),
-                max: pos2(l + health * (r - l), b),
-            };
-            painter.rect_filled(
-                to_screen.transform_rect(health_rect),
-                0.,
-                Color32::from_rgb(0, 191, 0),
-            );
-        }
+        painter.circle_stroke(
+            pos,
+            10.,
+            Stroke {
+                color: brush,
+                width: 3.,
+            },
+        );
     }
 }
 
@@ -662,8 +727,31 @@ fn paint_resources(response: &Response, painter: &Painter, data: &AppData) {
         to_screen.transform_pos(((pos + offset) * data.scale as f32).to_pos2())
     };
 
-    for resource in &game.resources {
-        draw_resource(resource, to_point(resource.pos));
+    match (data.fog_active[0], data.fog_active[1]) {
+        (false, false) => {
+            for resource in &game.resources {
+                draw_resource(resource, to_point(resource.pos));
+            }
+        }
+        (true, false) => {
+            for resource in &game.fog[0].resources {
+                draw_resource(resource, to_point(resource.pos));
+            }
+        }
+        (false, true) => {
+            for resource in &game.fog[1].resources {
+                draw_resource(resource, to_point(resource.pos));
+            }
+        }
+        _ => {
+            for resource in game.fog[0]
+                .resources
+                .iter()
+                .chain(game.fog[1].resources.iter())
+            {
+                draw_resource(resource, to_point(resource.pos));
+            }
+        }
     }
 }
 
