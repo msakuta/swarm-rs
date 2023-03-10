@@ -174,13 +174,105 @@ impl Game {
         let max_octave = 6;
         let terms = gen_terms(&mut xor128, max_octave);
 
+        let mut board_bin: Vec<_> = board
+            .into_iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let xi = i % shape.0;
+                let yi = i / shape.0;
+                let dx = (xi as isize - shape.0 as isize / 2) as f64;
+                let dy = (yi as isize - shape.1 as isize / 2) as f64;
+                let noise_val =
+                    perlin_noise_pixel(xi as f64, yi as f64, min_octave, max_octave, &terms, 0.5);
+                let dropoff = (dx * dx + dy * dy).sqrt() / shape.0 as f64;
+                p + NOISE_FACTOR * noise_val - DROPOFF_FACTOR * dropoff > 0.5
+            })
+            .collect();
+
+        board_bin = opening(board_bin, shape, 3, 3);
+
         create_mesh(shape, params.simplify, |xi, yi| {
-            let dx = (xi as isize - shape.0 as isize / 2) as f64;
-            let dy = (yi as isize - shape.1 as isize / 2) as f64;
-            let noise_val =
-                perlin_noise_pixel(xi as f64, yi as f64, min_octave, max_octave, &terms, 0.5);
-            let dropoff = (dx * dx + dy * dy).sqrt() / shape.0 as f64;
-            board[xi + yi * shape.0] + NOISE_FACTOR * noise_val - DROPOFF_FACTOR * dropoff > 0.5
+            board_bin[xi + shape.0 * yi]
         })
     }
+}
+
+const NEIGHBORS: [[isize; 2]; 4] = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+
+fn dilate(board: &[bool], output: &mut [bool], shape: (usize, usize)) {
+    output.fill(false);
+    for y in 0..shape.1 {
+        for x in 0..shape.0 {
+            if !board[x + shape.0 * y] {
+                continue;
+            }
+            for neighbor in NEIGHBORS {
+                let jx = x as isize + neighbor[0];
+                let jy = y as isize + neighbor[1];
+                if jx < 0 || shape.0 as isize <= jx || jy < 0 || shape.1 as isize <= jy {
+                    continue;
+                }
+                output[jx as usize + shape.0 * jy as usize] = true;
+            }
+        }
+    }
+}
+
+fn erode(board: &[bool], output: &mut [bool], shape: (usize, usize)) {
+    output.fill(true);
+    for y in 0..shape.1 {
+        for x in 0..shape.0 {
+            if board[x + shape.0 * y] {
+                continue;
+            }
+            for neighbor in NEIGHBORS {
+                let jx = x as isize + neighbor[0];
+                let jy = y as isize + neighbor[1];
+                if jx < 0 || shape.0 as isize <= jx || jy < 0 || shape.1 as isize <= jy {
+                    continue;
+                }
+                output[jx as usize + shape.0 * jy as usize] = false;
+            }
+        }
+    }
+}
+
+fn _closing(
+    mut board: Vec<bool>,
+    shape: (usize, usize),
+    erosion: usize,
+    dilation: usize,
+) -> Vec<bool> {
+    let mut output = vec![false; board.len()];
+    {
+        for _ in 0..dilation {
+            dilate(&board, &mut output, shape);
+            std::mem::swap(&mut board, &mut output);
+        }
+        for _ in 0..erosion {
+            erode(&board, &mut output, shape);
+            std::mem::swap(&mut board, &mut output);
+        }
+    }
+    board
+}
+
+fn opening(
+    mut board: Vec<bool>,
+    shape: (usize, usize),
+    erosion: usize,
+    dilation: usize,
+) -> Vec<bool> {
+    let mut output = vec![false; board.len()];
+    {
+        for _ in 0..erosion {
+            erode(&board, &mut output, shape);
+            std::mem::swap(&mut board, &mut output);
+        }
+        for _ in 0..dilation {
+            dilate(&board, &mut output, shape);
+            std::mem::swap(&mut board, &mut output);
+        }
+    }
+    board
 }
