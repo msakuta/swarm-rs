@@ -81,6 +81,7 @@ pub struct Agent {
     pub pos: [f64; 2],
     pub orient: f64,
     pub speed: f64,
+    pub steer: f64,
     pub team: usize,
     pub(crate) class: AgentClass,
     cooldown: f64,
@@ -139,6 +140,7 @@ impl Agent {
             pos,
             orient,
             speed: 0.,
+            steer: 0.,
             team,
             class,
             cooldown: 5.,
@@ -657,7 +659,11 @@ impl Agent {
                 } else if f.downcast_ref::<FindSpawner>().is_some() {
                     self.find_spawner(entities)
                 } else if f.downcast_ref::<FindResource>().is_some() {
-                    return Some(Box::new(self.find_resource(&game.fog[self.team].resources)));
+                    return Some(Box::new(self.find_resource(if game.params.fow {
+                        &game.fog[self.team].resources
+                    } else {
+                        &game.resources
+                    })));
                 } else if f.downcast_ref::<FindFog>().is_some() {
                     return Some(Box::new(self.find_fog(game)));
                 } else if f.downcast_ref::<ClearTarget>().is_some() {

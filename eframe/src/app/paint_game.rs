@@ -417,6 +417,35 @@ fn paint_real_agent(
                 width: 3.,
             },
         );
+    } else if let Entity::Agent(agent) = &agent as &Entity {
+        // use std::f64::consts::PI;
+        let orient = Matrix2::from_angle(Rad(agent.orient));
+        let render_wheel = |base, steer| {
+            let steer = Matrix2::from_angle(Rad(steer + agent.orient));
+            let center = orient * Vector2::new(base, 0.);
+            let rear = center + steer * Vector2::new(-0.05, 0.) + Vector2::from(agent_pos);
+            let front = center + steer * Vector2::new(0.05, 0.) + Vector2::from(agent_pos);
+            painter.line_segment(
+                [to_point(rear.into()), to_point(front.into())],
+                (1., Color32::WHITE),
+            );
+        };
+
+        const WHEEL_BASE: f64 = 1.;
+        const REAR_OFFSET: f64 = -WHEEL_BASE / 2.;
+
+        render_wheel(0.5, agent.steer);
+        render_wheel(REAR_OFFSET, 0.);
+
+        if f64::EPSILON < agent.steer.abs() {
+            let r = WHEEL_BASE / agent.steer.tan();
+            let rear_axis = orient * Vector2::new(REAR_OFFSET, 0.) + Vector2::from(agent_pos);
+            let ind = orient * Vector2::new(0., r) + rear_axis;
+            painter.line_segment(
+                [to_point(rear_axis.into()), to_point(ind.into())],
+                (1., Color32::WHITE),
+            );
+        }
     }
 
     let resource = agent.resource();

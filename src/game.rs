@@ -756,7 +756,7 @@ impl Game {
 
     pub(crate) fn is_fog_older_than(&self, team: usize, pos: [f64; 2], age: i32) -> bool {
         if !self.params.fow {
-            return true;
+            return false;
         }
         if pos[0] < 0. || self.xs <= pos[0] as usize || pos[1] < 0. || self.ys <= pos[1] as usize {
             false

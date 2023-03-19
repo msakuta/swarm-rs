@@ -118,8 +118,10 @@ impl Agent {
                 self_shape.intersects(&shape)
             })
         {
-            self.orient = state.heading;
-            if arrived {
+            // self.orient = state.heading;
+            self.steer = wrapped_angle.max(-0.25 * PI).min(0.25 * PI);
+            println!("Set steer to {:.06}", self.steer);
+            if arrived || true {
                 OrientToResult::Arrived
             } else {
                 OrientToResult::Approaching
@@ -135,13 +137,14 @@ impl Agent {
         game: &mut Game,
         others: &[RefCell<Entity>],
     ) -> bool {
+        const WHEEL_BASE: f64 = 1.;
         let forward = Vector2::new(self.orient.cos(), self.orient.sin());
         let speed = self.class.speed();
         let target_pos = Vector2::from(self.pos) + drive.min(speed).max(-speed) * forward;
         let target_state = AgentState {
             x: target_pos.x,
             y: target_pos.y,
-            heading: self.orient,
+            heading: self.orient + speed * self.steer.tan() / WHEEL_BASE,
         };
 
         if Self::collision_check(Some(self.id), target_state, self.class, others, false) {
@@ -161,6 +164,7 @@ impl Agent {
             }
             self.trace.push_back(self.pos);
             self.pos = target_pos.into();
+            self.orient = target_state.heading;
             self.speed = drive;
             return true;
             // }
