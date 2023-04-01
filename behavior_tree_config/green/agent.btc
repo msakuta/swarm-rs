@@ -28,10 +28,12 @@ tree main = Sequence {
 tree Fight = Sequence {
     var isTargetFog
     Throttle (time <- "100") {
-        SetBool (value <- "false", output -> isTargetFog)
-        FindEnemy
-        if (!HasTarget) {
-            SetBool (value <- "true", output -> isTargetFog)
+        Sequence {
+            SetBool (value <- "false", output -> isTargetFog)
+            FindEnemy
+            if (!HasTarget) {
+                SetBool (value <- "true", output -> isTargetFog)
+            }
         }
     }
 
