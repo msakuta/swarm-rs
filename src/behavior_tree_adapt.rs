@@ -221,7 +221,7 @@ impl BehaviorNode for ThrottleNode {
         BehaviorResult::Success
     }
 
-    fn num_children(&self) -> NumChildren {
+    fn max_children(&self) -> NumChildren {
         NumChildren::Finite(1)
     }
 }
