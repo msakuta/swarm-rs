@@ -1,6 +1,13 @@
-use eframe::{emath::RectTransform, epaint::PathShape};
+use std::collections::HashMap;
+
+use eframe::{
+    emath::RectTransform,
+    epaint::{ahash::HashSet, PathShape},
+};
 use egui::{pos2, Color32, FontId, Frame, Painter, Pos2, Rect, Ui, Vec2};
-use swarm_rs::behavior_tree_lite::{parse_file, parser::TreeDef, PortType};
+use swarm_rs::behavior_tree_lite::{
+    parse_file, parser::BlackboardValue, parser::TreeDef, PortType,
+};
 
 use crate::SwarmRsApp;
 
@@ -26,9 +33,11 @@ impl SwarmRsApp {
                 return;
             };
 
-            let node_painter = NodePainter::new(&painter, &to_screen);
+            let mut node_painter = NodePainter::new(&painter, &to_screen);
 
             node_painter.paint_node_recurse(NODE_PADDING, NODE_PADDING, &main.root());
+
+            node_painter.render_connections();
         });
     }
 }
@@ -39,12 +48,23 @@ const NODE_PADDING: f32 = 5.;
 const NODE_PADDING2: f32 = NODE_PADDING * 2.;
 /// Space between node rectangles
 const NODE_SPACING: f32 = 20.;
+/// Radius of the port markers
+const PORT_RADIUS: f32 = 6.;
+/// Diameter of the port markers
+const PORT_DIAMETER: f32 = PORT_RADIUS * 2.;
+
+#[derive(Default)]
+struct BBConnection {
+    source: Vec<Pos2>,
+    dest: Vec<Pos2>,
+}
 
 struct NodePainter<'p> {
     painter: &'p Painter,
     to_screen: &'p RectTransform,
     font: FontId,
     port_font: FontId,
+    bb_connections: HashMap<String, BBConnection>,
 }
 
 impl<'p> NodePainter<'p> {
@@ -54,10 +74,11 @@ impl<'p> NodePainter<'p> {
             to_screen,
             font: FontId::monospace(16.),
             port_font: FontId::monospace(12.),
+            bb_connections: HashMap::new(),
         }
     }
 
-    fn paint_node_recurse(&self, mut x: f32, mut y: f32, node: &TreeDef<'_>) -> Vec2 {
+    fn paint_node_recurse(&mut self, mut x: f32, mut y: f32, node: &TreeDef<'_>) -> Vec2 {
         let initial_x = x;
         let initial_y = y;
         let galley = self.painter.layout_no_wrap(
@@ -101,9 +122,24 @@ impl<'p> NodePainter<'p> {
                     },
                 );
                 let port_height = port_galley.size().y;
-                let port = (port_galley, y, port_type);
+                let ret = (port_galley, y, port_type);
+
+                if let BlackboardValue::Ref(bbref) = port.blackboard_value() {
+                    let con = self
+                        .bb_connections
+                        .entry(bbref.to_string())
+                        .or_insert(BBConnection::default());
+                    match port.get_type() {
+                        PortType::Input => con.dest.push(pos2(node_left, y + PORT_RADIUS)),
+                        PortType::Output => con
+                            .source
+                            .push(pos2(node_left + size.x + NODE_PADDING2, y + PORT_RADIUS)),
+                        _ => (),
+                    }
+                }
+
                 y += port_height;
-                port
+                ret
             })
             .collect();
 
@@ -131,7 +167,11 @@ impl<'p> NodePainter<'p> {
             );
 
             let render_input = || {
-                let mut path = vec![pos2(-5., 0.), pos2(-5., 12.), pos2(5., 6.)];
+                let mut path = vec![
+                    pos2(-5., 0.),
+                    pos2(-5., PORT_DIAMETER),
+                    pos2(5., PORT_RADIUS),
+                ];
                 for node in &mut path {
                     node.x += node_left;
                     node.y += y;
@@ -145,7 +185,11 @@ impl<'p> NodePainter<'p> {
             };
 
             let render_output = || {
-                let mut path = vec![pos2(-5., 0.), pos2(-5., 12.), pos2(5., 6.)];
+                let mut path = vec![
+                    pos2(-5., 0.),
+                    pos2(-5., PORT_DIAMETER),
+                    pos2(5., PORT_RADIUS),
+                ];
                 for node in &mut path {
                     node.x += node_left + size.x + NODE_PADDING2;
                     node.y += y;
@@ -178,5 +222,18 @@ impl<'p> NodePainter<'p> {
         size.x = tree_width;
 
         size
+    }
+
+    fn render_connections(&self) {
+        for (_, con) in &self.bb_connections {
+            for source in &con.source {
+                for dest in &con.dest {
+                    let from = self.to_screen.transform_pos(*source);
+                    let to = self.to_screen.transform_pos(*dest);
+                    self.painter
+                        .line_segment([from, to], (2., Color32::from_rgb(255, 127, 255)));
+                }
+            }
+        }
     }
 }
