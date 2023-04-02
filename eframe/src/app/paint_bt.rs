@@ -1,21 +1,80 @@
 use std::collections::HashMap;
 
-use eframe::{
-    emath::RectTransform,
-    epaint::{ahash::HashSet, PathShape},
-};
-use egui::{pos2, Color32, FontId, Frame, Painter, Pos2, Rect, Ui, Vec2};
+use cgmath::{Matrix3, MetricSpace, Point2, Vector2};
+use eframe::{emath::RectTransform, epaint::PathShape};
+use egui::{pos2, vec2, Color32, FontId, Frame, Painter, Pos2, Rect, Ui, Vec2};
 use swarm_rs::behavior_tree_lite::{
     parse_file, parser::BlackboardValue, parser::TreeDef, PortType,
 };
 
 use crate::SwarmRsApp;
 
+use super::transform_point;
+
+pub(crate) struct BTComponent {
+    origin: [f64; 2],
+    scale: f64,
+    pub(crate) canvas_offset: Pos2,
+}
+
+impl BTComponent {
+    pub(crate) fn new() -> Self {
+        Self {
+            origin: [0.; 2],
+            scale: 1.,
+            canvas_offset: Pos2::ZERO,
+        }
+    }
+
+    pub(crate) fn view_transform(&self) -> Matrix3<f64> {
+        /*Matrix3::from_scale(self.scale) */
+        Matrix3::from_translation(self.origin.into())
+    }
+
+    /// Inverse
+    pub(crate) fn inverse_view_transform(&self) -> Matrix3<f64> {
+        Matrix3::from_translation(-cgmath::Vector2::from(self.origin))
+            * Matrix3::from_scale(1. / self.scale)
+    }
+}
+
 impl SwarmRsApp {
     pub(crate) fn paint_bt(&mut self, ui: &mut Ui) {
+        struct UiResult {
+            scroll_delta: f32,
+            zoom_delta: f32,
+            pointer: bool,
+            delta: Vec2,
+            interact_pos: Point2<f64>,
+            hover_pos: Option<Pos2>,
+            clicked: bool,
+        }
+
+        let ui_result = {
+            let input = ui.input();
+            let interact_pos = input.pointer.interact_pos().unwrap_or(Pos2::ZERO)
+                - self.app_data.bt_compo.canvas_offset;
+
+            UiResult {
+                scroll_delta: input.scroll_delta[1],
+                zoom_delta: if input.multi_touch().is_some() {
+                    input.zoom_delta()
+                } else {
+                    1.
+                },
+                pointer: input.pointer.primary_down(),
+                delta: input.pointer.delta(),
+                interact_pos: Point2::new(interact_pos.x as f64, interact_pos.y as f64),
+                hover_pos: input.pointer.hover_pos(),
+                clicked: input.pointer.primary_released(),
+            }
+        };
+
         Frame::canvas(ui.style()).show(ui, |ui| {
             let (response, painter) =
                 ui.allocate_painter(ui.available_size(), egui::Sense::hover());
+
+            self.app_data.bt_compo.canvas_offset = response.rect.min;
 
             let to_screen = egui::emath::RectTransform::from_to(
                 Rect::from_min_size(Pos2::ZERO, response.rect.size()),
@@ -33,12 +92,42 @@ impl SwarmRsApp {
                 return;
             };
 
-            let mut node_painter = NodePainter::new(&painter, &to_screen);
+            let mut node_painter = NodePainter::new(&self.app_data.bt_compo, &painter, &to_screen);
 
-            node_painter.paint_node_recurse(NODE_PADDING, NODE_PADDING, &main.root());
+            let scale = self.app_data.bt_compo.scale as f32;
+            node_painter.paint_node_recurse(NODE_PADDING * scale, NODE_PADDING * scale, &main.root());
 
             node_painter.render_connections();
         });
+
+        if ui.ui_contains_pointer() {
+            // We disallow changing scale with a mouse wheel, because the font size does not scale linearly.
+            // if ui_result.scroll_delta != 0. || ui_result.zoom_delta != 1. {
+            //     let old_offset = transform_point(
+            //         &self.app_data.bt_compo.inverse_view_transform(),
+            //         ui_result.interact_pos,
+            //     );
+            //     if ui_result.scroll_delta < 0. {
+            //         self.app_data.bt_compo.scale /= 1.2;
+            //     } else if 0. < ui_result.scroll_delta {
+            //         self.app_data.bt_compo.scale *= 1.2;
+            //     } else if ui_result.zoom_delta != 1. {
+            //         self.app_data.bt_compo.scale *= ui_result.zoom_delta as f64;
+            //     }
+            //     let new_offset = transform_point(
+            //         &self.app_data.bt_compo.inverse_view_transform(),
+            //         ui_result.interact_pos,
+            //     );
+            //     let diff = new_offset - old_offset;
+            //     self.app_data.bt_compo.origin =
+            //         (Vector2::<f64>::from(self.app_data.bt_compo.origin) + diff).into();
+            // }
+
+            if ui_result.pointer {
+                self.app_data.bt_compo.origin[0] += ui_result.delta[0] as f64; // self.app_data.bt_compo.scale;
+                self.app_data.bt_compo.origin[1] += ui_result.delta[1] as f64; // self.app_data.bt_compo.scale;
+            }
+        }
     }
 }
 
@@ -60,25 +149,53 @@ struct BBConnection {
 }
 
 struct NodePainter<'p> {
+    bt_component: &'p BTComponent,
     painter: &'p Painter,
     to_screen: &'p RectTransform,
     font: FontId,
     port_font: FontId,
     bb_connections: HashMap<String, BBConnection>,
+    view_transform: Matrix3<f64>,
 }
 
 impl<'p> NodePainter<'p> {
-    fn new(painter: &'p Painter, to_screen: &'p RectTransform) -> Self {
+    fn new(
+        bt_component: &'p BTComponent,
+        painter: &'p Painter,
+        to_screen: &'p RectTransform,
+    ) -> Self {
+        let view_transform = bt_component.view_transform();
         Self {
+            bt_component,
             painter,
             to_screen,
-            font: FontId::monospace(16.),
-            port_font: FontId::monospace(12.),
+            font: FontId::monospace(bt_component.scale as f32 * 16.),
+            port_font: FontId::monospace(bt_component.scale as f32 * 12.),
             bb_connections: HashMap::new(),
+            view_transform,
         }
     }
 
+    fn to_pos2(&self, pos: impl Into<[f32; 2]>) -> Pos2 {
+        let offset = vec2(
+            self.bt_component.origin[0] as f32,
+            self.bt_component.origin[1] as f32,
+        );
+        let scale = 1.; //self.bt_component.scale;
+        let pos = pos.into();
+        let pos = transform_point(&self.view_transform, [pos[0] as f64, pos[1] as f64]);
+        let pos = Vec2::new(pos.x as f32, pos.y as f32);
+        self.to_screen
+            .transform_pos(((pos + offset) * scale as f32).to_pos2())
+    }
+
     fn paint_node_recurse(&mut self, mut x: f32, mut y: f32, node: &TreeDef<'_>) -> Vec2 {
+        let node_padding = NODE_PADDING * self.bt_component.scale as f32;
+        let node_padding2 = NODE_PADDING2 * self.bt_component.scale as f32;
+        let node_spacing = NODE_SPACING * self.bt_component.scale as f32;
+        let port_radius = PORT_RADIUS * self.bt_component.scale as f32;
+        let port_diameter = PORT_DIAMETER * self.bt_component.scale as f32;
+
         let initial_x = x;
         let initial_y = y;
         let galley = self.painter.layout_no_wrap(
@@ -92,21 +209,21 @@ impl<'p> NodePainter<'p> {
         let mut subnode_connectors = vec![];
         for child in node.children() {
             let node_size =
-                self.paint_node_recurse(x, y + size.y + NODE_PADDING2 + NODE_SPACING, child);
+                self.paint_node_recurse(x, y + size.y + node_padding2 + node_spacing, child);
 
-            let to = self.to_screen.transform_pos(pos2(
+            let to = self.to_pos2([
                 x + node_size.x / 2.,
-                y + size.y + NODE_PADDING2 + NODE_SPACING,
-            ));
+                y + size.y + node_padding2 + node_spacing,
+            ]);
             subnode_connectors.push(to);
 
-            x += node_size.x + NODE_PADDING2 + NODE_SPACING;
+            x += node_size.x + node_padding2 + node_spacing;
         }
 
-        let tree_width = size.x.max(x - initial_x - NODE_PADDING2 - NODE_SPACING);
+        let tree_width = size.x.max(x - initial_x - node_padding2 - node_spacing);
         let node_left = initial_x + (tree_width - size.x) / 2.;
 
-        y += size.y + NODE_PADDING;
+        y += size.y + node_padding;
         let ports: Vec<_> = node
             .port_maps()
             .iter()
@@ -130,10 +247,10 @@ impl<'p> NodePainter<'p> {
                         .entry(bbref.to_string())
                         .or_insert(BBConnection::default());
                     match port.get_type() {
-                        PortType::Input => con.dest.push(pos2(node_left, y + PORT_RADIUS)),
+                        PortType::Input => con.dest.push(pos2(node_left, y + port_radius)),
                         PortType::Output => con
                             .source
-                            .push(pos2(node_left + size.x + NODE_PADDING2, y + PORT_RADIUS)),
+                            .push(pos2(node_left + size.x + node_padding2, y + port_radius)),
                         _ => (),
                     }
                 }
@@ -143,39 +260,35 @@ impl<'p> NodePainter<'p> {
             })
             .collect();
 
+        let min = self.to_pos2([node_left, initial_y]);
+        let max = self.to_pos2([node_left + node_padding2 + size.x, y + node_padding]);
+
         self.painter.rect(
-            self.to_screen.transform_rect(Rect {
-                min: pos2(node_left, initial_y),
-                max: pos2(node_left + NODE_PADDING2 + size.x, y + NODE_PADDING),
-            }),
+            Rect { min, max },
             0.,
             Color32::from_rgb(63, 63, 31),
             (1., Color32::from_rgb(127, 127, 191)),
         );
 
         self.painter.galley(
-            self.to_screen
-                .transform_pos(pos2(node_left + NODE_PADDING, initial_y + NODE_PADDING)),
+            self.to_pos2([node_left + node_padding, initial_y + node_padding]),
             galley,
         );
 
         for (port, y, port_type) in ports {
-            self.painter.galley(
-                self.to_screen
-                    .transform_pos(pos2(node_left + NODE_PADDING, y)),
-                port,
-            );
+            self.painter
+                .galley(self.to_pos2([node_left + node_padding, y]), port);
 
             let render_input = || {
                 let mut path = vec![
                     pos2(-5., 0.),
-                    pos2(-5., PORT_DIAMETER),
-                    pos2(5., PORT_RADIUS),
+                    pos2(-5., port_diameter),
+                    pos2(5., port_radius),
                 ];
                 for node in &mut path {
                     node.x += node_left;
                     node.y += y;
-                    *node = self.to_screen.transform_pos(*node);
+                    *node = self.to_pos2(*node);
                 }
                 self.painter.add(PathShape::convex_polygon(
                     path,
@@ -187,13 +300,13 @@ impl<'p> NodePainter<'p> {
             let render_output = || {
                 let mut path = vec![
                     pos2(-5., 0.),
-                    pos2(-5., PORT_DIAMETER),
-                    pos2(5., PORT_RADIUS),
+                    pos2(-5., port_diameter),
+                    pos2(5., port_radius),
                 ];
                 for node in &mut path {
-                    node.x += node_left + size.x + NODE_PADDING2;
+                    node.x += node_left + size.x + node_padding2;
                     node.y += y;
-                    *node = self.to_screen.transform_pos(*node);
+                    *node = self.to_pos2(*node);
                 }
                 self.painter.add(PathShape::convex_polygon(
                     path,
@@ -212,9 +325,7 @@ impl<'p> NodePainter<'p> {
             }
         }
 
-        let from = self
-            .to_screen
-            .transform_pos(pos2(node_left + size.x / 2., y + NODE_PADDING));
+        let from = self.to_pos2([node_left + size.x / 2., y + node_padding]);
         for to in subnode_connectors {
             self.painter.line_segment([from, to], (2., Color32::YELLOW));
         }
@@ -228,8 +339,8 @@ impl<'p> NodePainter<'p> {
         for (_, con) in &self.bb_connections {
             for source in &con.source {
                 for dest in &con.dest {
-                    let from = self.to_screen.transform_pos(*source);
-                    let to = self.to_screen.transform_pos(*dest);
+                    let from = self.to_pos2(*source);
+                    let to = self.to_pos2(*dest);
                     self.painter
                         .line_segment([from, to], (2., Color32::from_rgb(255, 127, 255)));
                 }

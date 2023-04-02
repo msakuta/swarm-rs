@@ -11,6 +11,8 @@ use swarm_rs::vfs::FileVfs;
 
 use std::rc::Rc;
 
+use crate::app::BTComponent;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BtType {
     Agent,
@@ -82,6 +84,8 @@ pub struct AppData {
     pub(crate) bt_buffer: String,
     pub(crate) dirty: bool,
     pub(crate) vfs: Option<Box<dyn Vfs>>,
+
+    pub(crate) bt_compo: BTComponent,
 }
 
 impl AppData {
@@ -154,6 +158,8 @@ impl AppData {
             bt_buffer: "".to_owned(),
             dirty: false,
             vfs: Some(Box::new(vfs)),
+
+            bt_compo: BTComponent::new(),
         }
     }
 

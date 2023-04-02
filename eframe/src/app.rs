@@ -4,12 +4,13 @@ mod syntax_highlighting;
 
 use std::path::Path;
 
+pub(crate) use self::paint_bt::BTComponent;
 use self::syntax_highlighting::{highlight, CodeTheme};
 use crate::{
     app_data::{AppData, BtType},
     bg_image::BgImage,
 };
-use cgmath::Matrix3;
+use cgmath::{Matrix3, Point2, Transform, Vector2};
 use egui::{Color32, Pos2, RichText, Ui};
 use swarm_rs::{
     game::{BoardParams, BoardType, UpdateResult},
@@ -673,4 +674,16 @@ impl eframe::App for SwarmRsApp {
             self.paint_game(ui);
         });
     }
+}
+
+/// Transform a vector (delta). Equivalent to `(m * v.extend(0.)).truncate()`.
+fn _transform_vector(m: &Matrix3<f64>, v: impl Into<Vector2<f64>>) -> Vector2<f64> {
+    // Transform trait is implemented for both Point2 and Point3, so we need to repeat fully qualified method call
+    <Matrix3<f64> as Transform<Point2<f64>>>::transform_vector(m, v.into())
+}
+
+/// Transform a point. Equivalent to `(m * v.extend(1.)).truncate()`.
+fn transform_point(m: &Matrix3<f64>, v: impl Into<Point2<f64>>) -> Point2<f64> {
+    // I don't really get the point of having the vector and the point as different types.
+    <Matrix3<f64> as Transform<Point2<f64>>>::transform_point(m, v.into())
 }
