@@ -1,4 +1,4 @@
-use eframe::emath::RectTransform;
+use eframe::{emath::RectTransform, epaint::PathShape};
 use egui::{pos2, Color32, FontId, Frame, Painter, Pos2, Rect, Ui, Vec2};
 use swarm_rs::behavior_tree_lite::{parse_file, parser::TreeDef, PortType};
 
@@ -90,17 +90,18 @@ impl<'p> NodePainter<'p> {
             .port_maps()
             .iter()
             .map(|port| {
+                let port_type = port.get_type();
                 let port_galley = self.painter.layout_no_wrap(
                     port.node_port().to_string(),
                     self.port_font.clone(),
-                    match port.get_type() {
+                    match port_type {
                         PortType::Input => Color32::from_rgb(255, 255, 127),
                         PortType::Output => Color32::from_rgb(127, 255, 255),
                         PortType::InOut => Color32::from_rgb(127, 255, 127),
                     },
                 );
                 let port_height = port_galley.size().y;
-                let port = (port_galley, y);
+                let port = (port_galley, y, port_type);
                 y += port_height;
                 port
             })
@@ -122,12 +123,49 @@ impl<'p> NodePainter<'p> {
             galley,
         );
 
-        for (port, y) in ports {
+        for (port, y, port_type) in ports {
             self.painter.galley(
                 self.to_screen
                     .transform_pos(pos2(node_left + NODE_PADDING, y)),
                 port,
             );
+
+            let render_input = || {
+                let mut path = vec![pos2(-5., 0.), pos2(-5., 12.), pos2(5., 6.)];
+                for node in &mut path {
+                    node.x += node_left;
+                    node.y += y;
+                    *node = self.to_screen.transform_pos(*node);
+                }
+                self.painter.add(PathShape::convex_polygon(
+                    path,
+                    Color32::DARK_GRAY,
+                    (1., Color32::WHITE),
+                ));
+            };
+
+            let render_output = || {
+                let mut path = vec![pos2(-5., 0.), pos2(-5., 12.), pos2(5., 6.)];
+                for node in &mut path {
+                    node.x += node_left + size.x + NODE_PADDING2;
+                    node.y += y;
+                    *node = self.to_screen.transform_pos(*node);
+                }
+                self.painter.add(PathShape::convex_polygon(
+                    path,
+                    Color32::DARK_GRAY,
+                    (1., Color32::WHITE),
+                ));
+            };
+
+            match port_type {
+                PortType::Input => render_input(),
+                PortType::Output => render_output(),
+                _ => {
+                    render_input();
+                    render_output();
+                }
+            }
         }
 
         let from = self
