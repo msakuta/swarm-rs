@@ -1,3 +1,4 @@
+mod paint_bt;
 mod paint_game;
 mod syntax_highlighting;
 
@@ -661,6 +662,12 @@ impl eframe::App for SwarmRsApp {
                 Panel::BTEditor => self.show_editor(ui),
             }
         });
+
+        egui::TopBottomPanel::bottom("bt_graph")
+            .resizable(true)
+            .show(ctx, |ui| {
+                self.paint_bt(ui);
+            });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.paint_game(ui);

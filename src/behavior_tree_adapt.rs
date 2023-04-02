@@ -1,8 +1,8 @@
 //! An adapter functions and types for behavior_tree_lite
 
 use behavior_tree_lite::{
-    boxify, BehaviorCallback, BehaviorNode, BehaviorNodeContainer, BehaviorResult,
-    NumChildren, PortSpec, Registry,
+    boxify, BehaviorCallback, BehaviorNode, BehaviorNodeContainer, BehaviorResult, NumChildren,
+    PortSpec, Registry,
 };
 
 use crate::qtree::QTreePathNode;
