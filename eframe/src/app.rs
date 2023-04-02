@@ -4,7 +4,7 @@ mod syntax_highlighting;
 
 use std::path::Path;
 
-pub(crate) use self::paint_bt::BTComponent;
+pub(crate) use self::paint_bt::BTWidget;
 use self::syntax_highlighting::{highlight, CodeTheme};
 use crate::{
     app_data::{AppData, BtType},

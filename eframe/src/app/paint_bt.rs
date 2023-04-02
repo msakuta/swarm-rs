@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use cgmath::{Matrix3, MetricSpace, Point2, Vector2};
+use cgmath::Matrix3;
 use eframe::{emath::RectTransform, epaint::PathShape};
-use egui::{pos2, vec2, Color32, FontId, Frame, Painter, Pos2, Rect, Ui, Vec2};
+use egui::{pos2, vec2, Color32, FontId, Frame, Painter, Pos2, Rect, RichText, Ui, Vec2};
 use swarm_rs::behavior_tree_lite::{
     parse_file, parser::BlackboardValue, parser::TreeDef, PortType,
 };
@@ -11,84 +11,115 @@ use crate::SwarmRsApp;
 
 use super::transform_point;
 
-pub(crate) struct BTComponent {
+#[derive(PartialEq, Eq, Debug)]
+enum FontSize {
+    Small,
+    Normal,
+    Large,
+}
+
+/// Data associated with behavior tree graphical editor widget.
+/// egui does not really have a concept of widget, but it is the closest concept.
+pub(crate) struct BTWidget {
     origin: [f64; 2],
     scale: f64,
     pub(crate) canvas_offset: Pos2,
+    font_size: FontSize,
+    tree: String,
 }
 
-impl BTComponent {
+impl BTWidget {
     pub(crate) fn new() -> Self {
         Self {
             origin: [0.; 2],
             scale: 1.,
             canvas_offset: Pos2::ZERO,
+            font_size: FontSize::Normal,
+            tree: "main".to_string(),
         }
     }
 
     pub(crate) fn view_transform(&self) -> Matrix3<f64> {
-        /*Matrix3::from_scale(self.scale) */
         Matrix3::from_translation(self.origin.into())
-    }
-
-    /// Inverse
-    pub(crate) fn inverse_view_transform(&self) -> Matrix3<f64> {
-        Matrix3::from_translation(-cgmath::Vector2::from(self.origin))
-            * Matrix3::from_scale(1. / self.scale)
     }
 }
 
 impl SwarmRsApp {
     pub(crate) fn paint_bt(&mut self, ui: &mut Ui) {
         struct UiResult {
-            scroll_delta: f32,
-            zoom_delta: f32,
             pointer: bool,
             delta: Vec2,
-            interact_pos: Point2<f64>,
-            hover_pos: Option<Pos2>,
-            clicked: bool,
         }
 
         let ui_result = {
             let input = ui.input();
-            let interact_pos = input.pointer.interact_pos().unwrap_or(Pos2::ZERO)
-                - self.app_data.bt_compo.canvas_offset;
 
             UiResult {
-                scroll_delta: input.scroll_delta[1],
-                zoom_delta: if input.multi_touch().is_some() {
-                    input.zoom_delta()
-                } else {
-                    1.
-                },
                 pointer: input.pointer.primary_down(),
                 delta: input.pointer.delta(),
-                interact_pos: Point2::new(interact_pos.x as f64, interact_pos.y as f64),
-                hover_pos: input.pointer.hover_pos(),
-                clicked: input.pointer.primary_released(),
             }
         };
+
+        let source = &mut self.app_data.bt_buffer;
+        let Ok((_, trees)) = parse_file(source) else {
+            println!("Error on parsing source");
+            return;
+        };
+
+        ui.horizontal(|ui| {
+            ui.label("Tree:");
+
+            ui.group(|ui| {
+                for tree in &trees.tree_defs {
+                    let mut tree_name = RichText::new(tree.name());
+                    if self.app_data.bt_compo.tree == tree.name() {
+                        // TODO: use black in light theme
+                        tree_name = tree_name.underline().color(Color32::WHITE);
+                    }
+                    if ui.label(tree_name).interact(egui::Sense::click()).clicked() {
+                        self.app_data.bt_compo.tree = tree.name().to_owned();
+                    }
+                }
+            });
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Font size:");
+            ui.radio_value(
+                &mut self.app_data.bt_compo.font_size,
+                FontSize::Small,
+                "Small",
+            );
+            ui.radio_value(
+                &mut self.app_data.bt_compo.font_size,
+                FontSize::Normal,
+                "Normal",
+            );
+            ui.radio_value(
+                &mut self.app_data.bt_compo.font_size,
+                FontSize::Large,
+                "Large",
+            );
+        });
 
         Frame::canvas(ui.style()).show(ui, |ui| {
             let (response, painter) =
                 ui.allocate_painter(ui.available_size(), egui::Sense::hover());
 
             self.app_data.bt_compo.canvas_offset = response.rect.min;
+            self.app_data.bt_compo.scale = match self.app_data.bt_compo.font_size {
+                FontSize::Small => 0.7,
+                FontSize::Normal => 1.,
+                FontSize::Large => 1.5,
+            };
 
             let to_screen = egui::emath::RectTransform::from_to(
                 Rect::from_min_size(Pos2::ZERO, response.rect.size()),
                 response.rect,
             );
 
-            let source = &mut self.app_data.bt_buffer;
-            let Ok((_, tree)) = parse_file(source) else {
-                println!("Error on parsing source");
-                return;
-            };
-
-            let Some(main) = tree.tree_defs.iter().find(|node| node.name() == "main") else {
-                println!("No main tree defined in {:?}", tree.tree_defs.iter().map(|node| node.name()).collect::<Vec<_>>());
+            let Some(main) = trees.tree_defs.iter().find(|node| node.name() == self.app_data.bt_compo.tree) else {
+                println!("No tree {main:?} defined in {tree:?}", main = self.app_data.bt_compo.tree, tree = trees.tree_defs.iter().map(|node| node.name()).collect::<Vec<_>>());
                 return;
             };
 
@@ -98,36 +129,36 @@ impl SwarmRsApp {
             node_painter.paint_node_recurse(NODE_PADDING * scale, NODE_PADDING * scale, &main.root());
 
             node_painter.render_connections();
-        });
 
-        if ui.ui_contains_pointer() {
-            // We disallow changing scale with a mouse wheel, because the font size does not scale linearly.
-            // if ui_result.scroll_delta != 0. || ui_result.zoom_delta != 1. {
-            //     let old_offset = transform_point(
-            //         &self.app_data.bt_compo.inverse_view_transform(),
-            //         ui_result.interact_pos,
-            //     );
-            //     if ui_result.scroll_delta < 0. {
-            //         self.app_data.bt_compo.scale /= 1.2;
-            //     } else if 0. < ui_result.scroll_delta {
-            //         self.app_data.bt_compo.scale *= 1.2;
-            //     } else if ui_result.zoom_delta != 1. {
-            //         self.app_data.bt_compo.scale *= ui_result.zoom_delta as f64;
-            //     }
-            //     let new_offset = transform_point(
-            //         &self.app_data.bt_compo.inverse_view_transform(),
-            //         ui_result.interact_pos,
-            //     );
-            //     let diff = new_offset - old_offset;
-            //     self.app_data.bt_compo.origin =
-            //         (Vector2::<f64>::from(self.app_data.bt_compo.origin) + diff).into();
-            // }
+            if ui.ui_contains_pointer() {
+                // We disallow changing scale with a mouse wheel, because the font size does not scale linearly.
+                // if ui_result.scroll_delta != 0. || ui_result.zoom_delta != 1. {
+                //     let old_offset = transform_point(
+                //         &self.app_data.bt_compo.inverse_view_transform(),
+                //         ui_result.interact_pos,
+                //     );
+                //     if ui_result.scroll_delta < 0. {
+                //         self.app_data.bt_compo.scale /= 1.2;
+                //     } else if 0. < ui_result.scroll_delta {
+                //         self.app_data.bt_compo.scale *= 1.2;
+                //     } else if ui_result.zoom_delta != 1. {
+                //         self.app_data.bt_compo.scale *= ui_result.zoom_delta as f64;
+                //     }
+                //     let new_offset = transform_point(
+                //         &self.app_data.bt_compo.inverse_view_transform(),
+                //         ui_result.interact_pos,
+                //     );
+                //     let diff = new_offset - old_offset;
+                //     self.app_data.bt_compo.origin =
+                //         (Vector2::<f64>::from(self.app_data.bt_compo.origin) + diff).into();
+                // }
 
-            if ui_result.pointer {
-                self.app_data.bt_compo.origin[0] += ui_result.delta[0] as f64; // self.app_data.bt_compo.scale;
-                self.app_data.bt_compo.origin[1] += ui_result.delta[1] as f64; // self.app_data.bt_compo.scale;
+                if ui_result.pointer {
+                    self.app_data.bt_compo.origin[0] += ui_result.delta[0] as f64; // self.app_data.bt_compo.scale;
+                    self.app_data.bt_compo.origin[1] += ui_result.delta[1] as f64; // self.app_data.bt_compo.scale;
+                }
             }
-        }
+        });
     }
 }
 
@@ -137,6 +168,8 @@ const NODE_PADDING: f32 = 5.;
 const NODE_PADDING2: f32 = NODE_PADDING * 2.;
 /// Space between node rectangles
 const NODE_SPACING: f32 = 20.;
+/// Space between node rectangles
+const CHILD_NODE_SPACING: f32 = 40.;
 /// Radius of the port markers
 const PORT_RADIUS: f32 = 6.;
 /// Diameter of the port markers
@@ -149,7 +182,7 @@ struct BBConnection {
 }
 
 struct NodePainter<'p> {
-    bt_component: &'p BTComponent,
+    bt_component: &'p BTWidget,
     painter: &'p Painter,
     to_screen: &'p RectTransform,
     font: FontId,
@@ -159,11 +192,7 @@ struct NodePainter<'p> {
 }
 
 impl<'p> NodePainter<'p> {
-    fn new(
-        bt_component: &'p BTComponent,
-        painter: &'p Painter,
-        to_screen: &'p RectTransform,
-    ) -> Self {
+    fn new(bt_component: &'p BTWidget, painter: &'p Painter, to_screen: &'p RectTransform) -> Self {
         let view_transform = bt_component.view_transform();
         Self {
             bt_component,
@@ -193,6 +222,7 @@ impl<'p> NodePainter<'p> {
         let node_padding = NODE_PADDING * self.bt_component.scale as f32;
         let node_padding2 = NODE_PADDING2 * self.bt_component.scale as f32;
         let node_spacing = NODE_SPACING * self.bt_component.scale as f32;
+        let child_node_spacing = CHILD_NODE_SPACING * self.bt_component.scale as f32;
         let port_radius = PORT_RADIUS * self.bt_component.scale as f32;
         let port_diameter = PORT_DIAMETER * self.bt_component.scale as f32;
 
@@ -209,11 +239,11 @@ impl<'p> NodePainter<'p> {
         let mut subnode_connectors = vec![];
         for child in node.children() {
             let node_size =
-                self.paint_node_recurse(x, y + size.y + node_padding2 + node_spacing, child);
+                self.paint_node_recurse(x, y + size.y + node_padding2 + child_node_spacing, child);
 
             let to = self.to_pos2([
                 x + node_size.x / 2.,
-                y + size.y + node_padding2 + node_spacing,
+                y + size.y + node_padding2 + child_node_spacing,
             ]);
             subnode_connectors.push(to);
 
@@ -281,9 +311,9 @@ impl<'p> NodePainter<'p> {
 
             let render_input = || {
                 let mut path = vec![
-                    pos2(-5., 0.),
-                    pos2(-5., port_diameter),
-                    pos2(5., port_radius),
+                    pos2(-port_radius, 0.),
+                    pos2(-port_radius, port_diameter),
+                    pos2(port_radius, port_radius),
                 ];
                 for node in &mut path {
                     node.x += node_left;
@@ -299,9 +329,9 @@ impl<'p> NodePainter<'p> {
 
             let render_output = || {
                 let mut path = vec![
-                    pos2(-5., 0.),
-                    pos2(-5., port_diameter),
-                    pos2(5., port_radius),
+                    pos2(-port_radius, 0.),
+                    pos2(-port_radius, port_diameter),
+                    pos2(port_radius, port_radius),
                 ];
                 for node in &mut path {
                     node.x += node_left + size.x + node_padding2;

@@ -11,7 +11,7 @@ use swarm_rs::vfs::FileVfs;
 
 use std::rc::Rc;
 
-use crate::app::BTComponent;
+use crate::app::BTWidget;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BtType {
@@ -85,7 +85,7 @@ pub struct AppData {
     pub(crate) dirty: bool,
     pub(crate) vfs: Option<Box<dyn Vfs>>,
 
-    pub(crate) bt_compo: BTComponent,
+    pub(crate) bt_compo: BTWidget,
 }
 
 impl AppData {
@@ -159,7 +159,7 @@ impl AppData {
             dirty: false,
             vfs: Some(Box::new(vfs)),
 
-            bt_compo: BTComponent::new(),
+            bt_compo: BTWidget::new(),
         }
     }
 

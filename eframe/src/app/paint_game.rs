@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use crate::app_data::AppData;
-use cgmath::{InnerSpace, Matrix2, Matrix3, MetricSpace, Point2, Rad, Transform, Vector2};
+use cgmath::{InnerSpace, Matrix2, Matrix3, MetricSpace, Point2, Rad, Vector2};
 use eframe::{
     emath::RectTransform,
     epaint::{self, PathShape},
