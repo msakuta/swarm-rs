@@ -371,10 +371,37 @@ impl<'p> NodePainter<'p> {
                 for dest in &con.dest {
                     let from = self.to_pos2(*source);
                     let to = self.to_pos2(*dest);
-                    self.painter
-                        .line_segment([from, to], (2., Color32::from_rgb(255, 127, 255)));
+                    let mut points = vec![];
+                    let midpoint = ((from.to_vec2() + to.to_vec2()) / 2.).to_pos2();
+                    let cp_length =
+                        ((to.x - from.x) / 2.).min(100. * self.bt_component.scale as f32);
+                    let from_cp = from + vec2(cp_length, 0.);
+                    let to_cp = to + vec2(-cp_length, 0.);
+                    let interpolates = 10;
+                    for i in 0..=interpolates {
+                        let f = i as f32 / interpolates as f32;
+                        let p0 = interp(from, from_cp, f);
+                        let p1 = interp(from_cp, midpoint, f);
+                        let p2 = interp(p0, p1, f);
+                        points.push(p2);
+                    }
+                    for i in 0..=interpolates {
+                        let f = i as f32 / interpolates as f32;
+                        let p0 = interp(midpoint, to_cp, f);
+                        let p1 = interp(to_cp, to, f);
+                        let p2 = interp(p0, p1, f);
+                        points.push(p2);
+                    }
+                    self.painter.add(PathShape::line(
+                        points,
+                        (2., Color32::from_rgb(255, 127, 255)),
+                    ));
                 }
             }
         }
     }
+}
+
+fn interp(v0: Pos2, v1: Pos2, f: f32) -> Pos2 {
+    (v0.to_vec2() * (1. - f) + v1.to_vec2() * f).to_pos2()
 }
