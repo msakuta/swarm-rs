@@ -166,10 +166,14 @@ impl SwarmRsApp {
     }
 
     fn show_panel_ui(&mut self, ui: &mut Ui) {
-        ui.add(egui::Checkbox::new(
-            &mut self.app_data.game_params.paused,
-            "Paused",
-        ));
+        ui.horizontal(|ui| {
+            ui.add(egui::Checkbox::new(
+                &mut self.app_data.game_params.paused,
+                "Paused",
+            ));
+
+            ui.checkbox(&mut self.app_data.bt_visible, "BT Graphical editor");
+        });
 
         ui.collapsing("New game options", |ui| {
             if ui.button("New game").clicked() {
@@ -415,18 +419,22 @@ impl SwarmRsApp {
     fn show_editor(&mut self, ui: &mut Ui) {
         let team_colors = [Color32::GREEN, Color32::RED];
 
-        if ui.button("Reset all").clicked() {
-            self.app_data.set_confirm_message(
-                "Are you sure you want to reset all the source codes?".to_string(),
-                Box::new(|app_data| {
-                    if let Some(ref mut vfs) = app_data.vfs {
-                        if let Err(e) = vfs.reset() {
-                            app_data.set_message(e);
+        ui.horizontal(|ui| {
+            if ui.button("Reset all").clicked() {
+                self.app_data.set_confirm_message(
+                    "Are you sure you want to reset all the source codes?".to_string(),
+                    Box::new(|app_data| {
+                        if let Some(ref mut vfs) = app_data.vfs {
+                            if let Err(e) = vfs.reset() {
+                                app_data.set_message(e);
+                            }
                         }
-                    }
-                }),
-            )
-        }
+                    }),
+                )
+            }
+
+            ui.checkbox(&mut self.app_data.bt_visible, "BT Graphical editor");
+        });
 
         ui.horizontal(|ui| {
             ui.label("BT to apply:");
@@ -664,11 +672,13 @@ impl eframe::App for SwarmRsApp {
             }
         });
 
-        egui::TopBottomPanel::bottom("bt_graph")
-            .resizable(true)
-            .show(ctx, |ui| {
-                self.paint_bt(ui);
-            });
+        if self.app_data.bt_visible {
+            egui::TopBottomPanel::bottom("bt_graph")
+                .resizable(true)
+                .show(ctx, |ui| {
+                    self.paint_bt(ui);
+                });
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.paint_game(ui);

@@ -85,7 +85,8 @@ pub struct AppData {
     pub(crate) dirty: bool,
     pub(crate) vfs: Option<Box<dyn Vfs>>,
 
-    pub(crate) bt_compo: BTWidget,
+    pub(crate) bt_visible: bool,
+    pub(crate) bt_widget: BTWidget,
 }
 
 impl AppData {
@@ -159,7 +160,8 @@ impl AppData {
             dirty: false,
             vfs: Some(Box::new(vfs)),
 
-            bt_compo: BTWidget::new(),
+            bt_visible: false,
+            bt_widget: BTWidget::new(),
         }
     }
 

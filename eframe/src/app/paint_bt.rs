@@ -72,12 +72,12 @@ impl SwarmRsApp {
             ui.group(|ui| {
                 for tree in &trees.tree_defs {
                     let mut tree_name = RichText::new(tree.name());
-                    if self.app_data.bt_compo.tree == tree.name() {
+                    if self.app_data.bt_widget.tree == tree.name() {
                         // TODO: use black in light theme
                         tree_name = tree_name.underline().color(Color32::WHITE);
                     }
                     if ui.label(tree_name).interact(egui::Sense::click()).clicked() {
-                        self.app_data.bt_compo.tree = tree.name().to_owned();
+                        self.app_data.bt_widget.tree = tree.name().to_owned();
                     }
                 }
             });
@@ -86,17 +86,17 @@ impl SwarmRsApp {
         ui.horizontal(|ui| {
             ui.label("Font size:");
             ui.radio_value(
-                &mut self.app_data.bt_compo.font_size,
+                &mut self.app_data.bt_widget.font_size,
                 FontSize::Small,
                 "Small",
             );
             ui.radio_value(
-                &mut self.app_data.bt_compo.font_size,
+                &mut self.app_data.bt_widget.font_size,
                 FontSize::Normal,
                 "Normal",
             );
             ui.radio_value(
-                &mut self.app_data.bt_compo.font_size,
+                &mut self.app_data.bt_widget.font_size,
                 FontSize::Large,
                 "Large",
             );
@@ -106,8 +106,8 @@ impl SwarmRsApp {
             let (response, painter) =
                 ui.allocate_painter(ui.available_size(), egui::Sense::hover());
 
-            self.app_data.bt_compo.canvas_offset = response.rect.min;
-            self.app_data.bt_compo.scale = match self.app_data.bt_compo.font_size {
+            self.app_data.bt_widget.canvas_offset = response.rect.min;
+            self.app_data.bt_widget.scale = match self.app_data.bt_widget.font_size {
                 FontSize::Small => 0.7,
                 FontSize::Normal => 1.,
                 FontSize::Large => 1.5,
@@ -118,14 +118,14 @@ impl SwarmRsApp {
                 response.rect,
             );
 
-            let Some(main) = trees.tree_defs.iter().find(|node| node.name() == self.app_data.bt_compo.tree) else {
-                println!("No tree {main:?} defined in {tree:?}", main = self.app_data.bt_compo.tree, tree = trees.tree_defs.iter().map(|node| node.name()).collect::<Vec<_>>());
+            let Some(main) = trees.tree_defs.iter().find(|node| node.name() == self.app_data.bt_widget.tree) else {
+                println!("No tree {main:?} defined in {tree:?}", main = self.app_data.bt_widget.tree, tree = trees.tree_defs.iter().map(|node| node.name()).collect::<Vec<_>>());
                 return;
             };
 
-            let mut node_painter = NodePainter::new(&self.app_data.bt_compo, &painter, &to_screen);
+            let mut node_painter = NodePainter::new(&self.app_data.bt_widget, &painter, &to_screen);
 
-            let scale = self.app_data.bt_compo.scale as f32;
+            let scale = self.app_data.bt_widget.scale as f32;
             node_painter.paint_node_recurse(NODE_PADDING * scale, NODE_PADDING * scale, &main.root());
 
             node_painter.render_connections();
@@ -154,8 +154,8 @@ impl SwarmRsApp {
                 // }
 
                 if ui_result.pointer {
-                    self.app_data.bt_compo.origin[0] += ui_result.delta[0] as f64; // self.app_data.bt_compo.scale;
-                    self.app_data.bt_compo.origin[1] += ui_result.delta[1] as f64; // self.app_data.bt_compo.scale;
+                    self.app_data.bt_widget.origin[0] += ui_result.delta[0] as f64; // self.app_data.bt_compo.scale;
+                    self.app_data.bt_widget.origin[1] += ui_result.delta[1] as f64; // self.app_data.bt_compo.scale;
                 }
             }
         });
