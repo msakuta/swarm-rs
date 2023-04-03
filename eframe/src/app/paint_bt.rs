@@ -260,7 +260,11 @@ impl<'p> NodePainter<'p> {
             .map(|port| {
                 let port_type = port.get_type();
                 let port_galley = self.painter.layout_no_wrap(
-                    port.node_port().to_string(),
+                    if let BlackboardValue::Literal(lit) = port.blackboard_value() {
+                        format!("{} <- {:?}", port.node_port().to_string(), lit)
+                    } else {
+                        port.node_port().to_string()
+                    },
                     self.port_font.clone(),
                     match port_type {
                         PortType::Input => Color32::from_rgb(255, 255, 127),
@@ -269,6 +273,7 @@ impl<'p> NodePainter<'p> {
                     },
                 );
                 let port_height = port_galley.size().y;
+                let port_width = port_galley.size().x;
                 let ret = (port_galley, y, port_type);
 
                 if let BlackboardValue::Ref(bbref) = port.blackboard_value() {
@@ -284,6 +289,8 @@ impl<'p> NodePainter<'p> {
                         _ => (),
                     }
                 }
+
+                size.x = size.x.max(port_width);
 
                 y += port_height;
                 ret
@@ -360,7 +367,7 @@ impl<'p> NodePainter<'p> {
             self.painter.line_segment([from, to], (2., Color32::YELLOW));
         }
 
-        size.x = tree_width;
+        size.x = size.x.max(tree_width);
 
         size
     }
