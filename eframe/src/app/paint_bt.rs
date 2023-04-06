@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use cgmath::Matrix3;
 use eframe::{emath::RectTransform, epaint::PathShape};
-use egui::{pos2, vec2, Color32, FontId, Frame, Painter, Pos2, Rect, RichText, Ui, Vec2};
+use egui::{pos2, vec2, Align2, Color32, FontId, Frame, Painter, Pos2, Rect, RichText, Ui, Vec2};
 use swarm_rs::behavior_tree_lite::{
     parse_file, parser::BlackboardValue, parser::TreeDef, PortType,
 };
@@ -26,6 +26,8 @@ pub(crate) struct BTWidget {
     pub(crate) canvas_offset: Pos2,
     font_size: FontSize,
     tree: String,
+    /// Whether to show the blackboard variables names on the connections.
+    show_vars: bool,
 }
 
 impl BTWidget {
@@ -36,6 +38,7 @@ impl BTWidget {
             canvas_offset: Pos2::ZERO,
             font_size: FontSize::Normal,
             tree: "main".to_string(),
+            show_vars: true,
         }
     }
 
@@ -99,6 +102,10 @@ impl SwarmRsApp {
                 &mut self.app_data.bt_widget.font_size,
                 FontSize::Large,
                 "Large",
+            );
+            ui.checkbox(
+                &mut self.app_data.bt_widget.show_vars,
+                "Show variable labels",
             );
         });
 
@@ -373,7 +380,7 @@ impl<'p> NodePainter<'p> {
     }
 
     fn render_connections(&self) {
-        for (_, con) in &self.bb_connections {
+        for (name, con) in &self.bb_connections {
             for source in &con.source {
                 for dest in &con.dest {
                     let from = self.to_pos2(*source);
@@ -403,6 +410,25 @@ impl<'p> NodePainter<'p> {
                         points,
                         (2., Color32::from_rgb(255, 127, 255)),
                     ));
+
+                    if self.bt_component.show_vars {
+                        let galley = self.painter.layout_no_wrap(
+                            name.to_string(),
+                            self.port_font.clone(),
+                            Color32::WHITE,
+                        );
+                        let mut rect = galley.rect;
+                        let text_pos = pos2(midpoint.x - rect.width() / 2., midpoint.y);
+                        rect.min = text_pos;
+                        rect.max += text_pos.to_vec2();
+                        self.painter.rect(
+                            rect,
+                            0.,
+                            Color32::from_black_alpha(255),
+                            (1., Color32::from_rgb(255, 127, 255)),
+                        );
+                        self.painter.galley(text_pos, galley);
+                    }
                 }
             }
         }
