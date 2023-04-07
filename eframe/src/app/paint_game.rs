@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use crate::app_data::AppData;
-use cgmath::{InnerSpace, Matrix2, Matrix3, MetricSpace, Point2, Rad, Transform, Vector2};
+use cgmath::{InnerSpace, Matrix2, Matrix3, MetricSpace, Point2, Rad, Vector2};
 use eframe::{
     emath::RectTransform,
     epaint::{self, PathShape},
@@ -15,19 +15,7 @@ use swarm_rs::{
     Bullet, CellState,
 };
 
-use super::SwarmRsApp;
-
-/// Transform a vector (delta). Equivalent to `(m * v.extend(0.)).truncate()`.
-fn _transform_vector(m: &Matrix3<f64>, v: impl Into<Vector2<f64>>) -> Vector2<f64> {
-    // Transform trait is implemented for both Point2 and Point3, so we need to repeat fully qualified method call
-    <Matrix3<f64> as Transform<Point2<f64>>>::transform_vector(m, v.into())
-}
-
-/// Transform a point. Equivalent to `(m * v.extend(1.)).truncate()`.
-fn transform_point(m: &Matrix3<f64>, v: impl Into<Point2<f64>>) -> Point2<f64> {
-    // I don't really get the point of having the vector and the point as different types.
-    <Matrix3<f64> as Transform<Point2<f64>>>::transform_point(m, v.into())
-}
+use super::{transform_point, SwarmRsApp};
 
 /// In points
 const SCREEN_SELECT_RADIUS: f64 = 20.;

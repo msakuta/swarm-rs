@@ -1,14 +1,16 @@
+mod paint_bt;
 mod paint_game;
 mod syntax_highlighting;
 
 use std::path::Path;
 
+pub(crate) use self::paint_bt::BTWidget;
 use self::syntax_highlighting::{highlight, CodeTheme};
 use crate::{
     app_data::{AppData, BtType},
     bg_image::BgImage,
 };
-use cgmath::Matrix3;
+use cgmath::{Matrix3, Point2, Transform, Vector2};
 use egui::{Color32, Pos2, RichText, Ui};
 use swarm_rs::{
     game::{BoardParams, BoardType, UpdateResult},
@@ -164,10 +166,14 @@ impl SwarmRsApp {
     }
 
     fn show_panel_ui(&mut self, ui: &mut Ui) {
-        ui.add(egui::Checkbox::new(
-            &mut self.app_data.game_params.paused,
-            "Paused",
-        ));
+        ui.horizontal(|ui| {
+            ui.add(egui::Checkbox::new(
+                &mut self.app_data.game_params.paused,
+                "Paused",
+            ));
+
+            ui.checkbox(&mut self.app_data.bt_visible, "BT Graphical editor");
+        });
 
         ui.collapsing("New game options", |ui| {
             if ui.button("New game").clicked() {
@@ -413,18 +419,22 @@ impl SwarmRsApp {
     fn show_editor(&mut self, ui: &mut Ui) {
         let team_colors = [Color32::GREEN, Color32::RED];
 
-        if ui.button("Reset all").clicked() {
-            self.app_data.set_confirm_message(
-                "Are you sure you want to reset all the source codes?".to_string(),
-                Box::new(|app_data| {
-                    if let Some(ref mut vfs) = app_data.vfs {
-                        if let Err(e) = vfs.reset() {
-                            app_data.set_message(e);
+        ui.horizontal(|ui| {
+            if ui.button("Reset all").clicked() {
+                self.app_data.set_confirm_message(
+                    "Are you sure you want to reset all the source codes?".to_string(),
+                    Box::new(|app_data| {
+                        if let Some(ref mut vfs) = app_data.vfs {
+                            if let Err(e) = vfs.reset() {
+                                app_data.set_message(e);
+                            }
                         }
-                    }
-                }),
-            )
-        }
+                    }),
+                )
+            }
+
+            ui.checkbox(&mut self.app_data.bt_visible, "BT Graphical editor");
+        });
 
         ui.horizontal(|ui| {
             ui.label("BT to apply:");
@@ -662,8 +672,28 @@ impl eframe::App for SwarmRsApp {
             }
         });
 
+        if self.app_data.bt_visible {
+            egui::TopBottomPanel::bottom("bt_graph")
+                .resizable(true)
+                .show(ctx, |ui| {
+                    self.paint_bt(ui);
+                });
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             self.paint_game(ui);
         });
     }
+}
+
+/// Transform a vector (delta). Equivalent to `(m * v.extend(0.)).truncate()`.
+fn _transform_vector(m: &Matrix3<f64>, v: impl Into<Vector2<f64>>) -> Vector2<f64> {
+    // Transform trait is implemented for both Point2 and Point3, so we need to repeat fully qualified method call
+    <Matrix3<f64> as Transform<Point2<f64>>>::transform_vector(m, v.into())
+}
+
+/// Transform a point. Equivalent to `(m * v.extend(1.)).truncate()`.
+fn transform_point(m: &Matrix3<f64>, v: impl Into<Point2<f64>>) -> Point2<f64> {
+    // I don't really get the point of having the vector and the point as different types.
+    <Matrix3<f64> as Transform<Point2<f64>>>::transform_point(m, v.into())
 }

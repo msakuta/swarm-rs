@@ -1,14 +1,14 @@
 //! An adapter functions and types for behavior_tree_lite
 
 use behavior_tree_lite::{
-    boxify, tick_child_node, BehaviorCallback, BehaviorNode, BehaviorNodeContainer, BehaviorResult,
+    boxify, BehaviorCallback, BehaviorNode, BehaviorNodeContainer, BehaviorResult, NumChildren,
     PortSpec, Registry,
 };
 
 use crate::qtree::QTreePathNode;
 
 /// Boundary to skip Debug trait from propagating to BehaviorNode trait
-pub(super) struct BehaviorTree(pub Box<dyn BehaviorNode>);
+pub(super) struct BehaviorTree(pub BehaviorNodeContainer);
 
 impl std::fmt::Debug for BehaviorTree {
     fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -184,7 +184,6 @@ impl BehaviorNode for GetResource {
 #[derive(Default)]
 struct ThrottleNode {
     timer: Option<usize>,
-    child: Option<BehaviorNodeContainer>,
 }
 
 impl BehaviorNode for ThrottleNode {
@@ -210,11 +209,7 @@ impl BehaviorNode for ThrottleNode {
             if *remaining == 0 {
                 // println!("Timed out");
                 set_timer(self);
-                let res = self
-                    .child
-                    .as_mut()
-                    .map(|child| tick_child_node(arg, ctx, child))
-                    .unwrap_or(BehaviorResult::Fail);
+                let res = ctx.tick_child(0, arg).unwrap_or(BehaviorResult::Fail);
                 return res;
             } else {
                 *remaining -= 1;
@@ -226,12 +221,7 @@ impl BehaviorNode for ThrottleNode {
         BehaviorResult::Success
     }
 
-    fn add_child(
-        &mut self,
-        node: Box<dyn BehaviorNode>,
-        blackboard_map: behavior_tree_lite::BBMap,
-    ) -> behavior_tree_lite::error::AddChildResult {
-        self.child = Some(BehaviorNodeContainer::new(node, blackboard_map));
-        Ok(())
+    fn max_children(&self) -> NumChildren {
+        NumChildren::Finite(1)
     }
 }
