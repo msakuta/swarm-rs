@@ -109,8 +109,7 @@ impl Spawner {
 
         let mut try_spawn = |class: AgentClass| -> Option<Box<dyn std::any::Any>> {
             if class.cost() <= self.resource {
-                let rng = &mut game.rng;
-                if entities
+                let agent_count = entities
                     .iter()
                     .filter(|entity| {
                         entity
@@ -122,10 +121,8 @@ impl Spawner {
                             })
                             .unwrap_or(false)
                     })
-                    .count()
-                    < game.params.agent_count
-                    && rng.next() < 0.1
-                {
+                    .count();
+                if agent_count < game.params.agent_count {
                     ret.push(GameEvent::SpawnAgent {
                         pos: self.pos,
                         team: self.team,
