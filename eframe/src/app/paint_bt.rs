@@ -74,7 +74,13 @@ impl SwarmRsApp {
                     }
                 })
             }),
-            Panel::BTEditor => Some(Rc::new(self.app_data.bt_buffer.clone())),
+            Panel::BTEditor => {
+                if self.app_data.bt_buffer.is_empty() {
+                    None
+                } else {
+                    Some(Rc::new(self.app_data.bt_buffer.clone()))
+                }
+            }
         };
         let trees = source
             .as_ref()
@@ -96,6 +102,15 @@ impl SwarmRsApp {
                             self.app_data.bt_widget.tree = tree.name().to_owned();
                         }
                     }
+                } else {
+                    match self.open_panel {
+                        Panel::Main => ui.label(
+                            RichText::new("Select an entity to show its behavior trees!")
+                                .font(FontId::proportional(18.0))),
+                        Panel::BTEditor => ui.label(
+                            RichText::new("Select a btc source file or enter source to show its behavior trees!")
+                                .font(FontId::proportional(18.0))),
+                    };
                 }
             });
         });
@@ -142,7 +157,6 @@ impl SwarmRsApp {
             );
 
             let Some(main) = trees.tree_defs.iter().find(|node| node.name() == self.app_data.bt_widget.tree) else {
-                println!("No tree {main:?} defined in {tree:?}", main = self.app_data.bt_widget.tree, tree = trees.tree_defs.iter().map(|node| node.name()).collect::<Vec<_>>());
                 return;
             };
 
