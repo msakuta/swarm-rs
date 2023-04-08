@@ -1,13 +1,13 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use cgmath::Matrix3;
 use eframe::{emath::RectTransform, epaint::PathShape};
-use egui::{pos2, vec2, Align2, Color32, FontId, Frame, Painter, Pos2, Rect, RichText, Ui, Vec2};
+use egui::{pos2, vec2, Color32, FontId, Frame, Painter, Pos2, Rect, RichText, Ui, Vec2};
 use swarm_rs::behavior_tree_lite::{
     parse_file, parser::BlackboardValue, parser::TreeDef, PortType,
 };
 
-use crate::SwarmRsApp;
+use crate::{app::Panel, SwarmRsApp};
 
 use super::transform_point;
 
@@ -63,24 +63,38 @@ impl SwarmRsApp {
             }
         };
 
-        let source = &mut self.app_data.bt_buffer;
-        let Ok((_, trees)) = parse_file(source) else {
-            println!("Error on parsing source");
-            return;
+        let source = match self.open_panel {
+            Panel::Main => self.app_data.selected_entity.and_then(|id| {
+                self.app_data.game.entities.iter().find_map(|entity| {
+                    let entity = entity.borrow();
+                    if entity.get_id() == id {
+                        Some(entity.behavior_source())
+                    } else {
+                        None
+                    }
+                })
+            }),
+            Panel::BTEditor => Some(Rc::new(self.app_data.bt_buffer.clone())),
         };
+        let trees = source
+            .as_ref()
+            .and_then(|source| parse_file(source).ok())
+            .map(|(_, trees)| trees);
 
         ui.horizontal(|ui| {
             ui.label("Tree:");
 
             ui.group(|ui| {
-                for tree in &trees.tree_defs {
-                    let mut tree_name = RichText::new(tree.name());
-                    if self.app_data.bt_widget.tree == tree.name() {
-                        // TODO: use black in light theme
-                        tree_name = tree_name.underline().color(Color32::WHITE);
-                    }
-                    if ui.label(tree_name).interact(egui::Sense::click()).clicked() {
-                        self.app_data.bt_widget.tree = tree.name().to_owned();
+                if let Some(trees) = &trees {
+                    for tree in &trees.tree_defs {
+                        let mut tree_name = RichText::new(tree.name());
+                        if self.app_data.bt_widget.tree == tree.name() {
+                            // TODO: use black in light theme
+                            tree_name = tree_name.underline().color(Color32::WHITE);
+                        }
+                        if ui.label(tree_name).interact(egui::Sense::click()).clicked() {
+                            self.app_data.bt_widget.tree = tree.name().to_owned();
+                        }
                     }
                 }
             });
@@ -112,6 +126,8 @@ impl SwarmRsApp {
         Frame::canvas(ui.style()).show(ui, |ui| {
             let (response, painter) =
                 ui.allocate_painter(ui.available_size(), egui::Sense::hover());
+
+            let Some(trees) = trees else { return };
 
             self.app_data.bt_widget.canvas_offset = response.rect.min;
             self.app_data.bt_widget.scale = match self.app_data.bt_widget.font_size {

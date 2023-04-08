@@ -10,7 +10,7 @@ use crate::{
     shape::Idx,
     spawner::{Spawner, SPAWNER_MAX_HEALTH, SPAWNER_MAX_RESOURCE},
 };
-use std::{cell::RefCell, collections::VecDeque};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 pub(crate) const MAX_LOG_ENTRIES: usize = 100;
 
@@ -228,6 +228,13 @@ impl Entity {
         match self {
             Entity::Agent(agent) => agent.log_buffer(),
             Entity::Spawner(spawner) => spawner.log_buffer(),
+        }
+    }
+
+    pub fn behavior_source(&self) -> Rc<String> {
+        match self {
+            Entity::Agent(agent) => agent.behavior_source(),
+            Entity::Spawner(spawner) => spawner.behavior_source(),
         }
     }
 

@@ -10,7 +10,7 @@ use crate::{
     entity::{Entity, GameEvent, MAX_LOG_ENTRIES},
     game::Game,
 };
-use std::{cell::RefCell, collections::VecDeque};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 pub(crate) const SPAWNER_MAX_HEALTH: u32 = 1000;
 pub(crate) const SPAWNER_MAX_RESOURCE: i32 = 1000;
@@ -26,6 +26,7 @@ pub struct Spawner {
     pub active: bool,
     pub health: u32,
     pub resource: i32,
+    behavior_source: Rc<String>,
     behavior_tree: Option<BehaviorTree>,
     blackboard: Blackboard,
     log_buffer: VecDeque<String>,
@@ -36,12 +37,12 @@ impl Spawner {
         id_gen: &mut usize,
         pos: [f64; 2],
         team: usize,
-        behavior_source: &str,
+        behavior_source: Rc<String>,
     ) -> Result<Self, LoadError> {
         let id = *id_gen;
         *id_gen += 1;
 
-        let tree = build_tree(behavior_source)?;
+        let tree = build_tree(&behavior_source)?;
 
         Ok(Spawner {
             id,
@@ -50,6 +51,7 @@ impl Spawner {
             active: true,
             health: SPAWNER_MAX_HEALTH,
             resource: 0,
+            behavior_source,
             behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
             log_buffer: VecDeque::new(),
@@ -75,6 +77,10 @@ impl Spawner {
 
     pub(crate) fn log_buffer(&self) -> &VecDeque<String> {
         &self.log_buffer
+    }
+
+    pub(crate) fn behavior_source(&self) -> Rc<String> {
+        self.behavior_source.clone()
     }
 
     pub(crate) fn qtree_collision(

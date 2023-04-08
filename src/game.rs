@@ -434,9 +434,9 @@ impl Game {
                 team,
                 class,
                 if static_ {
-                    STATIC_SOURCE_FILE
+                    Rc::new(STATIC_SOURCE_FILE.to_string())
                 } else {
-                    &self.params.teams[team].agent_source
+                    self.params.teams[team].agent_source.clone()
                 },
             );
             match agent {
@@ -479,7 +479,7 @@ impl Game {
                     &mut self.id_gen,
                     pos_candidate,
                     team,
-                    &self.params.teams[team].spawner_source,
+                    self.params.teams[team].spawner_source.clone(),
                 );
                 match spawner {
                     Ok(spawner) => return Some(Entity::Spawner(spawner)),
