@@ -1,16 +1,11 @@
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use cgmath::Matrix3;
 use eframe::{emath::RectTransform, epaint::PathShape};
 use egui::{pos2, vec2, Color32, FontId, Frame, Painter, Pos2, Rect, RichText, Ui, Vec2};
-use swarm_rs::{
-    behavior_tree_lite::{
-        parse_file,
-        parser::TreeDef,
-        parser::{BlackboardValue, PortMap, PortMapOwned},
-        AbstractPortMap, BehaviorNodeContainer, BehaviorResult, BlackboardValueOwned, PortType,
-    },
-    BehaviorTree,
+use swarm_rs::behavior_tree_lite::{
+    parser::PortMapOwned, parser::TreeDef, AbstractPortMap, BehaviorNodeContainer, BehaviorResult,
+    BlackboardValueOwned, PortType,
 };
 
 use crate::{app::Panel, SwarmRsApp};
@@ -58,6 +53,7 @@ impl SwarmRsApp {
         struct UiResult {
             pointer: bool,
             delta: Vec2,
+            clicked: Option<Pos2>,
         }
 
         let ui_result = {
@@ -66,6 +62,11 @@ impl SwarmRsApp {
             UiResult {
                 pointer: input.pointer.primary_down(),
                 delta: input.pointer.delta(),
+                clicked: if input.pointer.primary_clicked() {
+                    input.pointer.interact_pos()
+                } else {
+                    None
+                },
             }
         };
 
@@ -173,6 +174,10 @@ impl SwarmRsApp {
 
             let mut node_painter = NodePainter::new(&self.app_data.bt_widget, &painter, &to_screen);
 
+            if ui.ui_contains_pointer() {
+                node_painter.clicked = ui_result.clicked;
+            }
+
             let scale = self.app_data.bt_widget.scale as f32;
             node_painter.paint_node_recurse(NODE_PADDING * scale, NODE_PADDING * scale, &main.0);
 
@@ -235,6 +240,13 @@ trait AbstractNode<'src> {
     fn children(&'src self) -> Box<dyn Iterator<Item = &Self> + 'src>;
     fn port_maps(&'src self) -> Box<dyn Iterator<Item = PortMapOwned> + 'src>;
     fn get_last_result(&self) -> Option<BehaviorResult>;
+    fn is_subtree(&self) -> bool;
+    fn is_subtree_expanded(&self) -> bool {
+        false
+    }
+    fn expand_subtree(&self, _b: bool) -> bool {
+        false
+    }
 }
 
 impl<'src> AbstractNode<'src> for TreeDef<'src> {
@@ -252,6 +264,10 @@ impl<'src> AbstractNode<'src> for TreeDef<'src> {
 
     fn get_last_result(&self) -> Option<BehaviorResult> {
         None
+    }
+
+    fn is_subtree(&self) -> bool {
+        false
     }
 }
 
@@ -271,6 +287,19 @@ impl<'src> AbstractNode<'src> for BehaviorNodeContainer {
     fn get_last_result(&self) -> Option<BehaviorResult> {
         self.last_result()
     }
+
+    fn is_subtree(&self) -> bool {
+        BehaviorNodeContainer::is_subtree(self)
+    }
+
+    fn is_subtree_expanded(&self) -> bool {
+        self.is_subtree_expanded()
+    }
+
+    fn expand_subtree(&self, b: bool) -> bool {
+        self.expand_subtree(b);
+        true
+    }
 }
 
 struct NodePainter<'p> {
@@ -281,6 +310,7 @@ struct NodePainter<'p> {
     port_font: FontId,
     bb_connections: HashMap<String, BBConnection>,
     view_transform: Matrix3<f64>,
+    clicked: Option<Pos2>,
 }
 
 impl<'p> NodePainter<'p> {
@@ -294,6 +324,7 @@ impl<'p> NodePainter<'p> {
             port_font: FontId::monospace(bt_component.scale as f32 * 12.),
             bb_connections: HashMap::new(),
             view_transform,
+            clicked: None,
         }
     }
 
@@ -334,17 +365,22 @@ impl<'p> NodePainter<'p> {
         let mut size = galley.size();
 
         let mut subnode_connectors = vec![];
-        for child in node.children() {
-            let node_size =
-                self.paint_node_recurse(x, y + size.y + node_padding2 + child_node_spacing, child);
+        if !node.is_subtree() || node.is_subtree_expanded() {
+            for child in node.children() {
+                let node_size = self.paint_node_recurse(
+                    x,
+                    y + size.y + node_padding2 + child_node_spacing,
+                    child,
+                );
 
-            let to = self.to_pos2([
-                x + node_size.x / 2.,
-                y + size.y + node_padding2 + child_node_spacing,
-            ]);
-            subnode_connectors.push(to);
+                let to = self.to_pos2([
+                    x + node_size.x / 2.,
+                    y + size.y + node_padding2 + child_node_spacing,
+                ]);
+                subnode_connectors.push(to);
 
-            x += node_size.x + node_padding2 + node_spacing;
+                x += node_size.x + node_padding2 + node_spacing;
+            }
         }
 
         let tree_width = size.x.max(x - initial_x - node_padding2 - node_spacing);
@@ -395,9 +431,21 @@ impl<'p> NodePainter<'p> {
 
         let min = self.to_pos2([node_left, initial_y]);
         let max = self.to_pos2([node_left + node_padding2 + size.x, y + node_padding]);
+        let rect = Rect { min, max };
+
+        if node.is_subtree() {
+            if let Some(pos) = self.clicked {
+                if rect.intersects(Rect { min: pos, max: pos }) {
+                    node.expand_subtree(!node.is_subtree_expanded());
+                }
+            }
+            // Show double border to imply that it is expandable with a click
+            self.painter
+                .rect_stroke(rect.expand(5.), 0., (1., Color32::from_rgb(127, 127, 191)));
+        }
 
         self.painter.rect(
-            Rect { min, max },
+            rect,
             0.,
             match node.get_last_result() {
                 Some(BehaviorResult::Success) => Color32::from_rgb(31, 127, 31),
