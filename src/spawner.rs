@@ -83,6 +83,10 @@ impl Spawner {
         self.behavior_source.clone()
     }
 
+    pub(crate) fn behavior_tree(&self) -> Option<&BehaviorTree> {
+        self.behavior_tree.as_ref()
+    }
+
     pub(crate) fn qtree_collision(
         ignore: Option<usize>,
         newpos: SpawnerState,

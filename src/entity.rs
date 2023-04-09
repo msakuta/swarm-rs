@@ -242,7 +242,7 @@ impl Entity {
     pub fn behavior_tree(&self) -> Option<&BehaviorTree> {
         match self {
             Entity::Agent(agent) => agent.behavior_tree(),
-            _ => None,
+            Entity::Spawner(spawner) => spawner.behavior_tree(),
         }
     }
 

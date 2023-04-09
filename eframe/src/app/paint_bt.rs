@@ -8,7 +8,7 @@ use swarm_rs::{
         parse_file,
         parser::TreeDef,
         parser::{BlackboardValue, PortMap, PortMapOwned},
-        AbstractPortMap, BehaviorNodeContainer, BlackboardValueOwned, PortType, BehaviorResult,
+        AbstractPortMap, BehaviorNodeContainer, BehaviorResult, BlackboardValueOwned, PortType,
     },
     BehaviorTree,
 };
