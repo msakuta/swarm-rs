@@ -218,7 +218,6 @@ checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 [[package]]
 name = "behavior-tree-lite"
 version = "0.3.0"
-source = "git+https://github.com/msakuta/rusty-behavior-tree-lite?tag=v0.3.0#9ecd1071ece77512d3096a36a1b4cf828c5680d5"
 dependencies = [
  "nom",
  "once_cell",

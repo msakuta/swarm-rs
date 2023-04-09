@@ -3,6 +3,7 @@ use cgmath::{InnerSpace, Vector2};
 use crate::{
     agent::Agent,
     agent::{AgentClass, Bullet, PathNode, AGENT_MAX_RESOURCE},
+    behavior_tree_adapt::BehaviorTree,
     collision::CollisionShape,
     game::Game,
     measure_time,
@@ -235,6 +236,13 @@ impl Entity {
         match self {
             Entity::Agent(agent) => agent.behavior_source(),
             Entity::Spawner(spawner) => spawner.behavior_source(),
+        }
+    }
+
+    pub fn behavior_tree(&self) -> Option<&BehaviorTree> {
+        match self {
+            Entity::Agent(agent) => agent.behavior_tree(),
+            _ => None,
         }
     }
 

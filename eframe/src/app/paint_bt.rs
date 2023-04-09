@@ -3,8 +3,14 @@ use std::{collections::HashMap, rc::Rc};
 use cgmath::Matrix3;
 use eframe::{emath::RectTransform, epaint::PathShape};
 use egui::{pos2, vec2, Color32, FontId, Frame, Painter, Pos2, Rect, RichText, Ui, Vec2};
-use swarm_rs::behavior_tree_lite::{
-    parse_file, parser::BlackboardValue, parser::TreeDef, PortType,
+use swarm_rs::{
+    behavior_tree_lite::{
+        parse_file,
+        parser::TreeDef,
+        parser::{BlackboardValue, PortMap, PortMapOwned},
+        AbstractPortMap, BehaviorNodeContainer, BlackboardValueOwned, PortType, BehaviorResult,
+    },
+    BehaviorTree,
 };
 
 use crate::{app::Panel, SwarmRsApp};
@@ -63,36 +69,40 @@ impl SwarmRsApp {
             }
         };
 
-        let source = match self.open_panel {
+        // let source
+        let trees = match self.open_panel {
             Panel::Main => self.app_data.selected_entity.and_then(|id| {
                 self.app_data.game.entities.iter().find_map(|entity| {
                     let entity = entity.borrow();
                     if entity.get_id() == id {
-                        Some(entity.behavior_source())
+                        Some(entity)
                     } else {
                         None
                     }
                 })
             }),
-            Panel::BTEditor => {
-                if self.app_data.bt_buffer.is_empty() {
-                    None
-                } else {
-                    Some(Rc::new(self.app_data.bt_buffer.clone()))
-                }
-            }
+            _ => None,
+            // Panel::BTEditor => {
+            //     if self.app_data.bt_buffer.is_empty() {
+            //         None
+            //     } else {
+            //         Some(Rc::new(self.app_data.bt_buffer.clone()))
+            //     }
+            // }
         };
-        let trees = source
-            .as_ref()
-            .and_then(|source| parse_file(source).ok())
-            .map(|(_, trees)| trees);
+        // let trees = source
+        //     .as_ref()
+        //     .and_then(|source| parse_file(source).ok())
+        //     .map(|(_, trees)| trees);
 
         ui.horizontal(|ui| {
             ui.label("Tree:");
 
             ui.group(|ui| {
-                if let Some(trees) = &trees {
-                    for tree in &trees.tree_defs {
+                if let Some(trees) = trees.as_ref().and_then(|trees| trees.behavior_tree()) {
+                    // for tree in &trees.tree_defs {
+                    let tree = &trees.0;
+                    {
                         let mut tree_name = RichText::new(tree.name());
                         if self.app_data.bt_widget.tree == tree.name() {
                             // TODO: use black in light theme
@@ -156,14 +166,15 @@ impl SwarmRsApp {
                 response.rect,
             );
 
-            let Some(main) = trees.tree_defs.iter().find(|node| node.name() == self.app_data.bt_widget.tree) else {
-                return;
-            };
+            // let Some(main) = trees.tree_defs.iter().find(|node| node.name() == self.app_data.bt_widget.tree) else {
+            //     return;
+            // };
+            let Some(main) = trees.behavior_tree() else { return };
 
             let mut node_painter = NodePainter::new(&self.app_data.bt_widget, &painter, &to_screen);
 
             let scale = self.app_data.bt_widget.scale as f32;
-            node_painter.paint_node_recurse(NODE_PADDING * scale, NODE_PADDING * scale, &main.root());
+            node_painter.paint_node_recurse(NODE_PADDING * scale, NODE_PADDING * scale, &main.0);
 
             node_painter.render_connections();
 
@@ -192,7 +203,8 @@ impl SwarmRsApp {
 
                 if ui_result.pointer {
                     self.app_data.bt_widget.origin[0] += ui_result.delta[0] as f64; // self.app_data.bt_compo.scale;
-                    self.app_data.bt_widget.origin[1] += ui_result.delta[1] as f64; // self.app_data.bt_compo.scale;
+                    self.app_data.bt_widget.origin[1] += ui_result.delta[1] as f64;
+                    // self.app_data.bt_compo.scale;
                 }
             }
         });
@@ -216,6 +228,49 @@ const PORT_DIAMETER: f32 = PORT_RADIUS * 2.;
 struct BBConnection {
     source: Vec<Pos2>,
     dest: Vec<Pos2>,
+}
+
+trait AbstractNode<'src> {
+    fn get_type(&self) -> &str;
+    fn children(&'src self) -> Box<dyn Iterator<Item = &Self> + 'src>;
+    fn port_maps(&'src self) -> Box<dyn Iterator<Item = PortMapOwned> + 'src>;
+    fn get_last_result(&self) -> Option<BehaviorResult>;
+}
+
+impl<'src> AbstractNode<'src> for TreeDef<'src> {
+    fn get_type(&self) -> &str {
+        TreeDef::get_type(self)
+    }
+
+    fn children(&'src self) -> Box<dyn Iterator<Item = &Self> + 'src> {
+        Box::new(self.children().iter())
+    }
+
+    fn port_maps(&'src self) -> Box<dyn Iterator<Item = PortMapOwned> + 'src> {
+        Box::new(self.port_maps().iter().map(|port| port.to_owned()))
+    }
+
+    fn get_last_result(&self) -> Option<BehaviorResult> {
+        None
+    }
+}
+
+impl<'src> AbstractNode<'src> for BehaviorNodeContainer {
+    fn get_type(&self) -> &str {
+        self.name()
+    }
+
+    fn children(&'src self) -> Box<dyn Iterator<Item = &Self> + 'src> {
+        Box::new(self.children().iter())
+    }
+
+    fn port_maps(&self) -> Box<dyn Iterator<Item = PortMapOwned>> {
+        Box::new(self.port_map())
+    }
+
+    fn get_last_result(&self) -> Option<BehaviorResult> {
+        self.last_result()
+    }
 }
 
 struct NodePainter<'p> {
@@ -255,7 +310,12 @@ impl<'p> NodePainter<'p> {
             .transform_pos(((pos + offset) * scale as f32).to_pos2())
     }
 
-    fn paint_node_recurse(&mut self, mut x: f32, mut y: f32, node: &TreeDef<'_>) -> Vec2 {
+    fn paint_node_recurse<'src>(
+        &mut self,
+        mut x: f32,
+        mut y: f32,
+        node: &'src impl AbstractNode<'src>,
+    ) -> Vec2 {
         let node_padding = NODE_PADDING * self.bt_component.scale as f32;
         let node_padding2 = NODE_PADDING2 * self.bt_component.scale as f32;
         let node_spacing = NODE_SPACING * self.bt_component.scale as f32;
@@ -293,11 +353,10 @@ impl<'p> NodePainter<'p> {
         y += size.y + node_padding;
         let ports: Vec<_> = node
             .port_maps()
-            .iter()
             .map(|port| {
                 let port_type = port.get_type();
                 let port_galley = self.painter.layout_no_wrap(
-                    if let BlackboardValue::Literal(lit) = port.blackboard_value() {
+                    if let BlackboardValueOwned::Literal(lit) = port.blackboard_value() {
                         format!("{} <- {:?}", port.node_port().to_string(), lit)
                     } else {
                         port.node_port().to_string()
@@ -313,7 +372,7 @@ impl<'p> NodePainter<'p> {
                 let port_width = port_galley.size().x;
                 let ret = (port_galley, y, port_type);
 
-                if let BlackboardValue::Ref(bbref) = port.blackboard_value() {
+                if let BlackboardValueOwned::Ref(bbref) = port.blackboard_value() {
                     let con = self
                         .bb_connections
                         .entry(bbref.to_string())
@@ -340,7 +399,12 @@ impl<'p> NodePainter<'p> {
         self.painter.rect(
             Rect { min, max },
             0.,
-            Color32::from_rgb(63, 63, 31),
+            match node.get_last_result() {
+                Some(BehaviorResult::Success) => Color32::from_rgb(31, 127, 31),
+                Some(BehaviorResult::Fail) => Color32::from_rgb(127, 31, 31),
+                Some(BehaviorResult::Running) => Color32::from_rgb(127, 127, 31),
+                _ => Color32::from_rgb(63, 63, 31),
+            },
             (1., Color32::from_rgb(127, 127, 191)),
         );
 

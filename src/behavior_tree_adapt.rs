@@ -8,7 +8,7 @@ use behavior_tree_lite::{
 use crate::qtree::QTreePathNode;
 
 /// Boundary to skip Debug trait from propagating to BehaviorNode trait
-pub(super) struct BehaviorTree(pub BehaviorNodeContainer);
+pub struct BehaviorTree(pub BehaviorNodeContainer);
 
 impl std::fmt::Debug for BehaviorTree {
     fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
