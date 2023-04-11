@@ -27,6 +27,7 @@ pub(crate) struct BTWidget {
     pub(crate) canvas_offset: Pos2,
     font_size: FontSize,
     tree: String,
+    show_var_connections: bool,
     /// Whether to show the blackboard variables names on the connections.
     show_vars: bool,
 }
@@ -39,6 +40,7 @@ impl BTWidget {
             canvas_offset: Pos2::ZERO,
             font_size: FontSize::Normal,
             tree: "main".to_string(),
+            show_var_connections: true,
             show_vars: true,
         }
     }
@@ -144,6 +146,10 @@ impl SwarmRsApp {
                 "Large",
             );
             ui.checkbox(
+                &mut self.app_data.bt_widget.show_var_connections,
+                "Show variable connections",
+            );
+            ui.checkbox(
                 &mut self.app_data.bt_widget.show_vars,
                 "Show variable labels",
             );
@@ -157,7 +163,7 @@ impl SwarmRsApp {
 
             self.app_data.bt_widget.canvas_offset = response.rect.min;
             self.app_data.bt_widget.scale = match self.app_data.bt_widget.font_size {
-                FontSize::Small => 0.7,
+                FontSize::Small => 0.3,
                 FontSize::Normal => 1.,
                 FontSize::Large => 1.5,
             };
@@ -181,7 +187,9 @@ impl SwarmRsApp {
             let scale = self.app_data.bt_widget.scale as f32;
             node_painter.paint_node_recurse(NODE_PADDING * scale, NODE_PADDING * scale, &main.0);
 
-            node_painter.render_connections();
+            if self.app_data.bt_widget.show_var_connections {
+                node_painter.render_variable_connections();
+            }
 
             if ui.ui_contains_pointer() {
                 // We disallow changing scale with a mouse wheel, because the font size does not scale linearly.
@@ -547,7 +555,7 @@ impl<'p> NodePainter<'p> {
         size
     }
 
-    fn render_connections(&self) {
+    fn render_variable_connections(&self) {
         for (name, con) in &self.bb_connections {
             for source in &con.source {
                 for dest in &con.dest {
