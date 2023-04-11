@@ -222,6 +222,7 @@ const NODE_PADDING: f32 = 5.;
 const NODE_PADDING2: f32 = NODE_PADDING * 2.;
 /// Space between node rectangles
 const NODE_SPACING: f32 = 20.;
+const NODE_BORDER_OFFSET: f32 = 5.;
 /// Space between node rectangles
 const CHILD_NODE_SPACING: f32 = 40.;
 /// Radius of the port markers
@@ -297,7 +298,7 @@ impl<'src> AbstractNode<'src> for BehaviorNodeContainer {
     }
 
     fn expand_subtree(&self, b: bool) -> bool {
-        self.expand_subtree(b);
+        BehaviorNodeContainer::expand_subtree(self, b);
         true
     }
 }
@@ -363,23 +364,22 @@ impl<'p> NodePainter<'p> {
         );
 
         let mut size = galley.size();
+        let mut subtree_height = 0f32;
 
         let mut subnode_connectors = vec![];
         if !node.is_subtree() || node.is_subtree_expanded() {
             for child in node.children() {
-                let node_size = self.paint_node_recurse(
-                    x,
-                    y + size.y + node_padding2 + child_node_spacing,
-                    child,
-                );
+                let child_y_offset = size.y + node_padding2 + child_node_spacing;
+                let node_size = self.paint_node_recurse(x, y + child_y_offset, child);
 
                 let to = self.to_pos2([
-                    x + node_size.x / 2.,
+                    x + (node_size.x + node_padding) / 2.,
                     y + size.y + node_padding2 + child_node_spacing,
                 ]);
                 subnode_connectors.push(to);
 
                 x += node_size.x + node_padding2 + node_spacing;
+                subtree_height = subtree_height.max(node_size.y + child_y_offset);
             }
         }
 
@@ -433,6 +433,8 @@ impl<'p> NodePainter<'p> {
         let max = self.to_pos2([node_left + node_padding2 + size.x, y + node_padding]);
         let rect = Rect { min, max };
 
+        subtree_height = subtree_height.max(y - initial_y);
+
         if node.is_subtree() {
             if let Some(pos) = self.clicked {
                 if rect.intersects(Rect { min: pos, max: pos }) {
@@ -440,8 +442,24 @@ impl<'p> NodePainter<'p> {
                 }
             }
             // Show double border to imply that it is expandable with a click
-            self.painter
-                .rect_stroke(rect.expand(5.), 0., (1., Color32::from_rgb(127, 127, 191)));
+            self.painter.rect_stroke(
+                rect.expand(NODE_BORDER_OFFSET),
+                0.,
+                (1., Color32::from_rgb(127, 127, 191)),
+            );
+
+            if node.is_subtree_expanded() {
+                let tree_rect = Rect {
+                    min: self.to_pos2([initial_x, initial_y]),
+                    max: self.to_pos2([
+                        initial_x + tree_width + node_padding2,
+                        initial_y + subtree_height + node_padding,
+                    ]),
+                }
+                .expand(NODE_BORDER_OFFSET);
+                self.painter
+                    .rect_stroke(tree_rect, 0., (1., Color32::from_rgb(127, 127, 191)));
+            }
         }
 
         self.painter.rect(
@@ -511,12 +529,20 @@ impl<'p> NodePainter<'p> {
             }
         }
 
-        let from = self.to_pos2([node_left + size.x / 2., y + node_padding]);
+        let from = self.to_pos2([node_left + (size.x + node_padding) / 2., y + node_padding]);
         for to in subnode_connectors {
             self.painter.line_segment([from, to], (2., Color32::YELLOW));
         }
 
-        size.x = size.x.max(tree_width);
+        let subtree_offset = if node.is_subtree_expanded() {
+            // Add a bit of offset to separate nested subtree borders
+            NODE_SPACING
+        } else {
+            0.
+        };
+
+        size.x = size.x.max(tree_width + subtree_offset);
+        size.y = size.y.max(subtree_height + subtree_offset);
 
         size
     }
