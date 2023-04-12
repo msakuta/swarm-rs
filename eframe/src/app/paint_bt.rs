@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use cgmath::Matrix3;
+use cgmath::{Matrix3, SquareMatrix};
 use eframe::{emath::RectTransform, epaint::PathShape};
-use egui::{pos2, vec2, Color32, FontId, Frame, Painter, Pos2, Rect, RichText, Ui, Vec2};
+use egui::{pos2, vec2, Color32, FontId, Frame, Galley, Painter, Pos2, Rect, RichText, Ui, Vec2};
 use swarm_rs::behavior_tree_lite::{
     parser::PortMapOwned, parser::TreeDef, AbstractPortMap, BehaviorNodeContainer, BehaviorResult,
     BlackboardValueOwned, PortType,
@@ -185,11 +185,58 @@ impl SwarmRsApp {
             }
 
             let scale = self.app_data.bt_widget.scale as f32;
-            node_painter.paint_node_recurse(NODE_PADDING * scale, NODE_PADDING * scale, &main.0);
+            let (tree_size, rendered_tree) = node_painter
+                .paint_node_recurse::<std::sync::Arc<Galley>>(
+                    NODE_PADDING * scale,
+                    NODE_PADDING * scale,
+                    &main.0,
+                );
 
             if self.app_data.bt_widget.show_var_connections {
                 node_painter.render_variable_connections();
             }
+
+            let map_rect = to_screen.transform_rect(Rect {
+                min: pos2(
+                    painter.clip_rect().max.x - NODE_MAP_WIDTH - NODE_SPACING,
+                    0.,
+                ),
+                max: pos2(painter.clip_rect().max.x - NODE_SPACING, NODE_MAP_WIDTH),
+            });
+
+            painter.rect(
+                map_rect,
+                0.,
+                Color32::from_black_alpha(127),
+                (1., Color32::GRAY),
+            );
+
+            let subpainter = painter.with_clip_rect(map_rect);
+
+            node_painter.painter = &subpainter;
+            node_painter.offset = Vec2::ZERO;
+            node_painter.scale = map_rect.width() / tree_size.x;
+            node_painter.render_font = false;
+            node_painter.record_rendered_tree = false;
+            node_painter.view_transform = Matrix3::identity();
+            let to_screen = egui::emath::RectTransform::from_to(
+                Rect::from_min_size(Pos2::ZERO, map_rect.size()),
+                map_rect,
+            );
+            node_painter.to_screen = &to_screen;
+            let rendered_tree = rendered_tree.unwrap();
+            node_painter.paint_node_recurse::<usize>(0., 0., &rendered_tree);
+
+            let origin = self.app_data.bt_widget.origin;
+            let view_rect = Rect::from_min_size(
+                Pos2::new(-origin[0] as f32, -origin[1] as f32),
+                response.rect.size(),
+            );
+            let view_rect = Rect {
+                min: node_painter.to_pos2(view_rect.min),
+                max: node_painter.to_pos2(view_rect.max),
+            };
+            painter.rect_stroke(view_rect, 0., (1., Color32::WHITE));
 
             if ui.ui_contains_pointer() {
                 // We disallow changing scale with a mouse wheel, because the font size does not scale linearly.
@@ -237,6 +284,8 @@ const CHILD_NODE_SPACING: f32 = 40.;
 const PORT_RADIUS: f32 = 6.;
 /// Diameter of the port markers
 const PORT_DIAMETER: f32 = PORT_RADIUS * 2.;
+/// Node minimap width, height is calculated
+const NODE_MAP_WIDTH: f32 = 200.;
 
 #[derive(Default)]
 struct BBConnection {
@@ -255,6 +304,9 @@ trait AbstractNode<'src> {
     }
     fn expand_subtree(&self, _b: bool) -> bool {
         false
+    }
+    fn rect(&self) -> Option<Rect> {
+        None
     }
 }
 
@@ -311,74 +363,153 @@ impl<'src> AbstractNode<'src> for BehaviorNodeContainer {
     }
 }
 
+trait AbstractGalley {
+    fn layout_no_wrap(
+        painter: &Painter,
+        font: &FontId,
+        s: impl ToString + AsRef<str>,
+        color: Color32,
+    ) -> Self;
+    fn size(&self) -> Vec2;
+    fn galley(&self, painter: &Painter, pos: Pos2);
+}
+
+impl AbstractGalley for std::sync::Arc<Galley> {
+    fn layout_no_wrap(
+        painter: &Painter,
+        font: &FontId,
+        s: impl ToString + AsRef<str>,
+        _color: Color32,
+    ) -> Self {
+        painter.layout_no_wrap(s.to_string(), font.clone(), Color32::WHITE)
+    }
+
+    fn size(&self) -> Vec2 {
+        Galley::size(&self)
+    }
+
+    fn galley(&self, painter: &Painter, pos: Pos2) {
+        painter.galley(pos, self.clone());
+    }
+}
+
+impl AbstractGalley for usize {
+    fn layout_no_wrap(
+        _painter: &Painter,
+        _font: &FontId,
+        s: impl ToString + AsRef<str>,
+        _color: Color32,
+    ) -> Self {
+        s.as_ref().len()
+    }
+
+    fn size(&self) -> Vec2 {
+        vec2(*self as f32 * 4., 6.)
+    }
+
+    fn galley(&self, _painter: &Painter, _pos: Pos2) {}
+}
+
+struct RenderedNode {
+    rect: Rect,
+    children: Vec<RenderedNode>,
+}
+
+impl<'src> AbstractNode<'src> for RenderedNode {
+    fn get_type(&self) -> &str {
+        ""
+    }
+
+    fn children(&'src self) -> Box<dyn Iterator<Item = &Self> + 'src> {
+        Box::new(self.children.iter())
+    }
+
+    fn port_maps(&'src self) -> Box<dyn Iterator<Item = PortMapOwned> + 'src> {
+        Box::new(std::iter::empty())
+    }
+
+    fn get_last_result(&self) -> Option<BehaviorResult> {
+        None
+    }
+
+    fn is_subtree(&self) -> bool {
+        false
+    }
+
+    fn rect(&self) -> Option<Rect> {
+        Some(self.rect)
+    }
+}
+
 struct NodePainter<'p> {
     bt_component: &'p BTWidget,
     painter: &'p Painter,
     to_screen: &'p RectTransform,
     font: FontId,
     port_font: FontId,
+    render_font: bool,
     bb_connections: HashMap<String, BBConnection>,
     view_transform: Matrix3<f64>,
     clicked: Option<Pos2>,
+    offset: Vec2,
+    scale: f32,
+    record_rendered_tree: bool,
 }
 
 impl<'p> NodePainter<'p> {
     fn new(bt_component: &'p BTWidget, painter: &'p Painter, to_screen: &'p RectTransform) -> Self {
-        let view_transform = bt_component.view_transform();
+        let view_transform = Matrix3::identity(); //bt_component.view_transform();
         Self {
             bt_component,
             painter,
             to_screen,
             font: FontId::monospace(bt_component.scale as f32 * 16.),
             port_font: FontId::monospace(bt_component.scale as f32 * 12.),
+            render_font: true,
             bb_connections: HashMap::new(),
             view_transform,
             clicked: None,
+            offset: vec2(bt_component.origin[0] as f32, bt_component.origin[1] as f32),
+            scale: bt_component.scale as f32,
+            record_rendered_tree: true,
         }
     }
 
     fn to_pos2(&self, pos: impl Into<[f32; 2]>) -> Pos2 {
-        let offset = vec2(
-            self.bt_component.origin[0] as f32,
-            self.bt_component.origin[1] as f32,
-        );
-        let scale = 1.; //self.bt_component.scale;
         let pos = pos.into();
         let pos = transform_point(&self.view_transform, [pos[0] as f64, pos[1] as f64]);
         let pos = Vec2::new(pos.x as f32, pos.y as f32);
         self.to_screen
-            .transform_pos(((pos + offset) * scale as f32).to_pos2())
+            .transform_pos(((pos + self.offset) * self.scale as f32).to_pos2())
     }
 
-    fn paint_node_recurse<'src>(
+    fn paint_node_recurse<'src, G: AbstractGalley>(
         &mut self,
         mut x: f32,
         mut y: f32,
         node: &'src impl AbstractNode<'src>,
-    ) -> Vec2 {
-        let node_padding = NODE_PADDING * self.bt_component.scale as f32;
-        let node_padding2 = NODE_PADDING2 * self.bt_component.scale as f32;
-        let node_spacing = NODE_SPACING * self.bt_component.scale as f32;
-        let child_node_spacing = CHILD_NODE_SPACING * self.bt_component.scale as f32;
-        let port_radius = PORT_RADIUS * self.bt_component.scale as f32;
-        let port_diameter = PORT_DIAMETER * self.bt_component.scale as f32;
+    ) -> (Vec2, Option<RenderedNode>) {
+        let node_padding = NODE_PADDING * self.scale;
+        let node_padding2 = NODE_PADDING2 * self.scale;
+        let node_spacing = NODE_SPACING * self.scale;
+        let child_node_spacing = CHILD_NODE_SPACING * self.scale;
+        let port_radius = PORT_RADIUS * self.scale;
+        let port_diameter = PORT_DIAMETER * self.scale;
 
         let initial_x = x;
         let initial_y = y;
-        let galley = self.painter.layout_no_wrap(
-            node.get_type().to_string(),
-            self.font.clone(),
-            Color32::WHITE,
-        );
+        let galley = G::layout_no_wrap(&self.painter, &self.font, node.get_type(), Color32::WHITE);
 
         let mut size = galley.size();
         let mut subtree_height = 0f32;
 
         let mut subnode_connectors = vec![];
+        let mut rendered_subtrees = vec![];
         if !node.is_subtree() || node.is_subtree_expanded() {
             for child in node.children() {
                 let child_y_offset = size.y + node_padding2 + child_node_spacing;
-                let node_size = self.paint_node_recurse(x, y + child_y_offset, child);
+                let (node_size, rendered_subtree) =
+                    self.paint_node_recurse::<G>(x, y + child_y_offset, child);
 
                 let to = self.to_pos2([
                     x + (node_size.x + node_padding) / 2.,
@@ -388,6 +519,9 @@ impl<'p> NodePainter<'p> {
 
                 x += node_size.x + node_padding2 + node_spacing;
                 subtree_height = subtree_height.max(node_size.y + child_y_offset);
+                if let Some(rendered_subtree) = rendered_subtree {
+                    rendered_subtrees.push(rendered_subtree);
+                }
             }
         }
 
@@ -399,13 +533,14 @@ impl<'p> NodePainter<'p> {
             .port_maps()
             .map(|port| {
                 let port_type = port.get_type();
-                let port_galley = self.painter.layout_no_wrap(
+                let port_galley = G::layout_no_wrap(
+                    &self.painter,
+                    &self.port_font,
                     if let BlackboardValueOwned::Literal(lit) = port.blackboard_value() {
                         format!("{} <- {:?}", port.node_port().to_string(), lit)
                     } else {
                         port.node_port().to_string()
                     },
-                    self.port_font.clone(),
                     match port_type {
                         PortType::Input => Color32::from_rgb(255, 255, 127),
                         PortType::Output => Color32::from_rgb(127, 255, 255),
@@ -437,9 +572,16 @@ impl<'p> NodePainter<'p> {
             })
             .collect();
 
-        let min = self.to_pos2([node_left, initial_y]);
-        let max = self.to_pos2([node_left + node_padding2 + size.x, y + node_padding]);
-        let rect = Rect { min, max };
+        let min = [node_left, initial_y];
+        let max = [node_left + node_padding2 + size.x, y + node_padding];
+        let rect_org = node.rect().unwrap_or(Rect {
+            min: min.into(),
+            max: max.into(),
+        });
+        let rect = Rect {
+            min: self.to_pos2(rect_org.min),
+            max: self.to_pos2(rect_org.max),
+        };
 
         subtree_height = subtree_height.max(y - initial_y);
 
@@ -482,14 +624,13 @@ impl<'p> NodePainter<'p> {
             (1., Color32::from_rgb(127, 127, 191)),
         );
 
-        self.painter.galley(
+        galley.galley(
+            &self.painter,
             self.to_pos2([node_left + node_padding, initial_y + node_padding]),
-            galley,
         );
 
         for (port, y, port_type) in ports {
-            self.painter
-                .galley(self.to_pos2([node_left + node_padding, y]), port);
+            port.galley(&self.painter, self.to_pos2([node_left + node_padding, y]));
 
             let render_input = || {
                 let mut path = vec![
@@ -552,7 +693,17 @@ impl<'p> NodePainter<'p> {
         size.x = size.x.max(tree_width + subtree_offset);
         size.y = size.y.max(subtree_height + subtree_offset);
 
-        size
+        (
+            size,
+            if self.record_rendered_tree {
+                Some(RenderedNode {
+                    rect: rect_org,
+                    children: rendered_subtrees,
+                })
+            } else {
+                None
+            },
+        )
     }
 
     fn render_variable_connections(&self) {
@@ -563,8 +714,7 @@ impl<'p> NodePainter<'p> {
                     let to = self.to_pos2(*dest);
                     let mut points = vec![];
                     let midpoint = ((from.to_vec2() + to.to_vec2()) / 2.).to_pos2();
-                    let cp_length =
-                        ((to.x - from.x) / 2.).min(100. * self.bt_component.scale as f32);
+                    let cp_length = ((to.x - from.x) / 2.).min(100. * self.scale);
                     let from_cp = from + vec2(cp_length, 0.);
                     let to_cp = to + vec2(-cp_length, 0.);
                     let interpolates = 10;
