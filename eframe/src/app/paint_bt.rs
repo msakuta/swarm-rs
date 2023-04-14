@@ -308,6 +308,15 @@ trait AbstractNode<'src> {
     fn rect(&self) -> Option<Rect> {
         None
     }
+    fn connector_top(&self, node_size: Vec2, size: Vec2) -> [f32; 2] {
+        [
+            (node_size.x + NODE_PADDING) / 2.,
+            size.y + NODE_PADDING2 + CHILD_NODE_SPACING,
+        ]
+    }
+    fn draw_border(&self) -> bool {
+        true
+    }
 }
 
 impl<'src> AbstractNode<'src> for TreeDef<'src> {
@@ -413,6 +422,7 @@ impl AbstractGalley for usize {
 struct RenderedNode {
     rect: Rect,
     children: Vec<RenderedNode>,
+    result: Option<BehaviorResult>,
 }
 
 impl<'src> AbstractNode<'src> for RenderedNode {
@@ -429,7 +439,7 @@ impl<'src> AbstractNode<'src> for RenderedNode {
     }
 
     fn get_last_result(&self) -> Option<BehaviorResult> {
-        None
+        self.result
     }
 
     fn is_subtree(&self) -> bool {
@@ -438,6 +448,14 @@ impl<'src> AbstractNode<'src> for RenderedNode {
 
     fn rect(&self) -> Option<Rect> {
         Some(self.rect)
+    }
+
+    fn connector_top(&self, _node_size: Vec2, _size: Vec2) -> [f32; 2] {
+        [self.rect.width(), self.rect.height()]
+    }
+
+    fn draw_border(&self) -> bool {
+        false
     }
 }
 
@@ -511,10 +529,7 @@ impl<'p> NodePainter<'p> {
                 let (node_size, rendered_subtree) =
                     self.paint_node_recurse::<G>(x, y + child_y_offset, child);
 
-                let to = self.to_pos2([
-                    x + (node_size.x + node_padding) / 2.,
-                    y + size.y + node_padding2 + child_node_spacing,
-                ]);
+                let to = self.to_pos2(Vec2::from(node.connector_top(node_size, size)) + vec2(x, y));
                 subnode_connectors.push(to);
 
                 x += node_size.x + node_padding2 + node_spacing;
@@ -612,17 +627,18 @@ impl<'p> NodePainter<'p> {
             }
         }
 
-        self.painter.rect(
-            rect,
-            0.,
-            match node.get_last_result() {
-                Some(BehaviorResult::Success) => Color32::from_rgb(31, 127, 31),
-                Some(BehaviorResult::Fail) => Color32::from_rgb(127, 31, 31),
-                Some(BehaviorResult::Running) => Color32::from_rgb(127, 127, 31),
-                _ => Color32::from_rgb(63, 63, 31),
-            },
-            (1., Color32::from_rgb(127, 127, 191)),
-        );
+        let fill_color = match node.get_last_result() {
+            Some(BehaviorResult::Success) => Color32::from_rgb(31, 127, 31),
+            Some(BehaviorResult::Fail) => Color32::from_rgb(127, 31, 31),
+            Some(BehaviorResult::Running) => Color32::from_rgb(127, 127, 31),
+            _ => Color32::from_rgb(63, 63, 31),
+        };
+        if node.draw_border() {
+            self.painter
+                .rect(rect, 0., fill_color, (1., Color32::from_rgb(127, 127, 191)));
+        } else {
+            self.painter.rect_filled(rect, 0., fill_color);
+        }
 
         galley.galley(
             &self.painter,
@@ -699,6 +715,7 @@ impl<'p> NodePainter<'p> {
                 Some(RenderedNode {
                     rect: rect_org,
                     children: rendered_subtrees,
+                    result: node.get_last_result(),
                 })
             } else {
                 None
