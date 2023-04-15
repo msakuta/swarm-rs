@@ -2,10 +2,14 @@ use std::collections::HashMap;
 
 use cgmath::{Matrix3, SquareMatrix};
 use eframe::{emath::RectTransform, epaint::PathShape};
-use egui::{pos2, vec2, Color32, FontId, Frame, Galley, Painter, Pos2, Rect, RichText, Ui, Vec2};
+use egui::{
+    pos2, vec2, Color32, FontId, Frame, Galley, Painter, Pos2, Rect, Response, RichText, Ui, Vec2,
+};
 use swarm_rs::behavior_tree_lite::{
-    parser::PortMapOwned, parser::TreeDef, AbstractPortMap, BehaviorNodeContainer, BehaviorResult,
-    BlackboardValueOwned, PortType,
+    parse_file,
+    parser::PortMapOwned,
+    parser::{TreeDef, TreeSource},
+    AbstractPortMap, BehaviorNodeContainer, BehaviorResult, BlackboardValueOwned, PortType,
 };
 
 use crate::{app::Panel, SwarmRsApp};
@@ -52,12 +56,6 @@ impl BTWidget {
 
 impl SwarmRsApp {
     pub(crate) fn paint_bt(&mut self, ui: &mut Ui) {
-        struct UiResult {
-            pointer: bool,
-            delta: Vec2,
-            clicked: Option<Pos2>,
-        }
-
         let ui_result = {
             let input = ui.input();
 
@@ -72,58 +70,67 @@ impl SwarmRsApp {
             }
         };
 
+        enum Tree<'src> {
+            Main(usize),
+            BTEditor(TreeSource<'src>),
+        }
+
         // let source
         let trees = match self.open_panel {
             Panel::Main => self.app_data.selected_entity.and_then(|id| {
                 self.app_data.game.entities.iter().find_map(|entity| {
                     let entity = entity.borrow();
                     if entity.get_id() == id {
-                        Some(entity)
+                        Some(Tree::Main(id))
                     } else {
                         None
                     }
                 })
             }),
-            _ => None,
-            // Panel::BTEditor => {
-            //     if self.app_data.bt_buffer.is_empty() {
-            //         None
-            //     } else {
-            //         Some(Rc::new(self.app_data.bt_buffer.clone()))
-            //     }
-            // }
+            Panel::BTEditor => {
+                if self.app_data.bt_buffer.is_empty() {
+                    None
+                } else {
+                    parse_file(&self.app_data.bt_buffer)
+                        .ok()
+                        .map(|(_, trees)| Tree::BTEditor(trees))
+                }
+            }
         };
-        // let trees = source
-        //     .as_ref()
-        //     .and_then(|source| parse_file(source).ok())
-        //     .map(|(_, trees)| trees);
 
         ui.horizontal(|ui| {
             ui.label("Tree:");
 
             ui.group(|ui| {
-                if let Some(trees) = trees.as_ref().and_then(|trees| trees.behavior_tree()) {
-                    // for tree in &trees.tree_defs {
-                    let tree = &trees.0;
-                    {
-                        let mut tree_name = RichText::new(tree.name());
-                        if self.app_data.bt_widget.tree == tree.name() {
-                            // TODO: use black in light theme
-                            tree_name = tree_name.underline().color(Color32::WHITE);
-                        }
-                        if ui.label(tree_name).interact(egui::Sense::click()).clicked() {
-                            self.app_data.bt_widget.tree = tree.name().to_owned();
+                match &trees {
+                    &Some(Tree::Main(_id)) => {
+                        let mut tree_name = RichText::new("Main");
+                        // TODO: use black in light theme
+                        tree_name = tree_name.underline().color(Color32::WHITE);
+                        ui.label(tree_name);
+                    }
+                    Some(Tree::BTEditor(trees)) => {
+                        for tree in &trees.tree_defs {
+                            let mut tree_name = RichText::new(tree.name());
+                            if self.app_data.bt_widget.tree == tree.name() {
+                                // TODO: use black in light theme
+                                tree_name = tree_name.underline().color(Color32::WHITE);
+                            }
+                            if ui.label(tree_name).interact(egui::Sense::click()).clicked() {
+                                self.app_data.bt_widget.tree = tree.name().to_owned();
+                            }
                         }
                     }
-                } else {
-                    match self.open_panel {
-                        Panel::Main => ui.label(
-                            RichText::new("Select an entity to show its behavior trees!")
-                                .font(FontId::proportional(18.0))),
-                        Panel::BTEditor => ui.label(
-                            RichText::new("Select a btc source file or enter source to show its behavior trees!")
-                                .font(FontId::proportional(18.0))),
-                    };
+                    _ => {
+                        match self.open_panel {
+                            Panel::Main => ui.label(
+                                RichText::new("Select an entity to show its behavior trees!")
+                                    .font(FontId::proportional(18.0))),
+                            Panel::BTEditor => ui.label(
+                                RichText::new("Select a btc source file or enter source to show its behavior trees!")
+                                    .font(FontId::proportional(18.0))),
+                        };
+                    }
                 }
             });
         });
@@ -173,69 +180,31 @@ impl SwarmRsApp {
                 response.rect,
             );
 
-            // let Some(main) = trees.tree_defs.iter().find(|node| node.name() == self.app_data.bt_widget.tree) else {
-            //     return;
-            // };
-            let Some(main) = trees.behavior_tree() else { return };
-
-            let mut node_painter = NodePainter::new(&self.app_data.bt_widget, &painter, &to_screen);
+            let mut node_painter =
+                NodePainter::new(&self.app_data.bt_widget, &painter, &response, &to_screen);
 
             if ui.ui_contains_pointer() {
                 node_painter.clicked = ui_result.clicked;
             }
 
-            let scale = self.app_data.bt_widget.scale as f32;
-            let (tree_size, rendered_tree) = node_painter.paint_node_recurse(
-                NODE_PADDING * scale,
-                NODE_PADDING * scale,
-                &main.0,
-            );
-
-            if self.app_data.bt_widget.show_var_connections {
-                node_painter.render_variable_connections();
+            match trees {
+                Tree::Main(id) => {
+                    if let Some(entity) = self.app_data.game.get_entity(id) {
+                        if let Some(tree) = entity.behavior_tree() {
+                            Self::draw_trees(&self.app_data.bt_widget, node_painter, &tree.0);
+                        }
+                    }
+                }
+                Tree::BTEditor(trees) => {
+                    if let Some(main) = trees
+                        .tree_defs
+                        .iter()
+                        .find(|node| node.name() == self.app_data.bt_widget.tree)
+                    {
+                        Self::draw_trees(&self.app_data.bt_widget, node_painter, main.root());
+                    }
+                }
             }
-
-            let map_rect = to_screen.transform_rect(Rect {
-                min: pos2(
-                    painter.clip_rect().max.x - NODE_MAP_WIDTH - NODE_SPACING,
-                    0.,
-                ),
-                max: pos2(painter.clip_rect().max.x - NODE_SPACING, NODE_MAP_WIDTH),
-            });
-
-            painter.rect(
-                map_rect,
-                0.,
-                Color32::from_black_alpha(127),
-                (1., Color32::GRAY),
-            );
-
-            let subpainter = painter.with_clip_rect(map_rect);
-
-            node_painter.painter = &subpainter;
-            node_painter.offset = Vec2::ZERO;
-            node_painter.scale = map_rect.width() / tree_size.x;
-            node_painter.render_font = false;
-            node_painter.record_rendered_tree = false;
-            node_painter.view_transform = Matrix3::identity();
-            let to_screen = egui::emath::RectTransform::from_to(
-                Rect::from_min_size(Pos2::ZERO, map_rect.size()),
-                map_rect,
-            );
-            node_painter.to_screen = &to_screen;
-            let rendered_tree = rendered_tree.unwrap();
-            node_painter.paint_node_recurse(0., 0., &rendered_tree);
-
-            let origin = self.app_data.bt_widget.origin;
-            let view_rect = Rect::from_min_size(
-                Pos2::new(-origin[0] as f32, -origin[1] as f32),
-                response.rect.size(),
-            );
-            let view_rect = Rect {
-                min: node_painter.to_pos2(view_rect.min),
-                max: node_painter.to_pos2(view_rect.max),
-            };
-            painter.rect_stroke(view_rect, 0., (1., Color32::WHITE));
 
             if ui.ui_contains_pointer() {
                 // We disallow changing scale with a mouse wheel, because the font size does not scale linearly.
@@ -261,12 +230,75 @@ impl SwarmRsApp {
                 // }
 
                 if ui_result.pointer {
-                    self.app_data.bt_widget.origin[0] += ui_result.delta[0] as f64; // self.app_data.bt_compo.scale;
+                    self.app_data.bt_widget.origin[0] += ui_result.delta[0] as f64;
                     self.app_data.bt_widget.origin[1] += ui_result.delta[1] as f64;
-                    // self.app_data.bt_compo.scale;
                 }
             }
         });
+    }
+
+    fn draw_trees<'a, 'src>(
+        bt_widget: &BTWidget,
+        mut node_painter: NodePainter<'_>,
+        main: &'a impl AbstractNode<'src>,
+    ) where
+        'a: 'src,
+    {
+        let scale = bt_widget.scale as f32;
+        let (tree_size, rendered_tree) =
+            node_painter.paint_node_recurse(NODE_PADDING * scale, NODE_PADDING * scale, main);
+
+        if bt_widget.show_var_connections {
+            node_painter.render_variable_connections();
+        }
+
+        let map_rect = node_painter.to_screen.transform_rect(Rect {
+            min: pos2(
+                node_painter.painter.clip_rect().max.x - NODE_MAP_WIDTH - NODE_SPACING,
+                0.,
+            ),
+            max: pos2(
+                node_painter.painter.clip_rect().max.x - NODE_SPACING,
+                NODE_MAP_WIDTH,
+            ),
+        });
+
+        node_painter.painter.rect(
+            map_rect,
+            0.,
+            Color32::from_black_alpha(127),
+            (1., Color32::GRAY),
+        );
+
+        let subpainter = node_painter.painter.with_clip_rect(map_rect);
+        let mut node_painter = node_painter;
+
+        node_painter.painter = &subpainter;
+        node_painter.offset = Vec2::ZERO;
+        node_painter.scale = map_rect.width() / tree_size.x;
+        node_painter.render_font = false;
+        node_painter.record_rendered_tree = false;
+        node_painter.view_transform = Matrix3::identity();
+        let to_screen = egui::emath::RectTransform::from_to(
+            Rect::from_min_size(Pos2::ZERO, map_rect.size()),
+            map_rect,
+        );
+        node_painter.to_screen = &to_screen;
+        let rendered_tree = rendered_tree.unwrap();
+        node_painter.paint_node_recurse(0., 0., &rendered_tree);
+
+        let origin = bt_widget.origin;
+        let view_rect = Rect::from_min_size(
+            Pos2::new(-origin[0] as f32, -origin[1] as f32),
+            node_painter.response.rect.size(),
+        );
+        let view_rect = Rect {
+            min: node_painter.to_pos2(view_rect.min),
+            max: node_painter.to_pos2(view_rect.max),
+        };
+        node_painter
+            .painter
+            .rect_stroke(view_rect, 0., (1., Color32::WHITE));
     }
 }
 
@@ -473,9 +505,17 @@ impl<'src> AbstractNode<'src> for RenderedNode {
     }
 }
 
+#[derive(Clone, Copy)]
+struct UiResult {
+    pointer: bool,
+    delta: Vec2,
+    clicked: Option<Pos2>,
+}
+
 struct NodePainter<'p> {
     bt_component: &'p BTWidget,
     painter: &'p Painter,
+    response: &'p Response,
     to_screen: &'p RectTransform,
     font: FontId,
     port_font: FontId,
@@ -489,11 +529,17 @@ struct NodePainter<'p> {
 }
 
 impl<'p> NodePainter<'p> {
-    fn new(bt_component: &'p BTWidget, painter: &'p Painter, to_screen: &'p RectTransform) -> Self {
+    fn new(
+        bt_component: &'p BTWidget,
+        painter: &'p Painter,
+        response: &'p Response,
+        to_screen: &'p RectTransform,
+    ) -> Self {
         let view_transform = Matrix3::identity(); //bt_component.view_transform();
         Self {
             bt_component,
             painter,
+            response,
             to_screen,
             font: FontId::monospace(bt_component.scale as f32 * 16.),
             port_font: FontId::monospace(bt_component.scale as f32 * 12.),

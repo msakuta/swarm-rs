@@ -874,6 +874,17 @@ impl Game {
                 .collect::<Vec<_>>(),
         ))
     }
+
+    pub fn get_entity(&self, id: usize) -> Option<std::cell::Ref<Entity>> {
+        self.entities.iter().find_map(|entity| {
+            let entity = entity.borrow();
+            if entity.get_id() == id {
+                Some(entity)
+            } else {
+                None
+            }
+        })
+    }
 }
 
 /// Separating axis theorem is relatively fast algorithm to detect collision between convex polygons,
