@@ -185,12 +185,11 @@ impl SwarmRsApp {
             }
 
             let scale = self.app_data.bt_widget.scale as f32;
-            let (tree_size, rendered_tree) = node_painter
-                .paint_node_recurse::<std::sync::Arc<Galley>>(
-                    NODE_PADDING * scale,
-                    NODE_PADDING * scale,
-                    &main.0,
-                );
+            let (tree_size, rendered_tree) = node_painter.paint_node_recurse(
+                NODE_PADDING * scale,
+                NODE_PADDING * scale,
+                &main.0,
+            );
 
             if self.app_data.bt_widget.show_var_connections {
                 node_painter.render_variable_connections();
@@ -225,7 +224,7 @@ impl SwarmRsApp {
             );
             node_painter.to_screen = &to_screen;
             let rendered_tree = rendered_tree.unwrap();
-            node_painter.paint_node_recurse::<usize>(0., 0., &rendered_tree);
+            node_painter.paint_node_recurse(0., 0., &rendered_tree);
 
             let origin = self.app_data.bt_widget.origin;
             let view_rect = Rect::from_min_size(
@@ -294,6 +293,7 @@ struct BBConnection {
 }
 
 trait AbstractNode<'src> {
+    type Galley: AbstractGalley;
     fn get_type(&self) -> &str;
     fn children(&'src self) -> Box<dyn Iterator<Item = &Self> + 'src>;
     fn port_maps(&'src self) -> Box<dyn Iterator<Item = PortMapOwned> + 'src>;
@@ -324,6 +324,8 @@ trait AbstractNode<'src> {
 }
 
 impl<'src> AbstractNode<'src> for TreeDef<'src> {
+    type Galley = std::sync::Arc<Galley>;
+
     fn get_type(&self) -> &str {
         TreeDef::get_type(self)
     }
@@ -346,6 +348,8 @@ impl<'src> AbstractNode<'src> for TreeDef<'src> {
 }
 
 impl<'src> AbstractNode<'src> for BehaviorNodeContainer {
+    type Galley = std::sync::Arc<Galley>;
+
     fn get_type(&self) -> &str {
         self.name()
     }
@@ -430,6 +434,8 @@ struct RenderedNode {
 }
 
 impl<'src> AbstractNode<'src> for RenderedNode {
+    type Galley = usize;
+
     fn get_type(&self) -> &str {
         ""
     }
@@ -509,11 +515,11 @@ impl<'p> NodePainter<'p> {
             .transform_pos(((pos + self.offset) * self.scale as f32).to_pos2())
     }
 
-    fn paint_node_recurse<'src, G: AbstractGalley>(
+    fn paint_node_recurse<'src, N: AbstractNode<'src>>(
         &mut self,
         mut x: f32,
         mut y: f32,
-        node: &'src impl AbstractNode<'src>,
+        node: &'src N,
     ) -> (Vec2, Option<RenderedNode>) {
         let node_padding = NODE_PADDING * self.scale;
         let node_padding2 = NODE_PADDING2 * self.scale;
@@ -524,7 +530,8 @@ impl<'p> NodePainter<'p> {
 
         let initial_x = x;
         let initial_y = y;
-        let galley = G::layout_no_wrap(&self.painter, &self.font, node.get_type(), Color32::WHITE);
+        let galley =
+            N::Galley::layout_no_wrap(&self.painter, &self.font, node.get_type(), Color32::WHITE);
 
         let mut size = galley.size();
         let mut subtree_height = 0f32;
@@ -535,7 +542,7 @@ impl<'p> NodePainter<'p> {
             for child in node.children() {
                 let child_y_offset = size.y + node_padding2 + child_node_spacing;
                 let (subtree_size, rendered_subtree) =
-                    self.paint_node_recurse::<G>(x, y + child_y_offset, child);
+                    self.paint_node_recurse(x, y + child_y_offset, child);
 
                 let to = self.to_pos2(Vec2::from(child.connector_top(
                     subtree_size,
@@ -560,7 +567,7 @@ impl<'p> NodePainter<'p> {
             .port_maps()
             .map(|port| {
                 let port_type = port.get_type();
-                let port_galley = G::layout_no_wrap(
+                let port_galley = N::Galley::layout_no_wrap(
                     &self.painter,
                     &self.port_font,
                     if let BlackboardValueOwned::Literal(lit) = port.blackboard_value() {
