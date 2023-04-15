@@ -305,17 +305,21 @@ trait AbstractNode<'src> {
     fn expand_subtree(&self, _b: bool) -> bool {
         false
     }
+    /// Customization point for rendered rectangle position and size.
     fn rect(&self) -> Option<Rect> {
         None
     }
-    fn connector_top(&self, node_size: Vec2, size: Vec2) -> [f32; 2] {
+    fn connector_top(&self, subtree_size: Vec2, size: Vec2, xy: Vec2) -> [f32; 2] {
         [
-            (node_size.x + NODE_PADDING) / 2.,
-            size.y + NODE_PADDING2 + CHILD_NODE_SPACING,
+            (subtree_size.x + NODE_PADDING) / 2. + xy.x,
+            size.y + NODE_PADDING2 + CHILD_NODE_SPACING + xy.y,
         ]
     }
     fn draw_border(&self) -> bool {
         true
+    }
+    fn line_width(&self) -> f32 {
+        2.
     }
 }
 
@@ -450,12 +454,16 @@ impl<'src> AbstractNode<'src> for RenderedNode {
         Some(self.rect)
     }
 
-    fn connector_top(&self, _node_size: Vec2, _size: Vec2) -> [f32; 2] {
-        [self.rect.width(), self.rect.height()]
+    fn connector_top(&self, _node_size: Vec2, _size: Vec2, _xy: Vec2) -> [f32; 2] {
+        [self.rect.center().x, self.rect.top()]
     }
 
     fn draw_border(&self) -> bool {
         false
+    }
+
+    fn line_width(&self) -> f32 {
+        0.5
     }
 }
 
@@ -526,14 +534,18 @@ impl<'p> NodePainter<'p> {
         if !node.is_subtree() || node.is_subtree_expanded() {
             for child in node.children() {
                 let child_y_offset = size.y + node_padding2 + child_node_spacing;
-                let (node_size, rendered_subtree) =
+                let (subtree_size, rendered_subtree) =
                     self.paint_node_recurse::<G>(x, y + child_y_offset, child);
 
-                let to = self.to_pos2(Vec2::from(node.connector_top(node_size, size)) + vec2(x, y));
+                let to = self.to_pos2(Vec2::from(child.connector_top(
+                    subtree_size,
+                    size,
+                    vec2(x, y),
+                )));
                 subnode_connectors.push(to);
 
-                x += node_size.x + node_padding2 + node_spacing;
-                subtree_height = subtree_height.max(node_size.y + child_y_offset);
+                x += subtree_size.x + node_padding2 + node_spacing;
+                subtree_height = subtree_height.max(subtree_size.y + child_y_offset);
                 if let Some(rendered_subtree) = rendered_subtree {
                     rendered_subtrees.push(rendered_subtree);
                 }
@@ -694,9 +706,10 @@ impl<'p> NodePainter<'p> {
             }
         }
 
-        let from = self.to_pos2([node_left + (size.x + node_padding) / 2., y + node_padding]);
+        let from = pos2(rect.center().x, rect.bottom());
         for to in subnode_connectors {
-            self.painter.line_segment([from, to], (2., Color32::YELLOW));
+            self.painter
+                .line_segment([from, to], (node.line_width(), Color32::YELLOW));
         }
 
         let subtree_offset = if node.is_subtree_expanded() {
