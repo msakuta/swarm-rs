@@ -22,7 +22,7 @@ pub mod triangle_utils;
 pub mod vfs;
 
 pub use crate::agent::Bullet;
-pub use crate::qtree::CellState;
+pub use crate::{behavior_tree_adapt::BehaviorTree, qtree::CellState};
 pub use behavior_tree_lite;
 
 #[cfg(not(target_arch = "wasm32"))]

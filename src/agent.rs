@@ -35,6 +35,7 @@ use behavior_tree_lite::{error::LoadError, BehaviorResult, Blackboard, Lazy};
 use std::{
     cell::RefCell,
     collections::{HashSet, VecDeque},
+    rc::Rc,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Mutex,
@@ -94,6 +95,7 @@ pub struct Agent {
     pub trace: VecDeque<[f64; 2]>,
     last_motion_result: Option<MotionCommandResult>,
     last_state: Option<AgentState>,
+    behavior_source: Rc<String>,
     behavior_tree: Option<BehaviorTree>,
     blackboard: Blackboard,
     log_buffer: VecDeque<String>,
@@ -122,12 +124,12 @@ impl Agent {
         orient: f64,
         team: usize,
         class: AgentClass,
-        behavior_source: &str,
+        behavior_source: Rc<String>,
     ) -> Result<Self, LoadError> {
         let id = *id_gen;
         *id_gen += 1;
 
-        let (tree, _build_time) = measure_time(|| build_tree(behavior_source));
+        let (tree, _build_time) = measure_time(|| build_tree(&behavior_source));
         let tree = tree?;
         // println!("tree build: {}", build_time);
 
@@ -152,6 +154,7 @@ impl Agent {
             trace: VecDeque::new(),
             last_motion_result: None,
             last_state: None,
+            behavior_source,
             behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
             log_buffer: VecDeque::new(),
@@ -205,6 +208,14 @@ impl Agent {
 
     pub(crate) fn log_buffer(&self) -> &VecDeque<String> {
         &self.log_buffer
+    }
+
+    pub(crate) fn behavior_source(&self) -> Rc<String> {
+        self.behavior_source.clone()
+    }
+
+    pub(crate) fn behavior_tree(&self) -> Option<&BehaviorTree> {
+        self.behavior_tree.as_ref()
     }
 
     /// Check collision in qtree bounding boxes
