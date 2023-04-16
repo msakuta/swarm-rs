@@ -48,10 +48,6 @@ impl BTWidget {
             show_vars: true,
         }
     }
-
-    pub(crate) fn view_transform(&self) -> Matrix3<f64> {
-        Matrix3::from_translation(self.origin.into())
-    }
 }
 
 impl SwarmRsApp {
@@ -204,28 +200,6 @@ impl SwarmRsApp {
             }
 
             if ui.ui_contains_pointer() {
-                // We disallow changing scale with a mouse wheel, because the font size does not scale linearly.
-                // if ui_result.scroll_delta != 0. || ui_result.zoom_delta != 1. {
-                //     let old_offset = transform_point(
-                //         &self.app_data.bt_compo.inverse_view_transform(),
-                //         ui_result.interact_pos,
-                //     );
-                //     if ui_result.scroll_delta < 0. {
-                //         self.app_data.bt_compo.scale /= 1.2;
-                //     } else if 0. < ui_result.scroll_delta {
-                //         self.app_data.bt_compo.scale *= 1.2;
-                //     } else if ui_result.zoom_delta != 1. {
-                //         self.app_data.bt_compo.scale *= ui_result.zoom_delta as f64;
-                //     }
-                //     let new_offset = transform_point(
-                //         &self.app_data.bt_compo.inverse_view_transform(),
-                //         ui_result.interact_pos,
-                //     );
-                //     let diff = new_offset - old_offset;
-                //     self.app_data.bt_compo.origin =
-                //         (Vector2::<f64>::from(self.app_data.bt_compo.origin) + diff).into();
-                // }
-
                 if ui_result.pointer {
                     self.app_data.bt_widget.origin[0] += ui_result.delta[0] as f64;
                     self.app_data.bt_widget.origin[1] += ui_result.delta[1] as f64;
