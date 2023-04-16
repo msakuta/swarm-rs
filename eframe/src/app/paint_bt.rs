@@ -591,6 +591,7 @@ impl<'p> NodePainter<'p> {
         let child_node_spacing = CHILD_NODE_SPACING * self.scale;
         let port_radius = PORT_RADIUS * self.scale;
         let port_diameter = PORT_DIAMETER * self.scale;
+        const DEFAULT_FRAME_COLOR: Color32 = Color32::from_rgb(127, 127, 191);
 
         let initial_x = x;
         let initial_y = y;
@@ -683,18 +684,26 @@ impl<'p> NodePainter<'p> {
 
         subtree_height = subtree_height.max(y - initial_y);
 
-        if node.is_subtree() {
-            if let Some(pos) = self.clicked {
-                if rect.intersects(Rect { min: pos, max: pos }) {
+        let frame_color = if node.is_subtree() {
+            let interact_pos = self.ui_result.interact_pos;
+            let interacting_pointer = rect.intersects(Rect {
+                min: interact_pos,
+                max: interact_pos,
+            });
+            if self.clicked.is_some() {
+                if interacting_pointer {
                     node.expand_subtree(!node.is_subtree_expanded());
                 }
             }
+
+            let frame_color = if interacting_pointer {
+                Color32::WHITE
+            } else {
+                DEFAULT_FRAME_COLOR
+            };
             // Show double border to imply that it is expandable with a click
-            self.painter.rect_stroke(
-                rect.expand(NODE_BORDER_OFFSET),
-                0.,
-                (1., Color32::from_rgb(127, 127, 191)),
-            );
+            self.painter
+                .rect_stroke(rect.expand(NODE_BORDER_OFFSET), 0., (1., frame_color));
 
             if node.is_subtree_expanded() {
                 let tree_rect = Rect {
@@ -706,9 +715,12 @@ impl<'p> NodePainter<'p> {
                 }
                 .expand(NODE_BORDER_OFFSET);
                 self.painter
-                    .rect_stroke(tree_rect, 0., (1., Color32::from_rgb(127, 127, 191)));
+                    .rect_stroke(tree_rect, 0., (1., DEFAULT_FRAME_COLOR));
             }
-        }
+            frame_color
+        } else {
+            DEFAULT_FRAME_COLOR
+        };
 
         let fill_color = match node.get_last_result() {
             Some(BehaviorResult::Success) => Color32::from_rgb(31, 127, 31),
@@ -717,8 +729,7 @@ impl<'p> NodePainter<'p> {
             _ => Color32::from_rgb(31, 31, 95),
         };
         if node.draw_border() {
-            self.painter
-                .rect(rect, 0., fill_color, (1., Color32::from_rgb(127, 127, 191)));
+            self.painter.rect(rect, 0., fill_color, (1., frame_color));
         } else {
             self.painter.rect_filled(rect, 0., fill_color);
         }
