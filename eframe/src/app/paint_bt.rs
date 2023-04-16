@@ -714,7 +714,7 @@ impl<'p> NodePainter<'p> {
             Some(BehaviorResult::Success) => Color32::from_rgb(31, 127, 31),
             Some(BehaviorResult::Fail) => Color32::from_rgb(127, 31, 31),
             Some(BehaviorResult::Running) => Color32::from_rgb(127, 127, 31),
-            _ => Color32::from_rgb(63, 63, 31),
+            _ => Color32::from_rgb(31, 31, 95),
         };
         if node.draw_border() {
             self.painter
