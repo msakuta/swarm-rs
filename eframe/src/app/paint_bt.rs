@@ -154,7 +154,7 @@ impl SwarmRsApp {
 
             self.app_data.bt_widget.canvas_offset = response.rect.min;
             self.app_data.bt_widget.scale = match self.app_data.bt_widget.font_size {
-                FontSize::Small => 0.3,
+                FontSize::Small => 0.7,
                 FontSize::Normal => 1.,
                 FontSize::Large => 1.5,
             };
@@ -173,6 +173,7 @@ impl SwarmRsApp {
                         &painter,
                         &response,
                         &to_screen,
+                        self.app_data.game.global_time as usize,
                     );
                     if let Some(entity) = self.app_data.game.get_entity(id) {
                         if let Some(tree) = entity.behavior_tree() {
@@ -193,6 +194,7 @@ impl SwarmRsApp {
                             &painter,
                             &response,
                             &to_screen,
+                            self.app_data.game.global_time as usize,
                         );
                         node_painter.draw_trees(main.root());
                     }
@@ -237,6 +239,9 @@ trait AbstractNode<'src> {
     fn children(&'src self) -> Box<dyn Iterator<Item = &Self> + 'src>;
     fn port_maps(&'src self) -> Box<dyn Iterator<Item = PortMapOwned> + 'src>;
     fn get_last_result(&self) -> Option<BehaviorResult>;
+    fn get_last_time(&self) -> Option<usize> {
+        None
+    }
     fn is_subtree(&self) -> bool;
     fn is_subtree_expanded(&self) -> bool {
         false
@@ -303,6 +308,10 @@ impl<'src> AbstractNode<'src> for BehaviorNodeContainer {
 
     fn get_last_result(&self) -> Option<BehaviorResult> {
         self.last_result()
+    }
+
+    fn get_last_time(&self) -> Option<usize> {
+        self.last_updated()
     }
 
     fn is_subtree(&self) -> bool {
@@ -454,6 +463,7 @@ struct NodePainter<'p> {
     offset: Vec2,
     scale: f32,
     record_rendered_tree: bool,
+    global_time: usize,
 }
 
 impl<'p> NodePainter<'p> {
@@ -464,6 +474,7 @@ impl<'p> NodePainter<'p> {
         painter: &'p Painter,
         response: &'p Response,
         to_screen: &'p RectTransform,
+        global_time: usize,
     ) -> Self {
         let view_transform = Matrix3::identity(); //bt_component.view_transform();
         let font = FontId::monospace(bt_widget.scale as f32 * 16.);
@@ -490,6 +501,7 @@ impl<'p> NodePainter<'p> {
             offset,
             scale,
             record_rendered_tree: true,
+            global_time,
         }
     }
 
@@ -722,13 +734,33 @@ impl<'p> NodePainter<'p> {
             DEFAULT_FRAME_COLOR
         };
 
+        let age = node
+            .get_last_time()
+            .map(|time| self.global_time.saturating_sub(time))
+            .unwrap_or(0)
+            .min(255) as u8;
+        let age = (96u8).saturating_sub(age);
+        let intensity = 32 + age;
+
         let fill_color = match node.get_last_result() {
-            Some(BehaviorResult::Success) => Color32::from_rgb(31, 127, 31),
-            Some(BehaviorResult::Fail) => Color32::from_rgb(127, 31, 31),
-            Some(BehaviorResult::Running) => Color32::from_rgb(127, 127, 31),
+            Some(BehaviorResult::Success) => Color32::from_rgb(31, intensity, 31),
+            Some(BehaviorResult::Fail) => Color32::from_rgb(intensity, 31, 31),
+            Some(BehaviorResult::Running) => Color32::from_rgb(intensity, intensity, 31),
             _ => Color32::from_rgb(31, 31, 95),
         };
         if node.draw_border() {
+            const MAX_WIDTH: f32 = 10.;
+            if 0 < age {
+                self.painter.rect(
+                    rect,
+                    age as f32 / MAX_WIDTH / 2.,
+                    fill_color,
+                    (
+                        age as f32 / MAX_WIDTH + 1.,
+                        Color32::from_rgb(127, 127, 127),
+                    ),
+                );
+            }
             self.painter.rect(rect, 0., fill_color, (1., frame_color));
         } else {
             self.painter.rect_filled(rect, 0., fill_color);

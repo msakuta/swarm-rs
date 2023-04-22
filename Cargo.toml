@@ -26,9 +26,9 @@ serde = { version = "1", features = ["derive"], optional = true }
 getrandom = { version = "0.2.8", features = ["js"] }
 
 [dependencies.behavior-tree-lite]
-# path = "../rusty-behavior-tree-lite"
-git = "https://github.com/msakuta/rusty-behavior-tree-lite"
-tag = "v0.3.1"
+path = "../rusty-behavior-tree-lite"
+# git = "https://github.com/msakuta/rusty-behavior-tree-lite"
+# tag = "v0.3.1"
 # commit = "ff5201ba194c985cdb925c8ac0845c5a5a3c46c1"
 
 [features]

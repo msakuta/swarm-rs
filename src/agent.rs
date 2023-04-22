@@ -640,6 +640,7 @@ impl Agent {
             }
             let mut command = None;
             let mut ctx = Context::new(std::mem::take(&mut self.blackboard));
+            ctx.set_global_time(game.global_time as usize);
             ctx.set("target", self.target);
             ctx.set("has_path", !self.path.is_empty());
             let mut process = |f: &dyn std::any::Any| {
