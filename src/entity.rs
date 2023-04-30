@@ -299,19 +299,19 @@ impl Entity {
         let graph_shape = (VISION_RANGE_U, VISION_RANGE_U);
         let pos_a: [i32; 2] = pos_i.into();
 
-        let visibility_map = if let Some(cache) =
-            game.fog_graph_cache
-                .get(&self.get_id())
-                .and_then(|(cache_pos, cache)| {
-                    if *cache_pos == pos_a {
-                        Some(cache)
-                    } else {
-                        None
-                    }
-                }) {
+        let visibility_map = if let Some(cache) = game
+            .fog_raycast_map_cache
+            .get(&self.get_id())
+            .and_then(|(cache_pos, cache)| {
+                if *cache_pos == pos_a {
+                    Some(cache)
+                } else {
+                    None
+                }
+            }) {
             cache
         } else {
-            assert_eq!(game.fog_graph.len(), VISION_RANGE_U * VISION_RANGE_U);
+            assert_eq!(game.fog_raycast_map.len(), VISION_RANGE_U * VISION_RANGE_U);
 
             let mut visibility_map = vec![true; VISION_RANGE_FULL * VISION_RANGE_FULL];
             for yf in 0..VISION_RANGE_FULL {
@@ -327,8 +327,8 @@ impl Entity {
                     if !res && visibility_map[xf + yf * VISION_RANGE_FULL] {
                         visibility_map[xf + yf * VISION_RANGE_FULL] = false;
 
-                        let ray_inverse =
-                            &game.fog_graph[graph_shape.idx(x.abs() as isize, y.abs() as isize)];
+                        let ray_inverse = &game.fog_raycast_map
+                            [graph_shape.idx(x.abs() as isize, y.abs() as isize)];
                         for ys in [-1, 1] {
                             if ys * y < 0 {
                                 continue;
@@ -347,9 +347,9 @@ impl Entity {
                     }
                 }
             }
-            game.fog_graph_cache
+            game.fog_raycast_map_cache
                 .insert(self.get_id(), (pos_i.into(), visibility_map));
-            let Some((_, cache)) = game.fog_graph_cache.get(&self.get_id()) else { return };
+            let Some((_, cache)) = game.fog_raycast_map_cache.get(&self.get_id()) else { return };
             cache
         };
 
@@ -363,17 +363,17 @@ impl Entity {
                     game.fog[self.get_team()].fow[pos.x as usize + pos.y as usize * game.xs] =
                         game.global_time;
                 } else if game.params.fow_raycast_visible {
-                    if game.fog_graph_forward[graph_shape.idx(x.abs() as isize, y.abs() as isize)]
-                        .iter()
-                        .any(|forward| {
-                            let jxf = (forward[0] * x.signum() + VISION_RANGE_I - 1) as usize;
-                            let jyf = (forward[1] * y.signum() + VISION_RANGE_I - 1) as usize;
-                            if *forward == [x.abs(), y.abs()] {
-                                return false;
-                            }
-                            !visibility_map[jxf + jyf * VISION_RANGE_FULL]
-                        })
-                    {
+                    if game.fog_raycast_map_forward
+                        [graph_shape.idx(x.abs() as isize, y.abs() as isize)]
+                    .iter()
+                    .any(|forward| {
+                        let jxf = (forward[0] * x.signum() + VISION_RANGE_I - 1) as usize;
+                        let jyf = (forward[1] * y.signum() + VISION_RANGE_I - 1) as usize;
+                        if *forward == [x.abs(), y.abs()] {
+                            return false;
+                        }
+                        !visibility_map[jxf + jyf * VISION_RANGE_FULL]
+                    }) {
                         continue;
                     }
 
@@ -385,8 +385,8 @@ impl Entity {
                             if xs * x < 0 {
                                 continue;
                             };
-                            for &(mut casted) in
-                                &game.fog_graph[graph_shape.idx(x.abs() as isize, y.abs() as isize)]
+                            for &(mut casted) in &game.fog_raycast_map
+                                [graph_shape.idx(x.abs() as isize, y.abs() as isize)]
                             {
                                 if xs < 0 {
                                     casted[0] *= -1;
@@ -407,7 +407,7 @@ impl Entity {
             }
         }
 
-        game.fog_graph_real.push(real_graph);
+        game.fog_raycast_map_real.push(real_graph);
     }
 
     /// Erase fog unconditionally within the radius

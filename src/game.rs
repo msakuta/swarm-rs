@@ -11,10 +11,10 @@ use std::{
 };
 
 use crate::{
-    agent::{interpolation::interpolate_i, Agent, AgentClass, AgentState, Bullet},
+    agent::{Agent, AgentClass, AgentState, Bullet},
     collision::CollisionShape,
     entity::{Entity, GameEvent, VISION_RANGE},
-    fog_of_war::{FogGraph, FogOfWar, FOG_MAX_AGE},
+    fog_of_war::{precompute_raycast_map, FogOfWar, FogRaycastMap, FOG_MAX_AGE},
     measure_time,
     mesh::{create_mesh, Mesh, MeshResult},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
@@ -172,10 +172,12 @@ pub struct Game {
     /// A visualization of visited pixels by raycasting visibility checking
     pub raycast_board: RefCell<Vec<u8>>,
     pub fog_rays: Vec<Vec<[i32; 2]>>,
-    pub fog_graph: FogGraph,
-    pub(crate) fog_graph_forward: FogGraph,
-    pub fog_graph_real: Vec<Vec<[[i32; 2]; 2]>>,
-    pub(crate) fog_graph_cache: HashMap<usize, ([i32; 2], Vec<bool>)>,
+    pub fog_raycast_map: FogRaycastMap,
+    pub(crate) fog_raycast_map_forward: FogRaycastMap,
+    /// Raycast maps for debug visualization
+    pub fog_raycast_map_real: Vec<Vec<[[i32; 2]; 2]>>,
+    /// Cached raycast maps for each Entity
+    pub(crate) fog_raycast_map_cache: HashMap<usize, ([i32; 2], Vec<bool>)>,
 }
 
 impl Game {
@@ -203,7 +205,8 @@ impl Game {
 
         println!("qtree time: {timer:?}");
 
-        let (fog_graph, fog_graph_forward) = precompute_ray_graph(VISION_RANGE as usize);
+        let (fog_raycast_map, fog_raycast_map_forward) =
+            precompute_raycast_map(VISION_RANGE as usize);
 
         Self {
             xs,
@@ -231,10 +234,10 @@ impl Game {
             enable_raycast_board: false,
             raycast_board: RefCell::new(vec![]),
             fog_rays: vec![],
-            fog_graph,
-            fog_graph_forward,
-            fog_graph_real: vec![],
-            fog_graph_cache: HashMap::new(),
+            fog_raycast_map,
+            fog_raycast_map_forward,
+            fog_raycast_map_real: vec![],
+            fog_raycast_map_cache: HashMap::new(),
         }
     }
 
@@ -317,7 +320,7 @@ impl Game {
         self.bullets = vec![];
         self.resources.clear();
         self.global_time = 0;
-        self.fog_graph_cache.clear();
+        self.fog_raycast_map_cache.clear();
     }
 
     fn new_qtree(
@@ -526,7 +529,7 @@ impl Game {
         self.global_time += 1;
 
         self.fog_rays.clear();
-        self.fog_graph_real.clear();
+        self.fog_raycast_map_real.clear();
 
         if self.enable_raycast_board {
             let mut raycast_board = self.raycast_board.borrow_mut();
@@ -932,19 +935,4 @@ pub fn is_passable_at_i(board: &[bool], shape: (usize, usize), pos: impl Into<[i
         let pos = [pos[0] as usize, pos[1] as usize];
         board[pos[0] + shape.0 * pos[1]]
     }
-}
-
-fn precompute_ray_graph(range: usize) -> (Vec<Vec<[i32; 2]>>, Vec<Vec<[i32; 2]>>) {
-    let mut graph = vec![vec![]; range * range];
-    let mut forward = vec![vec![]; range * range];
-    for y in 0..range as i32 {
-        for x in 0..range as i32 {
-            interpolate_i([0, 0], [x, y], |p| {
-                graph[p.x as usize + p.y as usize * range].push([x, y].into());
-                forward[x as usize + y as usize * range].push(p.into());
-                false
-            });
-        }
-    }
-    (graph, forward)
 }

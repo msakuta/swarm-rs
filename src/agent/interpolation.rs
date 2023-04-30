@@ -98,6 +98,40 @@ pub(crate) fn interpolate_i<P: Into<Vector2<i32>>>(
     return false;
 }
 
+/// A version of interpolation that won't miss diagonal walls.
+/// Suitable for raycasting in grid tiles.
+pub(crate) fn interpolate_raycast<P: Into<Vector2<i32>>>(
+    start: P,
+    target: P,
+    mut f: impl FnMut(Vector2<i32>) -> bool,
+) -> bool {
+    let start_p = start.into();
+    let target_p = target.into();
+    let dx = start_p.x - target_p.x;
+    let dy = start_p.y - target_p.y;
+    let interpolates = dx.abs().max(dy.abs());
+    if interpolates == 0 {
+        return f(start_p);
+    }
+    let horizontal = dy.abs() < dx.abs();
+    let mut last_pos = start_p;
+    for i in 0..=interpolates {
+        let point = lerp_i(start_p, target_p, i as f64 / interpolates as f64);
+        if horizontal {
+            if last_pos.y != point.y {
+                f(Vector2::new(point.x, last_pos.y));
+            }
+        } else if last_pos.x != point.x {
+            f(Vector2::new(last_pos.x, point.y));
+        }
+        if f(point) {
+            return true;
+        }
+        last_pos = point;
+    }
+    return false;
+}
+
 /// Collision checking with steering model. It can interpolate curvature.
 pub(crate) fn interpolate_steer(
     start: &AgentState,

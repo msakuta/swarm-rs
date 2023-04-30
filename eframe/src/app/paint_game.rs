@@ -338,7 +338,7 @@ fn paint_agents(bundle: (&Response, &Painter), app: &SwarmRsApp, view_transform:
         [v[0] as f64 + 0.5, v[1] as f64 + 0.5]
     }
 
-    for graph in &game.fog_graph_real {
+    for graph in &game.fog_raycast_map_real {
         for pix in graph {
             bundle.1.line_segment(
                 [to_point(vec2f64(pix[0])), to_point(vec2f64(pix[1]))],
