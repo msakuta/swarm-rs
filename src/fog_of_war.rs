@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use crate::{
-    agent::interpolation::{interpolate_i, interpolate_raycast},
+    agent::interpolation::interpolate_raycast,
     entity::Entity,
     game::{Board, Game, Resource},
 };
@@ -44,7 +44,8 @@ impl From<&Entity> for EntityShadow {
     }
 }
 
-pub(crate) type FogGraph = Vec<Vec<[i32; 2]>>;
+/// A map from a pixel and a collection of pixels that would be obscured if the given pixel was an obstacle.
+pub(crate) type FogRaycastMap = Vec<Vec<[i32; 2]>>;
 
 impl Game {
     pub(crate) fn fog_resource(&mut self, team: usize) {
@@ -101,17 +102,19 @@ impl Game {
     }
 }
 
-pub(crate) fn precompute_ray_graph(range: usize) -> (Vec<Vec<[i32; 2]>>, Vec<Vec<[i32; 2]>>) {
-    let mut graph = vec![vec![]; range * range];
+/// Compute raycast graph with given size. Both forward and backward maps are returned, but the
+/// useful one is backward, to quickly fill obstructed pixels.
+pub(crate) fn precompute_raycast_map(range: usize) -> (Vec<Vec<[i32; 2]>>, Vec<Vec<[i32; 2]>>) {
+    let mut backward = vec![vec![]; range * range];
     let mut forward = vec![vec![]; range * range];
     for y in 0..range as i32 {
         for x in 0..range as i32 {
             interpolate_raycast([0, 0], [x, y], |p| {
-                graph[p.x as usize + p.y as usize * range].push([x, y].into());
+                backward[p.x as usize + p.y as usize * range].push([x, y].into());
                 forward[x as usize + y as usize * range].push(p.into());
                 false
             });
         }
     }
-    (graph, forward)
+    (backward, forward)
 }
