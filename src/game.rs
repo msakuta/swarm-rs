@@ -11,10 +11,10 @@ use std::{
 };
 
 use crate::{
-    agent::{interpolation::interpolate_i, Agent, AgentClass, AgentState, Bullet},
+    agent::{Agent, AgentClass, AgentState, Bullet},
     collision::CollisionShape,
     entity::{Entity, GameEvent, VISION_RANGE},
-    fog_of_war::{FogGraph, FogOfWar, FOG_MAX_AGE},
+    fog_of_war::{precompute_ray_graph, FogGraph, FogOfWar, FOG_MAX_AGE},
     measure_time,
     mesh::{create_mesh, Mesh, MeshResult},
     perlin_noise::{gen_terms, perlin_noise_pixel, Xor128},
@@ -932,19 +932,4 @@ pub fn is_passable_at_i(board: &[bool], shape: (usize, usize), pos: impl Into<[i
         let pos = [pos[0] as usize, pos[1] as usize];
         board[pos[0] + shape.0 * pos[1]]
     }
-}
-
-fn precompute_ray_graph(range: usize) -> (Vec<Vec<[i32; 2]>>, Vec<Vec<[i32; 2]>>) {
-    let mut graph = vec![vec![]; range * range];
-    let mut forward = vec![vec![]; range * range];
-    for y in 0..range as i32 {
-        for x in 0..range as i32 {
-            interpolate_i([0, 0], [x, y], |p| {
-                graph[p.x as usize + p.y as usize * range].push([x, y].into());
-                forward[x as usize + y as usize * range].push(p.into());
-                false
-            });
-        }
-    }
-    (graph, forward)
 }
