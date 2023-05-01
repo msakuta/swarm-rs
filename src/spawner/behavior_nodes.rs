@@ -4,7 +4,7 @@ use behavior_tree_lite::{
 };
 
 use crate::{
-    agent::{Agent, AgentClass},
+    agent::AgentClass,
     behavior_tree_adapt::{common_tree_nodes, BehaviorTree},
 };
 
@@ -14,6 +14,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("SpawnFighter", boxify(|| SpawnFighter));
     registry.register("SpawnWorker", boxify(|| SpawnWorker));
     registry.register("CurrentSpawnTask", boxify(|| CurrentSpawnTask));
+    registry.register("CancelSpawnTask", boxify(|| CancelSpawnTask));
 
     let (_i, tree_source) = parse_file(source).unwrap();
     // println!("parse_file rest: {i:?}");
@@ -61,7 +62,7 @@ impl BehaviorNode for CurrentSpawnTask {
     ) -> BehaviorResult {
         let result = arg(self)
             .and_then(|a| a.downcast_ref::<Option<(usize, AgentClass)>>().copied())
-            .expect("Spawn should return an Option<AgentClass>");
+            .expect("CurrentSpawnTask should return an Option<AgentClass>");
         ctx.set(
             "class",
             result
@@ -73,5 +74,24 @@ impl BehaviorNode for CurrentSpawnTask {
             result.map(|(r, _)| r as i32).unwrap_or(0),
         );
         BehaviorResult::Success
+    }
+}
+
+pub(super) struct CancelSpawnTask;
+
+impl BehaviorNode for CancelSpawnTask {
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        _ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let result = arg(self)
+            .and_then(|a| a.downcast_ref::<bool>().copied())
+            .expect("CancelSpawnTask should return a bool");
+        if result {
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
     }
 }

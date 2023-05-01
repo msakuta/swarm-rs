@@ -2,7 +2,9 @@ mod behavior_nodes;
 
 use behavior_tree_lite::{error::LoadError, Blackboard, Context};
 
-use self::behavior_nodes::{build_tree, CurrentSpawnTask, SpawnFighter, SpawnWorker};
+use self::behavior_nodes::{
+    build_tree, CancelSpawnTask, CurrentSpawnTask, SpawnFighter, SpawnWorker,
+};
 use crate::{
     agent::AgentClass,
     behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource, PrintCommand},
@@ -125,44 +127,12 @@ impl Spawner {
 
         let mut ret = vec![];
 
-        let mut try_spawn = |class: AgentClass,
-                             spawn_progress: &mut Option<(usize, AgentClass)>|
-         -> Option<Box<dyn std::any::Any>> {
-            if class.cost() <= self.resource {
-                let agent_count = entities
-                    .iter()
-                    .filter(|entity| {
-                        entity
-                            .try_borrow()
-                            .map(|entity| {
-                                entity.is_agent()
-                                    && entity.get_team() == self.team
-                                    && entity.get_class() == Some(class)
-                            })
-                            .unwrap_or(false)
-                    })
-                    .count();
-                if agent_count < game.params.agent_count {
-                    if let Some((remaining, class)) = spawn_progress.as_mut() {
-                        if *remaining < 1 {
-                            ret.push(GameEvent::SpawnAgent {
-                                pos: self.pos,
-                                team: self.team,
-                                spawner: self.id,
-                                class: *class,
-                            });
-                            *spawn_progress = None;
-                        } else {
-                            *remaining -= 1;
-                        }
-                        return Some(Box::new(true));
-                    } else {
-                        *spawn_progress = Some((class.time(), class));
-                    }
-                }
-            }
-            Some(Box::new(false))
-        };
+        let mut try_spawn =
+            |class: AgentClass, this: &mut Self| -> Option<Box<dyn std::any::Any>> {
+                let (result, events) = this.try_spawn(class, game, entities);
+                ret.extend(events.into_iter());
+                result
+            };
 
         if let Some(mut tree) = self.behavior_tree.take() {
             let mut ctx = Context::new(std::mem::take(&mut self.blackboard));
@@ -177,11 +147,13 @@ impl Spawner {
                 } else if f.downcast_ref::<GetResource>().is_some() {
                     return Some(Box::new(self.resource));
                 } else if f.downcast_ref::<SpawnFighter>().is_some() {
-                    return try_spawn(AgentClass::Fighter, &mut self.spawn_progress);
+                    return try_spawn(AgentClass::Fighter, self);
                 } else if f.downcast_ref::<SpawnWorker>().is_some() {
-                    return try_spawn(AgentClass::Worker, &mut self.spawn_progress);
+                    return try_spawn(AgentClass::Worker, self);
                 } else if f.downcast_ref::<CurrentSpawnTask>().is_some() {
-                    return Some(Box::new(self.spawn_progress) as Box<dyn std::any::Any>);
+                    return Some(Box::new(self.spawn_progress));
+                } else if f.downcast_ref::<CancelSpawnTask>().is_some() {
+                    return self.cancel_task();
                 }
                 None
             };
@@ -193,5 +165,58 @@ impl Spawner {
         }
 
         ret
+    }
+
+    fn try_spawn(
+        &mut self,
+        class: AgentClass,
+        game: &Game,
+        entities: &[RefCell<Entity>],
+    ) -> (Option<Box<dyn std::any::Any>>, Vec<GameEvent>) {
+        let mut ret = vec![];
+        if class.cost() <= self.resource {
+            let agent_count = entities
+                .iter()
+                .filter(|entity| {
+                    entity
+                        .try_borrow()
+                        .map(|entity| {
+                            entity.is_agent()
+                                && entity.get_team() == self.team
+                                && entity.get_class() == Some(class)
+                        })
+                        .unwrap_or(false)
+                })
+                .count();
+            if agent_count < game.params.agent_count {
+                if let Some((remaining, class)) = self.spawn_progress.as_mut() {
+                    if *remaining < 1 {
+                        ret.push(GameEvent::SpawnAgent {
+                            pos: self.pos,
+                            team: self.team,
+                            spawner: self.id,
+                            class: *class,
+                        });
+                        self.spawn_progress = None;
+                    } else {
+                        *remaining -= 1;
+                    }
+                    return (Some(Box::new(true)), ret);
+                } else {
+                    self.spawn_progress = Some((class.time(), class));
+                }
+            }
+        }
+        (Some(Box::new(false)), ret)
+    }
+
+    fn cancel_task(&mut self) -> Option<Box<dyn std::any::Any>> {
+        let res = if self.spawn_progress.is_some() {
+            self.spawn_progress = None;
+            true
+        } else {
+            false
+        };
+        Some(Box::new(res))
     }
 }
