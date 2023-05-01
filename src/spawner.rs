@@ -30,6 +30,7 @@ pub struct Spawner {
     behavior_tree: Option<BehaviorTree>,
     blackboard: Blackboard,
     log_buffer: VecDeque<String>,
+    spawn_progress: Option<(usize, AgentClass)>,
 }
 
 impl Spawner {
@@ -55,6 +56,7 @@ impl Spawner {
             behavior_tree: Some(tree),
             blackboard: Blackboard::new(),
             log_buffer: VecDeque::new(),
+            spawn_progress: None,
         })
     }
 
@@ -106,6 +108,12 @@ impl Spawner {
         false
     }
 
+    pub fn get_progress(&self) -> f32 {
+        self.spawn_progress
+            .map(|(remaining, class)| remaining as f32 / class.time() as f32)
+            .unwrap_or(0.)
+    }
+
     pub(crate) fn update(
         &mut self,
         game: &mut Game,
@@ -133,13 +141,22 @@ impl Spawner {
                     })
                     .count();
                 if agent_count < game.params.agent_count {
-                    ret.push(GameEvent::SpawnAgent {
-                        pos: self.pos,
-                        team: self.team,
-                        spawner: self.id,
-                        class,
-                    });
-                    return Some(Box::new(true));
+                    if let Some((remaining, class)) = self.spawn_progress.as_mut() {
+                        if *remaining < 1 {
+                            ret.push(GameEvent::SpawnAgent {
+                                pos: self.pos,
+                                team: self.team,
+                                spawner: self.id,
+                                class: *class,
+                            });
+                            self.spawn_progress = None;
+                        } else {
+                            *remaining -= 1;
+                        }
+                        return Some(Box::new(true));
+                    } else {
+                        self.spawn_progress = Some((class.time(), class));
+                    }
                 }
             }
             Some(Box::new(false))

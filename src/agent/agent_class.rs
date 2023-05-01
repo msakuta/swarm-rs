@@ -31,6 +31,13 @@ impl AgentClass {
         }
     }
 
+    pub(crate) fn time(&self) -> usize {
+        match self {
+            Self::Worker => 200,
+            Self::Fighter => 1500,
+        }
+    }
+
     pub(crate) fn health(&self) -> u32 {
         match self {
             Self::Worker => AGENT_MAX_HEALTH,
