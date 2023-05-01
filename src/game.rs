@@ -309,6 +309,20 @@ impl Game {
             BoardType::Maze => Self::create_maze_board(&params),
         };
 
+        if let Ok(mut f) = std::fs::File::create("map.png").map(|f| std::io::BufWriter::new(f)) {
+            let u8buf: Vec<_> = board.iter().map(|b| if *b { 255u8 } else { 0 }).collect();
+            if let Err(e) = image::write_buffer_with_format(
+                &mut f,
+                &u8buf,
+                self.xs as u32,
+                self.ys as u32,
+                image::ColorType::L8,
+                image::ImageOutputFormat::Png,
+            ) {
+                eprintln!("Image writer error: {e}");
+            }
+        }
+
         let fog = FogOfWar::new(&board);
 
         self.qtree = Self::new_qtree(params.shape, &board, &[]);

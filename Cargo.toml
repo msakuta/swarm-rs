@@ -20,6 +20,7 @@ rand = "0.8.5"
 log = "0.4.17"
 
 serde = { version = "1", features = ["derive"], optional = true }
+image = "0.24.6"
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -32,8 +33,8 @@ tag = "v0.3.1"
 # commit = "ff5201ba194c985cdb925c8ac0845c5a5a3c46c1"
 
 [features]
-druid = [ "dep:druid" ]
-serde = [ "dep:serde" ]
+druid = ["dep:druid"]
+serde = ["dep:serde"]
 
 [workspace]
 members = [ "eframe", "druid" ]
