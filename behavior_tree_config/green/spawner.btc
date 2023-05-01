@@ -7,4 +7,6 @@ tree main = Sequence {
             SpawnWorker
         }
     }
+    # CurrentSpawnTask(class -> className, remaining_ticks -> remainingTicks)
+    # Print(input <- "class: {}, time: {}", arg0 <- className, arg1 <- remainingTicks)
 }

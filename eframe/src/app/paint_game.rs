@@ -434,7 +434,13 @@ fn paint_real_agent(
 
     if let Entity::Spawner(spawner) = &agent as &Entity {
         let progress = spawner.get_progress();
-        draw_arc(painter, pos.to_vec2(), 12.0, progress, (2., Color32::WHITE));
+        draw_arc(
+            painter,
+            pos.to_vec2(),
+            12.0,
+            progress,
+            (2., Color32::from_rgb(0, 255, 255)),
+        );
     }
 
     let agent_pos = agent.get_pos();

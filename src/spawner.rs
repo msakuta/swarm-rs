@@ -2,7 +2,7 @@ mod behavior_nodes;
 
 use behavior_tree_lite::{error::LoadError, Blackboard, Context};
 
-use self::behavior_nodes::{build_tree, SpawnFighter, SpawnWorker};
+use self::behavior_nodes::{build_tree, CurrentSpawnTask, SpawnFighter, SpawnWorker};
 use crate::{
     agent::AgentClass,
     behavior_tree_adapt::{BehaviorTree, GetIdCommand, GetResource, PrintCommand},
@@ -110,7 +110,7 @@ impl Spawner {
 
     pub fn get_progress(&self) -> f32 {
         self.spawn_progress
-            .map(|(remaining, class)| remaining as f32 / class.time() as f32)
+            .map(|(remaining, class)| 1. - remaining as f32 / class.time() as f32)
             .unwrap_or(0.)
     }
 
@@ -125,7 +125,9 @@ impl Spawner {
 
         let mut ret = vec![];
 
-        let mut try_spawn = |class: AgentClass| -> Option<Box<dyn std::any::Any>> {
+        let mut try_spawn = |class: AgentClass,
+                             spawn_progress: &mut Option<(usize, AgentClass)>|
+         -> Option<Box<dyn std::any::Any>> {
             if class.cost() <= self.resource {
                 let agent_count = entities
                     .iter()
@@ -141,7 +143,7 @@ impl Spawner {
                     })
                     .count();
                 if agent_count < game.params.agent_count {
-                    if let Some((remaining, class)) = self.spawn_progress.as_mut() {
+                    if let Some((remaining, class)) = spawn_progress.as_mut() {
                         if *remaining < 1 {
                             ret.push(GameEvent::SpawnAgent {
                                 pos: self.pos,
@@ -149,13 +151,13 @@ impl Spawner {
                                 spawner: self.id,
                                 class: *class,
                             });
-                            self.spawn_progress = None;
+                            *spawn_progress = None;
                         } else {
                             *remaining -= 1;
                         }
                         return Some(Box::new(true));
                     } else {
-                        self.spawn_progress = Some((class.time(), class));
+                        *spawn_progress = Some((class.time(), class));
                     }
                 }
             }
@@ -175,9 +177,11 @@ impl Spawner {
                 } else if f.downcast_ref::<GetResource>().is_some() {
                     return Some(Box::new(self.resource));
                 } else if f.downcast_ref::<SpawnFighter>().is_some() {
-                    return try_spawn(AgentClass::Fighter);
+                    return try_spawn(AgentClass::Fighter, &mut self.spawn_progress);
                 } else if f.downcast_ref::<SpawnWorker>().is_some() {
-                    return try_spawn(AgentClass::Worker);
+                    return try_spawn(AgentClass::Worker, &mut self.spawn_progress);
+                } else if f.downcast_ref::<CurrentSpawnTask>().is_some() {
+                    return Some(Box::new(self.spawn_progress) as Box<dyn std::any::Any>);
                 }
                 None
             };
