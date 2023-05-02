@@ -33,6 +33,7 @@ pub struct Spawner {
     blackboard: Blackboard,
     log_buffer: VecDeque<String>,
     spawn_progress: Option<(usize, AgentClass)>,
+    spawn_result: Option<bool>,
 }
 
 impl Spawner {
@@ -59,6 +60,7 @@ impl Spawner {
             blackboard: Blackboard::new(),
             log_buffer: VecDeque::new(),
             spawn_progress: None,
+            spawn_result: None,
         })
     }
 
@@ -127,13 +129,6 @@ impl Spawner {
 
         let mut ret = vec![];
 
-        let mut try_spawn =
-            |class: AgentClass, this: &mut Self| -> Option<Box<dyn std::any::Any>> {
-                let (result, events) = this.try_spawn(class, game, entities);
-                ret.extend(events.into_iter());
-                result
-            };
-
         if let Some(mut tree) = self.behavior_tree.take() {
             let mut ctx = Context::new(std::mem::take(&mut self.blackboard));
             let mut process = |f: &dyn std::any::Any| {
@@ -147,9 +142,9 @@ impl Spawner {
                 } else if f.downcast_ref::<GetResource>().is_some() {
                     return Some(Box::new(self.resource));
                 } else if f.downcast_ref::<SpawnFighter>().is_some() {
-                    return try_spawn(AgentClass::Fighter, self);
+                    return self.start_spawn(AgentClass::Fighter);
                 } else if f.downcast_ref::<SpawnWorker>().is_some() {
-                    return try_spawn(AgentClass::Worker, self);
+                    return self.start_spawn(AgentClass::Worker);
                 } else if f.downcast_ref::<CurrentSpawnTask>().is_some() {
                     return Some(Box::new(self.spawn_progress));
                 } else if f.downcast_ref::<CancelSpawnTask>().is_some() {
@@ -160,6 +155,10 @@ impl Spawner {
 
             let _res = tree.0.tick(&mut process, &mut ctx);
 
+            if let Some(event) = self.try_spawn(game, entities) {
+                ret.push(event);
+            }
+
             self.behavior_tree = Some(tree);
             self.blackboard = ctx.take_blackboard();
         }
@@ -167,14 +166,23 @@ impl Spawner {
         ret
     }
 
-    fn try_spawn(
-        &mut self,
-        class: AgentClass,
-        game: &Game,
-        entities: &[RefCell<Entity>],
-    ) -> (Option<Box<dyn std::any::Any>>, Vec<GameEvent>) {
-        let mut ret = vec![];
-        if class.cost() <= self.resource {
+    fn start_spawn(&mut self, class: AgentClass) -> Option<Box<dyn std::any::Any>> {
+        if self.spawn_progress.is_none() {
+            self.spawn_progress = Some((class.time(), class));
+        }
+        self.spawn_result
+            .map(|r| Box::new(r) as Box<dyn std::any::Any>)
+    }
+
+    fn try_spawn(&mut self, game: &Game, entities: &[RefCell<Entity>]) -> Option<GameEvent> {
+        if let Some((ref mut remaining, class)) = self.spawn_progress {
+            if 1 <= *remaining {
+                *remaining -= 1;
+                return None;
+            }
+            if self.resource < class.cost() {
+                return None;
+            }
             let agent_count = entities
                 .iter()
                 .filter(|entity| {
@@ -189,25 +197,18 @@ impl Spawner {
                 })
                 .count();
             if agent_count < game.params.agent_count {
-                if let Some((remaining, class)) = self.spawn_progress.as_mut() {
-                    if *remaining < 1 {
-                        ret.push(GameEvent::SpawnAgent {
-                            pos: self.pos,
-                            team: self.team,
-                            spawner: self.id,
-                            class: *class,
-                        });
-                        self.spawn_progress = None;
-                    } else {
-                        *remaining -= 1;
-                    }
-                    return (Some(Box::new(true)), ret);
-                } else {
-                    self.spawn_progress = Some((class.time(), class));
-                }
+                let ret = Some(GameEvent::SpawnAgent {
+                    pos: self.pos,
+                    team: self.team,
+                    spawner: self.id,
+                    class,
+                });
+                self.spawn_progress = None;
+                self.spawn_result = Some(true);
+                return ret;
             }
         }
-        (Some(Box::new(false)), ret)
+        None
     }
 
     fn cancel_task(&mut self) -> Option<Box<dyn std::any::Any>> {

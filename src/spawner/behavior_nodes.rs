@@ -31,8 +31,8 @@ macro_rules! spawn_impl {
                 arg: BehaviorCallback,
                 _ctx: &mut behavior_tree_lite::Context,
             ) -> BehaviorResult {
-                let result = arg(&Self).and_then(|a| a.downcast_ref::<bool>().copied()).expect("Spawn should return a bool");
-                if result {
+                let result = arg(&Self).and_then(|a| a.downcast_ref::<bool>().copied());
+                if result.is_some() {
                     BehaviorResult::Success
                 } else {
                     BehaviorResult::Fail
