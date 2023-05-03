@@ -3,7 +3,7 @@ mod behavior_nodes;
 use behavior_tree_lite::{error::LoadError, Blackboard, Context};
 
 use self::behavior_nodes::{
-    build_tree, CancelSpawnTask, CurrentSpawnTask, SpawnFighter, SpawnWorker,
+    build_tree, CancelSpawnTask, CurrentSpawnTask, LastSpawnResult, SpawnFighter, SpawnWorker,
 };
 use crate::{
     agent::AgentClass,
@@ -33,7 +33,7 @@ pub struct Spawner {
     blackboard: Blackboard,
     log_buffer: VecDeque<String>,
     spawn_progress: Option<(usize, AgentClass)>,
-    spawn_result: Option<bool>,
+    spawn_result: Option<AgentClass>,
 }
 
 impl Spawner {
@@ -145,6 +145,8 @@ impl Spawner {
                     return self.start_spawn(AgentClass::Fighter);
                 } else if f.downcast_ref::<SpawnWorker>().is_some() {
                     return self.start_spawn(AgentClass::Worker);
+                } else if f.downcast_ref::<LastSpawnResult>().is_some() {
+                    return self.last_spawn_result();
                 } else if f.downcast_ref::<CurrentSpawnTask>().is_some() {
                     return Some(Box::new(self.spawn_progress));
                 } else if f.downcast_ref::<CancelSpawnTask>().is_some() {
@@ -167,15 +169,21 @@ impl Spawner {
     }
 
     fn start_spawn(&mut self, class: AgentClass) -> Option<Box<dyn std::any::Any>> {
+        let mut ret = false;
         if self.spawn_progress.is_none() {
             self.spawn_progress = Some((class.time(), class));
+            ret = true;
         } else if let Some((_, cur_class)) = self.spawn_progress {
             if cur_class != class {
                 self.spawn_progress = Some((class.time(), class));
+                ret = true;
             }
         }
-        self.spawn_result
-            .map(|r| Box::new(r) as Box<dyn std::any::Any>)
+        Some(Box::new(ret))
+    }
+
+    fn last_spawn_result(&mut self) -> Option<Box<dyn std::any::Any>> {
+        Some(Box::new(self.spawn_result.take()) as Box<dyn std::any::Any>)
     }
 
     fn try_spawn(&mut self, game: &Game, entities: &[RefCell<Entity>]) -> Option<GameEvent> {
@@ -208,7 +216,7 @@ impl Spawner {
                     class,
                 });
                 self.spawn_progress = None;
-                self.spawn_result = Some(true);
+                self.spawn_result = Some(class);
                 return ret;
             }
         }

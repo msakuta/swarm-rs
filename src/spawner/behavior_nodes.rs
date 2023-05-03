@@ -13,6 +13,7 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     common_tree_nodes(&mut registry);
     registry.register("SpawnFighter", boxify(|| SpawnFighter));
     registry.register("SpawnWorker", boxify(|| SpawnWorker));
+    registry.register("LastSpawnResult", boxify(|| LastSpawnResult));
     registry.register("CurrentSpawnTask", boxify(|| CurrentSpawnTask));
     registry.register("CancelSpawnTask", boxify(|| CancelSpawnTask));
 
@@ -44,6 +45,30 @@ macro_rules! spawn_impl {
 
 spawn_impl!(SpawnFighter);
 spawn_impl!(SpawnWorker);
+
+pub(super) struct LastSpawnResult;
+
+impl BehaviorNode for LastSpawnResult {
+    fn provided_ports(&self) -> Vec<PortSpec> {
+        vec![PortSpec::new_out("type")]
+    }
+
+    fn tick(
+        &mut self,
+        arg: BehaviorCallback,
+        ctx: &mut behavior_tree_lite::Context,
+    ) -> BehaviorResult {
+        let result = arg(self)
+            .and_then(|a| a.downcast_ref::<Option<AgentClass>>().copied())
+            .expect("LastSpawnResult should return an Option<AgentClass>");
+        if let Some(result) = result {
+            ctx.set("type", result.to_string());
+            BehaviorResult::Success
+        } else {
+            BehaviorResult::Fail
+        }
+    }
+}
 
 pub(super) struct CurrentSpawnTask;
 

@@ -1,4 +1,7 @@
 tree main = Sequence {
+    if (LastSpawnResult(type -> lastType)) {
+        Print(input <- "Spawn{} finished!", arg0 <- lastType)
+    }
     GetResource (output -> resource)
     if (Ge (lhs <- resource, rhs <- "500")) {
         SpawnFighter
