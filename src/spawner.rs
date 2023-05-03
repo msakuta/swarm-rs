@@ -169,6 +169,10 @@ impl Spawner {
     fn start_spawn(&mut self, class: AgentClass) -> Option<Box<dyn std::any::Any>> {
         if self.spawn_progress.is_none() {
             self.spawn_progress = Some((class.time(), class));
+        } else if let Some((_, cur_class)) = self.spawn_progress {
+            if cur_class != class {
+                self.spawn_progress = Some((class.time(), class));
+            }
         }
         self.spawn_result
             .map(|r| Box::new(r) as Box<dyn std::any::Any>)
