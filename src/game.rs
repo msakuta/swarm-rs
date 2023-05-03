@@ -253,7 +253,6 @@ impl Game {
                 .any(|agent| !agent.borrow().is_agent() && agent.borrow().get_team() == team)
             {
                 let spawner = self.try_new_spawner(team);
-                println!("spawner: {spawner:?}");
                 if let Some(spawner) = spawner {
                     self.entities.push(RefCell::new(spawner));
                 }

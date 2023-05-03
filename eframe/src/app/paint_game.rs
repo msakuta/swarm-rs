@@ -407,24 +407,40 @@ fn paint_real_agent(
         );
     }
 
+    fn draw_arc(
+        painter: &Painter,
+        pos: Vec2,
+        radius: f32,
+        fraction: f32,
+        stroke: impl Into<Stroke> + Copy,
+    ) {
+        use std::f32::consts::PI;
+        let angle = fraction * 2. * PI;
+        let count = (10. * fraction) as i32 + 10; // There is no reason to pick this value, but it seems to work fine.
+        for (i0, i1) in (0..count).zip(1..=count) {
+            let theta0 = i0 as f32 / count as f32 * angle;
+            let theta1 = i1 as f32 / count as f32 * angle;
+            let p0 = Vec2::new(theta0.sin(), -theta0.cos()) * radius + pos;
+            let p1 = Vec2::new(theta1.sin(), -theta1.cos()) * radius + pos;
+            painter.line_segment([p0.to_pos2(), p1.to_pos2()], stroke);
+        }
+    }
+
     let resource = agent.resource();
     if 0 < resource {
-        use std::f64::consts::PI;
-        let f = resource as f64 * 2. * PI / agent.max_resource() as f64;
-        let count = 10; // There is no reason to pick this value, but it seems to work fine.
-        for (i0, i1) in (0..count).zip(1..=count) {
-            let theta0 = (i0 as f64 / count as f64 * f) as f32;
-            let theta1 = (i1 as f64 / count as f64 * f) as f32;
-            let p0 = Vec2::new(theta0.sin(), -theta0.cos()) * 7.5 + pos.to_vec2();
-            let p1 = Vec2::new(theta1.sin(), -theta1.cos()) * 7.5 + pos.to_vec2();
-            painter.line_segment(
-                [p0.to_pos2(), p1.to_pos2()],
-                Stroke {
-                    color: Color32::YELLOW,
-                    width: 2.5,
-                },
-            );
-        }
+        let f = resource as f32 / agent.max_resource() as f32;
+        draw_arc(painter, pos.to_vec2(), 7.5, f, (2.5, Color32::YELLOW));
+    }
+
+    if let Entity::Spawner(spawner) = &agent as &Entity {
+        let progress = spawner.get_progress();
+        draw_arc(
+            painter,
+            pos.to_vec2(),
+            13.,
+            progress,
+            (2., Color32::from_rgb(0, 191, 191)),
+        );
     }
 
     let agent_pos = agent.get_pos();

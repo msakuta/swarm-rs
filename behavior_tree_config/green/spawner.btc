@@ -1,4 +1,7 @@
 tree main = Sequence {
+    if (LastSpawnResult(type -> lastType)) {
+        Print(input <- "Spawn{} finished!", arg0 <- lastType)
+    }
     GetResource (output -> resource)
     if (Ge (lhs <- resource, rhs <- "500")) {
         SpawnFighter
@@ -7,4 +10,9 @@ tree main = Sequence {
             SpawnWorker
         }
     }
+    # CurrentSpawnTask(class -> className, remaining_ticks -> remainingTicks)
+    # Print(input <- "class: {}, time: {}", arg0 <- className, arg1 <- remainingTicks)
+    # if (Ge(rhs <- remainingTicks, lhs <- "100")) {
+    #     CancelSpawnTask
+    # }
 }
