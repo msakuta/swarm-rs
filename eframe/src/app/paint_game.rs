@@ -437,9 +437,9 @@ fn paint_real_agent(
         draw_arc(
             painter,
             pos.to_vec2(),
-            12.0,
+            13.,
             progress,
-            (2., Color32::from_rgb(0, 255, 255)),
+            (2., Color32::from_rgb(0, 191, 191)),
         );
     }
 
