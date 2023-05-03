@@ -777,6 +777,7 @@ impl Game {
     //     }
     // }
 
+    /// Returns an RGB image and its dimensions
     pub fn occupancy_image(
         &self,
         fog_active: &[bool; 2],

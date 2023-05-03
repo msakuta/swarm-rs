@@ -131,11 +131,8 @@ impl SwarmRsApp {
                     });
             } else if self.app_data.game.enable_raycast_board {
                 let raycast_board = self.app_data.game.raycast_board.borrow();
-                let ray_dirty = raycast_board.iter().any(|p| *p != 0);
                 let ray_valid = raycast_board.len() == self.app_data.game.board.len();
-                if ray_dirty || true {
-                    self.img_gray.clear();
-                }
+                self.img_gray.clear();
                 if ray_valid {
                     self.img_gray.paint(
                         &response,
@@ -147,11 +144,11 @@ impl SwarmRsApp {
                                 .occupancy_image(&app_data.fog_active, app_data.colored_fog)
                                 .unwrap_or_else(|| ([0, 0], vec![]));
                             let image = image
-                                .into_iter()
+                                .chunks(3)
                                 .zip(raycast_board.iter())
-                                .map(|(b, r)| {
-                                    let br = b.saturating_add(r * 32);
-                                    [br, br, b]
+                                .map(|(rgb, ray)| {
+                                    let br = *ray * 32;
+                                    [rgb[0].saturating_add(br), rgb[1].saturating_add(br), rgb[2]]
                                 })
                                 .flatten()
                                 .collect::<Vec<_>>();
