@@ -253,18 +253,23 @@ impl CollisionShape {
             println!("WARNING: OBB does not have vertices");
             return false;
         };
-        let Some((x_min, x_max, y_min, y_max)) = vertices.into_iter().fold(None, |acc: Option<(f64, f64, f64, f64)>, vertex| {
-            let rel_pos = Vector2::from(vertex) - org;
-            let x_dot = rel_pos.dot(x_normal);
-            let y_dot = rel_pos.dot(y_normal);
-            if let Some((x_min, x_max, y_min, y_max)) = acc {
-                Some((x_min.min(x_dot), x_max.max(x_dot), y_min.min(y_dot), y_max.max(y_dot)))
-            } else {
-                Some((x_dot, x_dot, y_dot, y_dot))
-            }
-        }) else {
+
+        let obb_vertices =
+            vertices
+                .into_iter()
+                .fold(None, |acc: Option<(f64, f64, f64, f64)>, vertex| {
+                    let rel_pos = Vector2::from(vertex) - org;
+                    let xd = rel_pos.dot(x_normal);
+                    let yd = rel_pos.dot(y_normal);
+                    if let Some((x_min, x_max, y_min, y_max)) = acc {
+                        Some((x_min.min(xd), x_max.max(xd), y_min.min(yd), y_max.max(yd)))
+                    } else {
+                        Some((xd, xd, yd, yd))
+                    }
+                });
+        let Some((x_min, x_max, y_min, y_max)) = obb_vertices else {
             println!("WARNING: OBB does not have vertices");
-            return false
+            return false;
         };
 
         if obb.xs < x_min || x_max < -obb.xs || obb.ys < y_min || y_max < -obb.ys {

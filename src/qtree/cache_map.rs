@@ -109,7 +109,9 @@ impl CacheMap {
     }
 
     pub(super) fn finish_update(&mut self) {
-        let Some(prev_map) = &mut self.prev_map else { return };
+        let Some(prev_map) = &mut self.prev_map else {
+            return;
+        };
 
         for i in self
             .map

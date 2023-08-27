@@ -415,10 +415,9 @@ fn paint_agents(ctx: &mut PaintCtx, data: &AppData, env: &Env, view_transform: &
 
         if data.path_visible {
             let avoidance_drawn = 'breaky: {
-                let Some(path) = agent
-                    .get_avoidance_path() else {
-                        break 'breaky None;
-                    };
+                let Some(path) = agent.get_avoidance_path() else {
+                    break 'breaky None;
+                };
                 if path.len() == 0 {
                     break 'breaky None;
                 }

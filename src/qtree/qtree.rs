@@ -338,7 +338,7 @@ impl QTree {
     ) -> (Result<QTreePath, PathFindError>, SearchTree) {
         let mut result = Err(PathFindError::SearchFailed);
         let Some(start_found) = self.find(start) else {
-            return (Err(PathFindError::StartBlocked), SearchTree::new())
+            return (Err(PathFindError::StartBlocked), SearchTree::new());
         };
         if blocked(start_found.1, &ignore) {
             dbg_println!("Start position {start:?} was occupied!");
@@ -346,7 +346,7 @@ impl QTree {
         }
 
         let Some(end_found) = self.find(end) else {
-            return (Err(PathFindError::GoalBlocked), SearchTree::new())
+            return (Err(PathFindError::GoalBlocked), SearchTree::new());
         };
         if blocked(end_found.1, &ignore) {
             dbg_println!("End position {start:?} was occupied!");
@@ -405,7 +405,7 @@ impl QTree {
     ) -> (Result<QTreePath, PathFindError>, SearchTree) {
         let mut result = Err(PathFindError::SearchFailed);
         let Some(start_found) = self.find(start) else {
-            return (Err(PathFindError::StartBlocked), SearchTree::new())
+            return (Err(PathFindError::StartBlocked), SearchTree::new());
         };
         if blocked(start_found.1, &ignore) {
             dbg_println!("Start position {start:?} was occupied!");
@@ -489,9 +489,7 @@ impl QTree {
                     //     "    Neighbor: [{nei_level}]{nei_idx:?}: {cell:?}, new_cost: {new_cost}"
                     // );
                 }
-                let Some(cell) = cell else {
-                    continue
-                };
+                let Some(cell) = cell else { continue };
                 if blocked(*cell, &ignore) {
                     continue;
                 }

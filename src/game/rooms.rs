@@ -56,8 +56,11 @@ impl Game {
             if open_ends.is_empty() {
                 break;
             }
-            let Some(&room_i) = open_ends.iter().nth(xor128.nexti() as usize % open_ends.len()) else {
-                break
+            let Some(&room_i) = open_ends
+                .iter()
+                .nth(xor128.nexti() as usize % open_ends.len())
+            else {
+                break;
             };
             let xi = room_i.0 as i32;
             let yi = room_i.1 as i32;

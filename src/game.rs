@@ -575,60 +575,53 @@ impl Game {
         // self.qtree = qtree;
 
         self.entities = entities;
-        self.bullets = bullets;
+        // self.bullets = bullets;
 
         {
             let agents = &self.entities;
             let mut temp_ents = std::mem::take(&mut self.temp_ents);
             let mut kills = [0usize; 2];
-            self.bullets = self
-                .bullets
-                .iter()
-                .filter_map(|bullet| {
-                    if !self.is_passable_at(bullet.pos) {
-                        return None;
+            bullets.retain_mut(|bullet| {
+                if !self.is_passable_at(bullet.pos) {
+                    return false;
+                }
+                let newpos = (Vector2::from(bullet.pos) + Vector2::from(bullet.velo)).into();
+                for agent in agents.iter() {
+                    let mut agent = agent.borrow_mut();
+                    if agent.get_team() == bullet.team {
+                        continue;
                     }
-                    let newpos = (Vector2::from(bullet.pos) + Vector2::from(bullet.velo)).into();
-                    for agent in agents.iter() {
-                        let mut agent = agent.borrow_mut();
-                        if agent.get_team() == bullet.team {
-                            continue;
-                        }
-                        if let Some(agent_vertices) = agent.get_shape().to_vertices() {
-                            if separating_axis(
-                                &Vector2::from(bullet.pos),
-                                &Vector2::from(bullet.velo),
-                                agent_vertices.into_iter().map(Vector2::from),
-                            ) {
-                                let temp_ent = match bullet.shooter_class {
-                                    AgentClass::Worker => {
-                                        TempEnt::new(bullet.pos, crate::temp_ents::MAX_TTL / 2., 1.)
-                                    }
-                                    AgentClass::Fighter => {
-                                        TempEnt::new(bullet.pos, crate::temp_ents::MAX_TTL, 2.)
-                                    }
-                                };
-                                temp_ents.push(temp_ent);
-                                if agent.damage(bullet.damage) {
-                                    agent.set_active(false);
-                                    kills[bullet.team] += 1;
-                                    println!("Entity {} is being killed", agent.get_id());
+                    if let Some(agent_vertices) = agent.get_shape().to_vertices() {
+                        if separating_axis(
+                            &Vector2::from(bullet.pos),
+                            &Vector2::from(bullet.velo),
+                            agent_vertices.into_iter().map(Vector2::from),
+                        ) {
+                            let temp_ent = match bullet.shooter_class {
+                                AgentClass::Worker => {
+                                    TempEnt::new(bullet.pos, crate::temp_ents::MAX_TTL / 2., 1.)
                                 }
-                                return None;
+                                AgentClass::Fighter => {
+                                    TempEnt::new(bullet.pos, crate::temp_ents::MAX_TTL, 2.)
+                                }
+                            };
+                            temp_ents.push(temp_ent);
+                            if agent.damage(bullet.damage) {
+                                agent.set_active(false);
+                                kills[bullet.team] += 1;
+                                println!("Entity {} is being killed", agent.get_id());
                             }
+                            return false;
                         }
                     }
-                    let mut ret = bullet.clone();
-                    ret.pos = newpos;
-                    ret.traveled += Vector2::from(bullet.velo).magnitude();
-                    Some(ret)
-                })
-                .collect();
+                }
+                bullet.pos = newpos;
+                bullet.traveled += Vector2::from(bullet.velo).magnitude();
+                true
+            });
+            self.bullets = bullets;
 
-            self.temp_ents = temp_ents
-                .into_iter()
-                .filter_map(|mut ent| if ent.update() { Some(ent) } else { None })
-                .collect();
+            self.temp_ents.retain_mut(|ent| ent.update());
 
             for team in 0..self.stats.len() {
                 self.stats[team].kills += kills[team];
@@ -696,10 +689,8 @@ impl Game {
 
         self.qtree_profiler.borrow_mut().add(timer);
 
-        let entities: Vec<_> = std::mem::take(&mut self.entities)
-            .into_iter()
-            .filter(|agent| agent.borrow().get_active())
-            .collect();
+        self.entities.retain(|agent| agent.borrow().get_active());
+        let entities = std::mem::take(&mut self.entities);
 
         // if entities.is_empty() {
         //     println!("Adding agents");

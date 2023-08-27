@@ -785,9 +785,10 @@ impl BehaviorNode for FaceToTargetNode {
     fn tick(&mut self, arg: BehaviorCallback, ctx: &mut Context) -> BehaviorResult {
         if let Some(target) = ctx.get::<[f64; 2]>(*TARGET) {
             let Some(val) = arg(&FaceToTargetCommand(*target))
-                .and_then(|val| val.downcast_ref::<OrientToResult>().copied()) else {
-                    return BehaviorResult::Fail;
-                };
+                .and_then(|val| val.downcast_ref::<OrientToResult>().copied())
+            else {
+                return BehaviorResult::Fail;
+            };
 
             if val.into() {
                 BehaviorResult::Success

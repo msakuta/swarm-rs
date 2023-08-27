@@ -355,10 +355,14 @@ impl Agent {
     }
 
     fn has_target(&self, entities: &[RefCell<Entity>]) -> bool {
-        let Some(target) = self.target else { return false };
+        let Some(target) = self.target else {
+            return false;
+        };
         match target {
             AgentTarget::Entity(id) => entities.iter().any(|entity| {
-                let Ok(entity) = entity.try_borrow() else { return false };
+                let Ok(entity) = entity.try_borrow() else {
+                    return false;
+                };
                 entity.get_id() == id
             }),
             AgentTarget::Resource(_) | AgentTarget::Fog(_) => true,
@@ -582,7 +586,7 @@ impl Agent {
             .iter()
             .min_by(|a, b| a.1.abs().partial_cmp(&b.1.abs()).unwrap());
         let Some(&(drive, steer)) = min_steer else {
-            return None
+            return None;
         };
         if steer != 0. {
             let target = self.get_avoidance_state((drive, steer));
@@ -890,8 +894,12 @@ impl Agent {
         if AGENT_VISIBLE_DISTANCE < distance {
             return false;
         }
-        let Some(self_veci) = self_vec.cast::<i32>() else { return false };
-        let Some(target_veci) = target_vec.cast::<i32>() else { return false };
+        let Some(self_veci) = self_vec.cast::<i32>() else {
+            return false;
+        };
+        let Some(target_veci) = target_vec.cast::<i32>() else {
+            return false;
+        };
         let delta = self_veci - target_veci;
         let horizontal = delta.y.abs() < delta.x.abs();
         let check_shape = if horizontal {

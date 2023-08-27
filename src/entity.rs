@@ -349,7 +349,9 @@ impl Entity {
             }
             game.fog_raycast_map_cache
                 .insert(self.get_id(), (pos_i.into(), visibility_map));
-            let Some((_, cache)) = game.fog_raycast_map_cache.get(&self.get_id()) else { return };
+            let Some((_, cache)) = game.fog_raycast_map_cache.get(&self.get_id()) else {
+                return;
+            };
             cache
         };
 

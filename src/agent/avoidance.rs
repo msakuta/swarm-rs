@@ -219,8 +219,12 @@ impl Agent {
         game: &mut Game,
         entities: &[RefCell<Entity>],
     ) -> bool {
-        let Some(ref mut ss) = self.search_state else { return false };
-        let Some(ref mut found_path) = ss.found_path else { return false };
+        let Some(ref mut ss) = self.search_state else {
+            return false;
+        };
+        let Some(ref mut found_path) = ss.found_path else {
+            return false;
+        };
         if let Some(target) = found_path.last() {
             let target_state = &ss.search_tree[*target];
             let state = target_state.state;
@@ -492,7 +496,9 @@ impl Agent {
         }
 
         for i in 0..ss.search_tree.len() {
-            let Some(from) = ss.search_tree[i].from else { continue };
+            let Some(from) = ss.search_tree[i].from else {
+                continue;
+            };
             let start_state = ss.search_tree[from].state;
             let next_state = ss.search_tree[i].state;
             ss.search_tree[i].blocked = false;

@@ -499,10 +499,9 @@ fn paint_real_agent(
 
     if data.path_visible {
         let mut path = 'avoidance_path: {
-            let Some(path) = agent
-                .get_avoidance_path_array() else {
-                    break 'avoidance_path vec![];
-                };
+            let Some(path) = agent.get_avoidance_path_array() else {
+                break 'avoidance_path vec![];
+            };
             if path.len() == 0 {
                 break 'avoidance_path vec![];
             }

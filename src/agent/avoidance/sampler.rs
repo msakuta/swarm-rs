@@ -196,10 +196,14 @@ impl StateSampler for ForwardKinematicSampler {
                 }
                 return;
             }
-            let Some((to_index, _)) = nodes[existing_from].to
-                .iter().copied().enumerate().find(|(_, j)| *j == i) else
-            {
-                continue
+            let Some((to_index, _)) = nodes[existing_from]
+                .to
+                .iter()
+                .copied()
+                .enumerate()
+                .find(|(_, j)| *j == i)
+            else {
+                continue;
             };
             let distance = Vector2::from(nodes[i].state).distance(Vector2::from(start_state));
             let shortcut_cost = self.calculate_cost(distance);
@@ -311,7 +315,9 @@ fn find_closest_node<'a, 'b>(
         let mut closest = None;
         for iy in -cell_radius..=cell_radius {
             for ix in -cell_radius..=cell_radius {
-                let Some(cell_nodes) = grid_map.get(&[center.0 + ix, center.1 + iy]) else { continue };
+                let Some(cell_nodes) = grid_map.get(&[center.0 + ix, center.1 + iy]) else {
+                    continue;
+                };
                 closest =
                     cell_nodes
                         .iter()
@@ -420,7 +426,9 @@ impl StateSampler for RrtStarSampler {
         let invokes = TOTAL_INVOKES.fetch_add(1, Ordering::Relaxed);
 
         fn cycle_check(nodes: &mut [SearchNode], start: usize) -> bool {
-            let Some(mut node) = nodes[start].from else { return false };
+            let Some(mut node) = nodes[start].from else {
+                return false;
+            };
             let mut cycle_check = HashSet::new();
             while let Some(next_node) = nodes[node].from {
                 if cycle_check.contains(&next_node) {
@@ -509,7 +517,9 @@ fn find_lowest_cost(
         let mut closest = None;
         for iy in -cell_radius..=cell_radius {
             for ix in -cell_radius..=cell_radius {
-                let Some(cell_nodes) = grid_map.get(&[center.0 + ix, center.1 + iy]) else { continue };
+                let Some(cell_nodes) = grid_map.get(&[center.0 + ix, center.1 + iy]) else {
+                    continue;
+                };
                 closest = cell_nodes.iter().fold(closest, |acc, &i| {
                     let existing_node = &nodes[i];
                     let delta = Vector2::from(state) - Vector2::from(existing_node.state);
