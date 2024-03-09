@@ -1,6 +1,15 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+mod app;
+mod app_data;
+mod bg_image;
+pub use app::SwarmRsApp;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm_utils;
+
+
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     // Log to stdout (if you run with `RUST_LOG=debug`).
@@ -10,7 +19,7 @@ fn main() {
     eframe::run_native(
         "swarm-rs application in eframe",
         native_options,
-        Box::new(|cc| Box::new(swarm_rs_eframe::SwarmRsApp::new(cc))),
+        Box::new(|cc| Box::new(SwarmRsApp::new(cc))),
     );
 }
 
@@ -33,7 +42,7 @@ fn main() {
         eframe::start_web(
             "the_canvas_id", // hardcode it
             web_options,
-            Box::new(|cc| Box::new(swarm_rs_eframe::SwarmRsApp::new(cc))),
+            Box::new(|cc| Box::new(SwarmRsApp::new(cc))),
         )
         .await
         .expect("failed to start eframe");

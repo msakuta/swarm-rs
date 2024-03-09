@@ -3,9 +3,6 @@ name = "swarm-rs-eframe"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
 [dependencies]
 egui = "0.20.0"
 eframe = { version = "0.20.0", default-features = false, features = [
