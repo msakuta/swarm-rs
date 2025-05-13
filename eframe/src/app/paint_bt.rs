@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use cgmath::{Matrix3, SquareMatrix};
 use eframe::{emath::RectTransform, epaint::PathShape};
 use egui::{
-    pos2, vec2, Color32, FontId, Frame, Galley, Painter, Pos2, Rect, Response, RichText, Ui, Vec2,
+    pos2, vec2, Color32, FontId, Frame, Galley, Painter, Pos2, Rect, Response, RichText,
+    StrokeKind, Ui, Vec2,
 };
 use swarm_rs::behavior_tree_lite::{
     parse_file,
@@ -345,7 +346,7 @@ impl AbstractGalley for std::sync::Arc<Galley> {
     }
 
     fn galley(&self, painter: &Painter, pos: Pos2) {
-        painter.galley(pos, self.clone());
+        painter.galley(pos, self.clone(), Color32::BLACK);
     }
 }
 
@@ -422,19 +423,20 @@ struct UiResult {
 
 impl UiResult {
     fn new(ui: &mut Ui) -> Self {
-        let input = ui.input();
-        let interact_pos = input.pointer.interact_pos().unwrap_or(Pos2::ZERO);
+        ui.input(|input| {
+            let interact_pos = input.pointer.interact_pos().unwrap_or(Pos2::ZERO);
 
-        UiResult {
-            pointer: input.pointer.primary_down(),
-            delta: input.pointer.delta(),
-            clicked: if input.pointer.primary_clicked() {
-                input.pointer.interact_pos()
-            } else {
-                None
-            },
-            interact_pos,
-        }
+            UiResult {
+                pointer: input.pointer.primary_down(),
+                delta: input.pointer.delta(),
+                clicked: if input.pointer.primary_clicked() {
+                    input.pointer.interact_pos()
+                } else {
+                    None
+                },
+                interact_pos,
+            }
+        })
     }
 }
 
@@ -535,6 +537,7 @@ impl<'p> NodePainter<'p> {
             0.,
             Color32::from_black_alpha(127),
             (1., Color32::GRAY),
+            StrokeKind::Middle,
         );
 
         let origin = self.bt_widget.origin;
@@ -563,7 +566,7 @@ impl<'p> NodePainter<'p> {
         };
         node_painter
             .painter
-            .rect_stroke(view_rect, 0., (1., Color32::WHITE));
+            .rect_stroke(view_rect, 0., (1., Color32::WHITE), StrokeKind::Middle);
 
         if node_painter.ui.rect_contains_pointer(map_screen_rect) {
             if node_painter.ui_result.pointer {
@@ -702,8 +705,12 @@ impl<'p> NodePainter<'p> {
                 DEFAULT_FRAME_COLOR
             };
             // Show double border to imply that it is expandable with a click
-            self.painter
-                .rect_stroke(rect.expand(NODE_BORDER_OFFSET), 0., (1., frame_color));
+            self.painter.rect_stroke(
+                rect.expand(NODE_BORDER_OFFSET),
+                0.,
+                (1., frame_color),
+                StrokeKind::Middle,
+            );
 
             if node.is_subtree_expanded() {
                 let tree_rect = Rect {
@@ -714,8 +721,12 @@ impl<'p> NodePainter<'p> {
                     ]),
                 }
                 .expand(NODE_BORDER_OFFSET);
-                self.painter
-                    .rect_stroke(tree_rect, 0., (1., DEFAULT_FRAME_COLOR));
+                self.painter.rect_stroke(
+                    tree_rect,
+                    0.,
+                    (1., DEFAULT_FRAME_COLOR),
+                    StrokeKind::Middle,
+                );
             }
             frame_color
         } else {
@@ -729,7 +740,8 @@ impl<'p> NodePainter<'p> {
             _ => Color32::from_rgb(31, 31, 95),
         };
         if node.draw_border() {
-            self.painter.rect(rect, 0., fill_color, (1., frame_color));
+            self.painter
+                .rect(rect, 0., fill_color, (1., frame_color), StrokeKind::Middle);
         } else {
             self.painter.rect_filled(rect, 0., fill_color);
         }
@@ -864,8 +876,9 @@ impl<'p> NodePainter<'p> {
                             0.,
                             Color32::from_black_alpha(255),
                             (1., Color32::from_rgb(255, 127, 255)),
+                            StrokeKind::Middle,
                         );
-                        self.painter.galley(text_pos, galley);
+                        self.painter.galley(text_pos, galley, Color32::BLACK);
                     }
                 }
             }

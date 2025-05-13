@@ -11,7 +11,7 @@ use crate::{
     bg_image::BgImage,
 };
 use cgmath::{Matrix3, Point2, Transform, Vector2};
-use egui::{Color32, Pos2, RichText, Ui};
+use egui::{Color32, Pos2, RichText, Theme, Ui};
 use swarm_rs::{
     game::{BoardParams, BoardType, UpdateResult},
     vfs::Vfs,
@@ -117,6 +117,9 @@ impl SwarmRsApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+
+        // Force dark theme
+        cc.egui_ctx.set_theme(Theme::Dark);
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
@@ -387,7 +390,7 @@ impl SwarmRsApp {
             ui.label("Print log:");
 
             egui::ScrollArea::vertical()
-                .always_show_scroll(true)
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                 .stick_to_bottom(true)
                 .show(ui, |ui| {
                     let mut source = if let Some(entity) = entity {
@@ -587,7 +590,7 @@ impl SwarmRsApp {
         let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
             let mut layout_job = highlight(ui.ctx(), &theme, string);
             layout_job.wrap.max_width = wrap_width;
-            ui.fonts().layout_job(layout_job)
+            ui.fonts(|f| f.layout_job(layout_job))
         };
 
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -621,7 +624,7 @@ impl eframe::App for SwarmRsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint();
 
-        let dt = ctx.input().stable_dt.min(0.1);
+        let dt = ctx.input(|i| i.raw.predicted_dt).min(0.1);
 
         let update_res = self.app_data.update(dt as f64 * 1000., self.agent_count);
 
@@ -650,7 +653,7 @@ impl eframe::App for SwarmRsApp {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Quit").clicked() {
-                        _frame.close();
+                        // _frame.ose();
                     }
                 });
             });

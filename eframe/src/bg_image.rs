@@ -32,6 +32,8 @@ impl BgImage {
                 TextureOptions {
                     magnification: egui::TextureFilter::Nearest,
                     minification: egui::TextureFilter::Linear,
+                    mipmap_mode: Some(egui::TextureFilter::Linear),
+                    wrap_mode: egui::TextureWrapMode::Repeat,
                 },
             )
         });

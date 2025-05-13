@@ -47,8 +47,7 @@ pub fn highlight(ctx: &egui::Context, theme: &CodeTheme, code: &str) -> LayoutJo
 
     type HighlightCache = egui::util::cache::FrameCache<LayoutJob, Highlighter>;
 
-    let mut mem = ctx.memory();
-    mem.caches.cache::<HighlightCache>().get((theme, code))
+    ctx.memory_mut(|mem| mem.caches.cache::<HighlightCache>().get((theme, code)))
 }
 
 impl CodeTheme {

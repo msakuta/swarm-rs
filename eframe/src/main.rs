@@ -9,7 +9,6 @@ pub use app::SwarmRsApp;
 #[cfg(target_arch = "wasm32")]
 mod wasm_utils;
 
-
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     // Log to stdout (if you run with `RUST_LOG=debug`).
@@ -19,8 +18,9 @@ fn main() {
     eframe::run_native(
         "swarm-rs application in eframe",
         native_options,
-        Box::new(|cc| Box::new(SwarmRsApp::new(cc))),
-    );
+        Box::new(|cc| Ok(Box::new(SwarmRsApp::new(cc)))),
+    )
+    .unwrap();
 }
 
 // when compiling to web using trunk.

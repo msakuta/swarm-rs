@@ -33,23 +33,24 @@ impl SwarmRsApp {
         }
 
         let ui_result = {
-            let input = ui.input();
-            let interact_pos =
-                input.pointer.interact_pos().unwrap_or(Pos2::ZERO) - self.canvas_offset;
+            ui.input(|input| {
+                let interact_pos =
+                    input.pointer.interact_pos().unwrap_or(Pos2::ZERO) - self.canvas_offset;
 
-            UiResult {
-                scroll_delta: input.scroll_delta[1],
-                zoom_delta: if input.multi_touch().is_some() {
-                    input.zoom_delta()
-                } else {
-                    1.
-                },
-                pointer: input.pointer.primary_down(),
-                delta: input.pointer.delta(),
-                interact_pos: Point2::new(interact_pos.x as f64, interact_pos.y as f64),
-                hover_pos: input.pointer.hover_pos(),
-                clicked: input.pointer.primary_released(),
-            }
+                UiResult {
+                    scroll_delta: input.raw_scroll_delta[1],
+                    zoom_delta: if input.multi_touch().is_some() {
+                        input.zoom_delta()
+                    } else {
+                        1.
+                    },
+                    pointer: input.pointer.primary_down(),
+                    delta: input.pointer.delta(),
+                    interact_pos: Point2::new(interact_pos.x as f64, interact_pos.y as f64),
+                    hover_pos: input.pointer.hover_pos(),
+                    clicked: input.pointer.primary_released(),
+                }
+            })
         };
 
         if ui.ui_contains_pointer() {
@@ -254,6 +255,7 @@ pub(crate) fn paint_qtree(response: &Response, painter: &Painter, data: &AppData
                             _ => Color32::from_rgb(255, 0, 255),
                         },
                     },
+                    egui::StrokeKind::Middle,
                 );
             }
         }
@@ -486,6 +488,7 @@ fn paint_real_agent(
                 color: brush,
                 width: 1.,
             },
+            egui::StrokeKind::Middle,
         );
     }
 
