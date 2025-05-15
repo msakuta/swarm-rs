@@ -33,8 +33,7 @@ version = "0.3.2"
 # commit = "ff5201ba194c985cdb925c8ac0845c5a5a3c46c1"
 
 [features]
-druid = [ "dep:druid" ]
 serde = [ "dep:serde" ]
 
 [workspace]
-members = [ "eframe", "druid" ]
+members = [ "eframe" ]

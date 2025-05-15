@@ -57,10 +57,7 @@ We have 2 versions of native application, using different GUI frameworks.
 
 ### druid
 
-* Run `cargo r -p swarm-rs-druid`
-
-Note that Druid is being discontinued so we will drop support some time in the future.
-
+Druid GUI version is dropped support.
 
 ## How to build Wasm version
 
@@ -80,8 +77,7 @@ We have 2 versions of wasm application, using different GUI frameworks.
 
 ### druid
 
-* Run `cd druid && wasm-pack build --release`
-* Copy `druid/index.html` and `druid/index.js` to `druid/pkg`
+Druid GUI version is dropped support.
 
 
 ## How to edit the behavior tree

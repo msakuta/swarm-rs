@@ -27,8 +27,6 @@ jobs:
       run: cargo c
     - name: Run Rust tests
       run: cargo test --verbose
-    - name: Build
-      run: cd druid && wasm-pack build --target web
 
     - uses: jetli/trunk-action@v0.4.0
       with:
