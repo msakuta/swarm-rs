@@ -5,6 +5,8 @@ mod app;
 mod app_data;
 mod bg_image;
 pub use app::SwarmRsApp;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_utils;
@@ -32,19 +34,45 @@ fn main() {
     // Redirect tracing to console.log and friends:
     tracing_wasm::set_as_global_default();
 
-    let mut web_options = eframe::WebOptions::default();
+    #[derive(Clone)]
+    #[wasm_bindgen]
+    struct WebHandle {
+        runner: eframe::WebRunner,
+    }
 
-    // We insist to use dark theme, because light theme looks dumb.
-    web_options.follow_system_theme = false;
-    web_options.default_theme = eframe::Theme::Dark;
+    impl WebHandle {
+        pub fn new() -> Self {
+            Self {
+                runner: eframe::WebRunner::new(),
+            }
+        }
+
+        pub async fn start(
+            &self,
+            canvas: web_sys::HtmlCanvasElement,
+        ) -> Result<(), wasm_bindgen::JsValue> {
+            self.runner
+                .start(
+                    canvas,
+                    eframe::WebOptions::default(),
+                    Box::new(|cc| Ok(Box::new(SwarmRsApp::new(cc)))),
+                )
+                .await
+        }
+    }
 
     wasm_bindgen_futures::spawn_local(async {
-        eframe::start_web(
-            "the_canvas_id", // hardcode it
-            web_options,
-            Box::new(|cc| Box::new(SwarmRsApp::new(cc))),
-        )
-        .await
-        .expect("failed to start eframe");
+        let canvas = web_sys::window()
+            .expect("no global `window` exists")
+            .document()
+            .expect("should have a document")
+            .get_element_by_id("the_canvas_id")
+            .expect("should have #the_canvas_id on the page")
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .expect("#the_canvas_id should be a <canvas> element");
+        WebHandle::new()
+            .start(canvas)
+            .await
+            .expect("failed to start eframe");
     });
 }
