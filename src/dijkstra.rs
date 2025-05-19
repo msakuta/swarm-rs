@@ -97,7 +97,7 @@ pub(crate) fn label(board: &[bool], shape: (usize, usize)) -> Vec<i32> {
     let mut labels = vec![0; board.len()];
     let mut label_counter = 1;
 
-    struct Label<'a>(&'a mut [i32], i32, (usize, usize));
+    struct Label<'a>(&'a mut [i32], i32);
 
     impl<'a> DijkstraField for Label<'a> {
         fn is_filled(&self, idx: usize) -> bool {
@@ -117,7 +117,7 @@ pub(crate) fn label(board: &[bool], shape: (usize, usize)) -> Vec<i32> {
                     board,
                     shape,
                     [x as i32, y as i32],
-                    &mut Label(&mut labels[..], label_counter, shape),
+                    &mut Label(&mut labels[..], label_counter),
                 );
                 label_counter += 1;
             }

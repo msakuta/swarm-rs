@@ -37,14 +37,14 @@ impl CodeTheme {
     }
 }
 
+impl egui::util::cache::ComputerMut<(&CodeTheme, &str), LayoutJob> for Highlighter {
+    fn compute(&mut self, (theme, code): (&CodeTheme, &str)) -> LayoutJob {
+        self.highlight(theme, code)
+    }
+}
+
 /// Memoized Code highlighting
 pub fn highlight(ctx: &egui::Context, theme: &CodeTheme, code: &str) -> LayoutJob {
-    impl egui::util::cache::ComputerMut<(&CodeTheme, &str), LayoutJob> for Highlighter {
-        fn compute(&mut self, (theme, code): (&CodeTheme, &str)) -> LayoutJob {
-            self.highlight(theme, code)
-        }
-    }
-
     type HighlightCache = egui::util::cache::FrameCache<LayoutJob, Highlighter>;
 
     ctx.memory_mut(|mem| mem.caches.cache::<HighlightCache>().get((theme, code)))

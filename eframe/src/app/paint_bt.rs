@@ -235,7 +235,7 @@ struct BBConnection {
 trait AbstractNode<'src> {
     type Galley: AbstractGalley;
     fn get_type(&self) -> &str;
-    fn children(&'src self) -> Box<dyn Iterator<Item = &Self> + 'src>;
+    fn children(&'src self) -> Box<dyn Iterator<Item = &'src Self> + 'src>;
     fn port_maps(&'src self) -> Box<dyn Iterator<Item = PortMapOwned> + 'src>;
     fn get_last_result(&self) -> Option<BehaviorResult>;
     fn is_subtree(&self) -> bool;
@@ -270,7 +270,7 @@ impl<'src> AbstractNode<'src> for TreeDef<'src> {
         TreeDef::get_type(self)
     }
 
-    fn children(&'src self) -> Box<dyn Iterator<Item = &Self> + 'src> {
+    fn children(&'src self) -> Box<dyn Iterator<Item = &'src Self> + 'src> {
         Box::new(self.children().iter())
     }
 
@@ -294,7 +294,7 @@ impl<'src> AbstractNode<'src> for BehaviorNodeContainer {
         self.name()
     }
 
-    fn children(&'src self) -> Box<dyn Iterator<Item = &Self> + 'src> {
+    fn children(&'src self) -> Box<dyn Iterator<Item = &'src Self> + 'src> {
         Box::new(self.children().iter())
     }
 
@@ -380,7 +380,7 @@ impl<'src> AbstractNode<'src> for RenderedNode {
         ""
     }
 
-    fn children(&'src self) -> Box<dyn Iterator<Item = &Self> + 'src> {
+    fn children(&'src self) -> Box<dyn Iterator<Item = &'src Self> + 'src> {
         Box::new(self.children.iter())
     }
 

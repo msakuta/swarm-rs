@@ -1,5 +1,8 @@
 pub(crate) trait Idx {
+    #[allow(dead_code)]
     fn wrapping_idx(&self, x: isize, y: isize) -> usize;
+
+    #[allow(dead_code)]
     fn try_idx(&self, x: isize, y: isize) -> Option<usize>;
 
     /// Panics on out of bounds
