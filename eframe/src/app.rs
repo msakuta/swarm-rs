@@ -197,6 +197,11 @@ impl SwarmRsApp {
                 ui.radio_value(&mut self.board_type, BoardType::Perlin, "Perlin");
                 ui.radio_value(&mut self.board_type, BoardType::Rooms, "Rooms");
                 ui.radio_value(&mut self.board_type, BoardType::Maze, "Maze");
+                ui.radio_value(
+                    &mut self.board_type,
+                    BoardType::IterativeMaze,
+                    "IterativeMaze",
+                );
             });
 
             ui.horizontal(|ui| {

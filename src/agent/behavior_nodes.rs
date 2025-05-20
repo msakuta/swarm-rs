@@ -48,7 +48,6 @@ pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     registry.register("FaceToTarget", boxify(|| FaceToTargetNode));
     registry.register("IsArrivedGoalNode", boxify(|| IsArrivedGoalNode));
 
-
     let (_i, tree_source) = parse_file(source).unwrap();
     // println!("parse_file rest: {i:?}");
     Ok(BehaviorTree(load(&tree_source, &registry, true)?))

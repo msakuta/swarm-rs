@@ -1,3 +1,4 @@
+mod iterative_maze;
 mod maze;
 mod rooms;
 
@@ -44,6 +45,7 @@ pub enum BoardType {
     Perlin,
     Rooms,
     Maze,
+    IterativeMaze,
 }
 
 #[derive(Debug, Clone)]
@@ -306,6 +308,7 @@ impl Game {
             BoardType::Perlin => Self::create_perlin_board(&params),
             BoardType::Rooms => Self::create_rooms_board(&params),
             BoardType::Maze => Self::create_maze_board(&params),
+            BoardType::IterativeMaze => Self::create_iterative_maze_board(&params),
         };
 
         let fog = FogOfWar::new(&board);
