@@ -3,17 +3,17 @@ use std::collections::HashMap;
 use cgmath::{Matrix3, SquareMatrix};
 use eframe::{emath::RectTransform, epaint::PathShape};
 use egui::{
-    pos2, vec2, Color32, FontId, Frame, Galley, Painter, Pos2, Rect, Response, RichText,
-    StrokeKind, Ui, Vec2,
+    Color32, FontId, Frame, Galley, Painter, Pos2, Rect, Response, RichText, StrokeKind, Ui, Vec2,
+    pos2, vec2,
 };
 use swarm_rs::behavior_tree_lite::{
+    AbstractPortMap, BehaviorNodeContainer, BehaviorResult, BlackboardValueOwned, PortType,
     parse_file,
     parser::PortMapOwned,
     parser::{TreeDef, TreeSource},
-    AbstractPortMap, BehaviorNodeContainer, BehaviorResult, BlackboardValueOwned, PortType,
 };
 
-use crate::{app::Panel, SwarmRsApp};
+use crate::{SwarmRsApp, app::Panel};
 
 use super::transform_point;
 

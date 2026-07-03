@@ -6,16 +6,16 @@ use eframe::{
     emath::RectTransform,
     epaint::{self, PathShape},
 };
-use egui::{pos2, Align2, Color32, FontId, Frame, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2};
+use egui::{Align2, Color32, FontId, Frame, Painter, Pos2, Rect, Response, Stroke, Ui, Vec2, pos2};
 use swarm_rs::{
-    agent::{AgentClass, AGENT_HALFLENGTH, BULLET_RADIUS},
+    Bullet, CellState,
+    agent::{AGENT_HALFLENGTH, AgentClass, BULLET_RADIUS},
     entity::Entity,
     game::Resource,
     qtree::FRESH_TICKS,
-    Bullet, CellState,
 };
 
-use super::{transform_point, SwarmRsApp};
+use super::{SwarmRsApp, transform_point};
 
 /// In points
 const SCREEN_SELECT_RADIUS: f64 = 20.;

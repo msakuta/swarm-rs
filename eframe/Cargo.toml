@@ -1,14 +1,15 @@
 [package]
 name = "swarm-rs-eframe"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-egui = "0.31.1"
-eframe = { version = "0.31.1", default-features = false, features = [
+egui = { version = "0.32", features = ["serde"] }
+eframe = { version = "0.32", default-features = false, features = [
     # "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
+    #"wgpu",
     "persistence",   # Enable restoring app state when restarting the app.
 ] }
 
@@ -21,6 +22,9 @@ wasm-bindgen = "0.2.84"
 web-sys = { version = "0.3.61", features = ["Storage", "Window"] }
 ron = "0.8.0"
 enum-map = { version = "2", features = ["serde"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+winit = { version = "0.30", features = ["x11"] }
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]

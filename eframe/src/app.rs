@@ -5,13 +5,13 @@ mod syntax_highlighting;
 use std::path::Path;
 
 pub(crate) use self::paint_bt::BTWidget;
-use self::syntax_highlighting::{highlight, CodeTheme};
+use self::syntax_highlighting::{CodeTheme, highlight};
 use crate::{
     app_data::{AppData, BtType},
     bg_image::BgImage,
 };
 use cgmath::{Matrix3, Point2, Transform, Vector2};
-use egui::{Color32, Pos2, RichText, Theme, Ui};
+use egui::{Color32, Pos2, RichText, TextBuffer, Theme, Ui};
 use swarm_rs::{
     game::{BoardParams, BoardType, UpdateResult},
     vfs::Vfs,
@@ -592,8 +592,8 @@ impl SwarmRsApp {
 
         let theme = CodeTheme::from_style(&ui.ctx().style());
 
-        let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
-            let mut layout_job = highlight(ui.ctx(), &theme, string);
+        let mut layouter = |ui: &egui::Ui, string: &dyn TextBuffer, wrap_width: f32| {
+            let mut layout_job = highlight(ui.ctx(), &theme, string.as_str());
             layout_job.wrap.max_width = wrap_width;
             ui.fonts(|f| f.layout_job(layout_job))
         };
