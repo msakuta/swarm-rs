@@ -9,7 +9,7 @@ use behavior_tree_lite::{
     Context, Lazy, PortSpec, Registry, Symbol,
 };
 use cgmath::{Matrix2, MetricSpace, Rad, Vector2};
-use rand::{distributions::Uniform, prelude::Distribution};
+use rand::{distr::Uniform, prelude::Distribution};
 
 pub(super) fn build_tree(source: &str) -> Result<BehaviorTree, LoadError> {
     let mut registry = Registry::default();
@@ -569,8 +569,8 @@ impl BehaviorNode for RandomizeNode {
     ) -> BehaviorResult {
         if let Some(max) = ctx.get_parse::<usize>("max") {
             let min = ctx.get_parse::<usize>("min").unwrap_or(0);
-            let between = Uniform::from(min..max);
-            let value = between.sample(&mut rand::thread_rng());
+            let between = Uniform::new(min, max).unwrap();
+            let value = between.sample(&mut rand::rng());
             // println!("Randomizing! {}/{}", value, max);
             ctx.set::<usize>("value", value);
             return BehaviorResult::Success;

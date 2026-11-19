@@ -11,19 +11,19 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 druid = { version = "0.8.2", optional = true }
 cgmath = "0.18.0"
-delaunator = "1.0.1"
+delaunator = "1.1.0"
 
 wasm-bindgen = "0.2.67"
 console_error_panic_hook = "0.1.6"
-geo = "0.28.0"
-rand = "0.8.5"
-log = "0.4.17"
+geo = "0.33.1"
+rand = "0.10.4"
+log = "0.4.35"
 
 serde = { version = "1", features = ["derive"], optional = true }
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.2.8", features = ["js"] }
+getrandom = { version = "0.2.17", features = ["js"] }
 
 [dependencies.behavior-tree-lite]
 version = "0.3.2"

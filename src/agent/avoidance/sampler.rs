@@ -4,7 +4,7 @@ use std::{
 };
 
 use cgmath::{InnerSpace, MetricSpace, Vector2};
-use rand::{distributions::Uniform, prelude::Distribution};
+use rand::{distr::Uniform, prelude::Distribution};
 
 use crate::agent::{wrap_angle, Agent};
 
@@ -106,7 +106,9 @@ impl StateSampler for ForwardKinematicSampler {
             if total_passables == 0 {
                 return None;
             }
-            let candidate = Uniform::from(0..total_passables).sample(&mut rand::thread_rng());
+            let candidate = Uniform::new(0, total_passables)
+                .unwrap()
+                .sample(&mut rand::rng());
             nodes
                 .iter()
                 .enumerate()
